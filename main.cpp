@@ -10,13 +10,6 @@ int main(int argc, char *argv[])
 {
 
     model_parameters mp;
-    mp.K_sat = 1;
-    mp.alpha = 20;
-    mp.n = 1.8;
-    mp.rw = 0.1;
-    mp.theta_sat = 0.4;
-    mp.theta_r = 0.05;
-    mp.initial_theta = 0.2;
 
     System *system=new System();
     ModelCreator ModCreate;
