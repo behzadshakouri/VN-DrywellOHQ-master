@@ -7,27 +7,25 @@ class System;
 
 struct model_parameters
 {
-    double DepthtoGroundWater = 20; // 40'
-    double DepthofWell = 12.1920; // 16'
-    double DepthofWell_c = 4.8768; // 16'
-    double DepthofWell_g1 = 0.6096; // 2'
-    double DepthofWell_g2 = 3.6576; // 12'
-    double RadiousOfInfluence = 1.2192; //4'
+    double ft=0.3048; //ft to m
+    double DepthtoGroundWater = 20; // Should be estimated
+    double DepthofWell_t = 40*ft; // 16'
+    double DepthofWell_c = 16*ft; // 16'
+    double DepthofWell_g = 14*ft; // 14'
+    double RadiousOfInfluence = 20; //Should be estimated
     int nr = 4; // Radius discretization number
     int nz = 10; // Depth discretization number
     double K_sat =1;
     double alpha = 20;
     double n = 1.8;
-    double rw = 0.1;
-    double rw_c = 1.2192; //4'
-    double rw_g1 = 1.8288; //6'
-    double rw_g2 = 1.2192; //4'
+    double rw_c_t = 6*ft; //6'
+    double rw_c = 4*ft; //4'
+    double rw_g = 4*ft; //4'
     double theta_sat = 0.4;
     double theta_r = 0.05;
     double initial_theta = 0.2;
     double porosity_c = 1;
-    double porosity_g1 = 0.5;
-    double porosity_g2 = 0.5;
+    double porosity_g = 0.5;
 
 
 };
