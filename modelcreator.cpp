@@ -31,7 +31,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             double r2 = mp.rw_c_t + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
 
-            B.SetName(("Soil (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
+            B.SetName(("Soil_c (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             B.SetVal("K_sat_original",mp.K_sat);
             B.SetVal("alpha",mp.alpha);
@@ -50,7 +50,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             system->AddBlock(B,false);
         }
 
-    // Soil Blocks around concrete part
+    // Soil Blocks around gravel part
 
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
     dz = (mp.DepthofWell_c+mp.DepthofWell_g)/mp.nz_g;
@@ -65,7 +65,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             double r2 = mp.rw_g + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
 
-            B.SetName(("Soil (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
+            B.SetName(("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             B.SetVal("K_sat_original",mp.K_sat);
             B.SetVal("alpha",mp.alpha);
@@ -78,7 +78,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
-            B.SetVal("y",(j*dz)*2000);
+            B.SetVal("y",11000+(j*dz)*2000);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
             B.SetVal("act_Y",-(j+0.5)*dz);
             system->AddBlock(B,false);
@@ -86,8 +86,11 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 
     // Soil Blocks under well
 
+    dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
+    dz = (mp.DepthofWell_c+mp.DepthofWell_g)/mp.nz_g;
+
     cout<<"Soil Blocks under well"<<endl;
-    for (int j=0; j<mp.nz_g; j++)
+    for (int j=0; j<mp.nz_c+mp.nz_g; j++)
     {
         if (j*dz>(mp.DepthofWell_c+mp.DepthofWell_g))
         {   Block B;
@@ -95,7 +98,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 
             double area = pi*(mp.rw_g*mp.rw_g);
 
-            B.SetName(("Soil (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString());
+            B.SetName(("Soil_uw (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             B.SetVal("K_sat_original",mp.K_sat);
             B.SetVal("alpha",mp.alpha);
@@ -108,7 +111,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
             B.SetVal("x",-mp.rw_g*2000);
-            B.SetVal("y",(j*dz)*2000);
+            B.SetVal("y",11000+(j*dz)*2000);
             B.SetVal("act_X",0);
             B.SetVal("act_Y",-(j+0.5)*dz);
             system->AddBlock(B,false);
@@ -116,41 +119,39 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     }
 
 
-    cout<<"Horizontal links"<<endl;
-    for (int i=0; i<mp.nr_g-1; i++)
-        for (int j=0; j<mp.nz_g; j++)
+    cout<<"Horizontal links for soils of concrete part"<<endl;
+    for (int i=0; i<mp.nr_c-1; i++)
+        for (int j=0; j<mp.nz_c; j++)
         {
             Link L;
             L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
 
 
-            L.SetName(("Soil (" + QString::number(i+1) + "$" + QString::number(j) + "-" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
+            L.SetName(("Soil_c (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_c (" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
             L.SetType("soil_to_soil_H_link");
 
             L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
             L.SetVal("length",dr);
 
-            system->AddLink(L, ("Soil (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
+            system->AddLink(L, ("Soil_c (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_c (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
         }
 
     cout<<"Horizontal links for central soils"<<endl;
-    for (int j=0; j<mp.nz_g; j++)
-    {
-
-        if (j*dz>mp.DepthofWell_g)
+    for (int i=0; i<mp.nr_g-1; i++)
+        for (int j=0; j<mp.nz_g; j++)
         {   Link L;
             L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
 
 
-            L.SetName(("Soil (" + QString::number(0) + "$" + QString::number(j) + "-" + QString::number(1) + "$" + QString::number(j)+ ")").toStdString());
+            L.SetName(("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_g (" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
             L.SetType("soil_to_soil_H_link");
 
             L.SetVal("area",2*pi*mp.rw_g);
             L.SetVal("length",dr);
 
-            system->AddLink(L, ("Soil (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString(), ("Soil (" + QString::number(1) + "$" + QString::number(j) + ")").toStdString(), false);
+            system->AddLink(L, ("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
         }
-    }
+    /*
     int well_layer=0;
     cout<<"Vertical links for central soils"<<endl;
     for (int j=0; j<mp.nz_g-1; j++)
@@ -259,7 +260,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
         system->AddLink(L, ("Soil (" + QString::number(i) + "$" + QString::number(mp.nz_g-1) + ")").toStdString(), "Ground Water", false);
 
     }
-
+*/
     cout<<"Populate functions"<<endl;
     system->PopulateOperatorsFunctions();
     cout<<"Variable parents"<<endl;
