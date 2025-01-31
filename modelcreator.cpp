@@ -90,15 +90,18 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     dz = (mp.DepthofWell_c+mp.DepthofWell_g)/mp.nz_g;
 
     cout<<"Soil Blocks under well"<<endl;
-    for (int j=0; j<mp.nz_c+mp.nz_g; j++)
-    {
-        if (j*dz>(mp.DepthofWell_c+mp.DepthofWell_g))
-        {   Block B;
+    for (int i=0; i<mp.nr_g; i++)
+        for (int j=0; j<mp.nz_g; j++)
+        {
+        //if (j*dz>(mp.DepthofWell_c+mp.DepthofWell_g))
+        {
+            Block B;
             B.SetQuantities(system->GetMetaModel(), "Soil");
+            double r1 = mp.rw_g + i*dr;
+            double r2 = mp.rw_g + (i+1)*dr;
+            double area = pi*(r2*r2-r1*r1);
 
-            double area = pi*(mp.rw_g*mp.rw_g);
-
-            B.SetName(("Soil_uw (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString());
+            B.SetName(("Soil_uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             B.SetVal("K_sat_original",mp.K_sat);
             B.SetVal("alpha",mp.alpha);
