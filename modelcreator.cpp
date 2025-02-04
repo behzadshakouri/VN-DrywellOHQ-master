@@ -53,7 +53,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     // Soil Blocks around gravel part
 
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
-    dz = (mp.DepthofWell_c+mp.DepthofWell_g)/mp.nz_g;
+    dz = mp.DepthofWell_t/mp.nz_g;
 
     cout<<"Soil Blocks around gravel part"<<endl;
     for (int i=0; i<mp.nr_g; i++)
@@ -78,22 +78,23 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
-            B.SetVal("y",11000+(j*dz)*2000);
+            B.SetVal("y",12000+(j*dz)*2000);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
-            B.SetVal("act_Y",-(j+0.5)*dz);
+            B.SetVal("act_Y",-(j+0.5)*dz-mp.DepthofWell_t);
             system->AddBlock(B,false);
         }
 
     // Soil Blocks under well
 
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
-    dz = (mp.DepthofWell_c+mp.DepthofWell_g)/mp.nz_g;
+    dz = mp.DepthofWell_t/mp.nz_g;
 
     cout<<"Soil Blocks under well"<<endl;
     for (int i=0; i<mp.nr_g; i++)
         for (int j=0; j<mp.nz_g; j++)
+        if (j*dz<mp.DepthtoGroundWater)
         {
-        //if (j*dz>(mp.DepthofWell_c+mp.DepthofWell_g))
+    {
         {
             Block B;
             B.SetQuantities(system->GetMetaModel(), "Soil");
@@ -113,18 +114,19 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta",mp.initial_theta);
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
-            B.SetVal("x",-mp.rw_g*2000);
-            B.SetVal("y",11000+(j*dz)*2000);
-            B.SetVal("act_X",0);
-            B.SetVal("act_Y",-(j+0.5)*dz);
+            B.SetVal("x",-(i*dr+mp.rw_g)*2000);
+            B.SetVal("y",37000+(j*dz)*2000);
+            B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
+            B.SetVal("act_Y",11000+(j*dz+mp.DepthofWell_t)*2000);
             system->AddBlock(B,false);
+        }
         }
     }
 
-
+/*
     cout<<"Horizontal links for soils of concrete part"<<endl;
-    for (int i=0; i<mp.nr_c-1; i++)
-        for (int j=0; j<mp.nz_c; j++)
+    for (int i=0; mp.nr_c<i<mp.RadiousOfInfluence; i++)
+        for (int j=0; mp.nz_c<j<mp.DepthtoGroundWater; j++)
         {
             Link L;
             L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
@@ -154,6 +156,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 
             system->AddLink(L, ("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
         }
+    */
     /*
     int well_layer=0;
     cout<<"Vertical links for central soils"<<endl;
@@ -186,37 +189,37 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 
             system->AddLink(L, ("Soil (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
         }
-
+*/
     cout<<"Well_c"<<endl;
     Block well_c;
     well_c.SetQuantities(system->GetMetaModel(), "Well_aggregate");
     well_c.SetName("Well_c");
     well_c.SetType("Well_aggregate");
-    well_c.SetVal("_height",mp.DepthofWell_c*1000);
+    well_c.SetVal("_height",mp.DepthofWell_c*2000);
     well_c.SetVal("_width",mp.rw_c*1000);
     well_c.SetVal("bottom_elevation",-mp.DepthofWell_c);
     well_c.SetVal("diameter",mp.rw_c*2);
     well_c.SetVal("depth",0.5);
     well_c.SetVal("porosity",mp.porosity_c);
-    well_c.SetVal("x",-mp.rw_c*1000);
-    well_c.SetVal("y",mp.DepthofWell_c*1000);
+    well_c.SetVal("x",-mp.rw_c*1000+1000);
+    well_c.SetVal("y",mp.DepthofWell_c*200);
     system->AddBlock(well_c,false);
 
-    cout<<"Well_g1"<<endl;
+    cout<<"Well_g"<<endl;
     Block well_g;
     well_g.SetQuantities(system->GetMetaModel(), "Well_aggregate");
-    well_g.SetName("Well_g1");
+    well_g.SetName("Well_g");
     well_g.SetType("Well_aggregate");
-    well_g.SetVal("_height",mp.DepthofWell_g*1000);
+    well_g.SetVal("_height",mp.DepthofWell_g*3200);
     well_g.SetVal("_width",mp.rw_g*1000);
     well_g.SetVal("bottom_elevation",-(mp.DepthofWell_c+mp.DepthofWell_g));
     well_g.SetVal("diameter",mp.rw_g*2);
     well_g.SetVal("depth",0.5);
     well_g.SetVal("porosity",mp.porosity_g);
-    well_g.SetVal("x",-mp.rw_g*1000);
-    well_g.SetVal("y",(mp.DepthofWell_c+mp.DepthofWell_g)*2*1000);
+    well_g.SetVal("x",-mp.rw_g*1000+1000);
+    well_g.SetVal("y",(mp.DepthofWell_c+mp.DepthofWell_g)*1000);
     system->AddBlock(well_g,false);
-
+/*
     cout<<"Well to soil"<<endl;
 
     for (int j=0; j<mp.nz_g; j++)
@@ -238,7 +241,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     well_to_bottom.SetName("Well_to_bottom");
     well_to_bottom.SetType("Well2soil vertical link");
     system->AddLink(well_to_bottom,"Well",("Soil (" + QString::number(0) + "$" + QString::number(well_layer) + ")").toStdString(), false);
-
+*/
     cout<<"Groundwater"<<endl;
     Block gw;
     gw.SetQuantities(system->GetMetaModel(), "fixed_head");
@@ -248,10 +251,10 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     gw.SetVal("_width",mp.RadiousOfInfluence*1000);
     gw.SetVal("head",-mp.DepthtoGroundWater);
     gw.SetVal("Storage",100000);
-    gw.SetVal("x",0);
-    gw.SetVal("y",mp.DepthtoGroundWater*1000+100);
+    gw.SetVal("x",-mp.nr_g*1000);
+    gw.SetVal("y",mp.DepthtoGroundWater*3200);
     system->AddBlock(gw,false);
-
+/*
     cout<<"Soil to Groundwater"<<endl;
     for (int i=0; i<mp.nr_g+1; i++)
     {

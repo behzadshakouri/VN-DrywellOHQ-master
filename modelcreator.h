@@ -9,9 +9,9 @@ struct model_parameters
 {
     double ft=0.3048; //ft to m
     double DepthtoGroundWater = 20; // Should be estimated
-    double DepthofWell_t = 40*ft; // 40'
     double DepthofWell_c = 16*ft; // 16'
-    double DepthofWell_g = 14*ft; // 14'
+    double DepthofWell_g = 24*ft; // 24'
+    double DepthofWell_t = DepthofWell_c + DepthofWell_g; // 40'
     double RadiousOfInfluence = 20; //Should be estimated
     int nr_c = 4; // Radius discretization number (around concrete part)
     int nr_g = 8; // Radius discretization number (around gravel part)
