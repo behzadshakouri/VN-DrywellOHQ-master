@@ -15,12 +15,16 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     system->GetQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/unsaturated_soil.json");
     system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Well.json");
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Sewer_system.json");
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/pipe_pump_tank.json");
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Pond_Plugin.json");
     system->ReadSystemSettingsTemplate("/home/behzad/Projects/OpenHydroQual/resources/settings.json");
 
-    // Soil Blocks around concrete part
     double dr = (mp.RadiousOfInfluence-mp.rw_c_t)/mp.nr_c;
     double dz = mp.DepthofWell_c/mp.nz_c;
 
+    /*
+    // Soil Blocks around concrete part
     cout<<"Soil Blocks around concrete part"<<endl;
     for (int i=0; i<mp.nr_c; i++)
         for (int j=0; j<mp.nz_c; j++)
@@ -36,19 +40,39 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("K_sat_original",mp.K_sat);
             B.SetVal("alpha",mp.alpha);
             B.SetVal("area",area);
-            B.SetVal("_width",dr*500);
-            B.SetVal("_height",dr*500);
+            B.SetVal("_width",dr*300);
+            B.SetVal("_height",dr*300);
             B.SetVal("bottom_elevation",-(j+1)*dz);
             B.SetVal("depth",dz);
             B.SetVal("theta",mp.initial_theta);
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
             B.SetVal("x",-(i*dr+mp.rw_c_t)*2000);
-            B.SetVal("y",(j*dz)*2000);
+            B.SetVal("y",1000+(j*dz)*2000);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_c_t);
             B.SetVal("act_Y",-(j+0.5)*dz);
             system->AddBlock(B,false);
         }
+    */
+
+    /*
+    cout<<"Horizontal links for soils of concrete part"<<endl;
+    for (int i=0; mp.nr_c<i<mp.RadiousOfInfluence; i++)
+        for (int j=0; mp.nz_c<j<mp.DepthtoGroundWater; j++)
+        {
+            Link L;
+            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
+
+
+            L.SetName(("Soil_c (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_c (" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
+            L.SetType("soil_to_soil_H_link");
+
+            L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
+            L.SetVal("length",dr);
+
+            system->AddLink(L, ("Soil_c (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_c (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
+        }
+    */
 
     // Soil Blocks around gravel part
 
@@ -78,7 +102,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
-            B.SetVal("y",12000+(j*dz)*2000);
+            B.SetVal("y",12500+(j*dz)*2000);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
             B.SetVal("act_Y",-(j+0.5)*dz-mp.DepthofWell_t);
             system->AddBlock(B,false);
@@ -123,58 +147,24 @@ bool ModelCreator::Create(model_parameters mp, System *system)
         }
     }
 
-/*
-    cout<<"Horizontal links for soils of concrete part"<<endl;
-    for (int i=0; mp.nr_c<i<mp.RadiousOfInfluence; i++)
-        for (int j=0; mp.nz_c<j<mp.DepthtoGroundWater; j++)
+    cout<<"Horizontal links for soils of gravel part"<<endl;
+    for (int i=0; i<mp.nr_g; i++)
+        for (int j=0; j<mp.nz_g; j++)
         {
             Link L;
-            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
-
-
-            L.SetName(("Soil_c (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_c (" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
-            L.SetType("soil_to_soil_H_link");
-
-            L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
-            L.SetVal("length",dr);
-
-            system->AddLink(L, ("Soil_c (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_c (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
-        }
-
-    cout<<"Horizontal links for central soils"<<endl;
-    for (int i=0; i<mp.nr_g-1; i++)
-        for (int j=0; j<mp.nz_g; j++)
-        {   Link L;
             L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
 
 
             L.SetName(("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_g (" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
             L.SetType("soil_to_soil_H_link");
 
-            L.SetVal("area",2*pi*mp.rw_g);
+            L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
             L.SetVal("length",dr);
 
             system->AddLink(L, ("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
         }
-    */
-    /*
-    int well_layer=0;
-    cout<<"Vertical links for central soils"<<endl;
-    for (int j=0; j<mp.nz_g-1; j++)
-    {
 
-        if (j*dz>mp.DepthofWell_g)
-        {   Link L;
-            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
-            if (well_layer==0) well_layer = j;
-
-            L.SetName(("Soil (" + QString::number(0) + "$" + QString::number(j) + "-" + QString::number(0) + "$" + QString::number(j+1)+ ")").toStdString());
-            L.SetType("soil_to_soil_link");
-
-            system->AddLink(L, ("Soil (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString(), ("Soil (" + QString::number(0) + "$" + QString::number(j+1) + ")").toStdString(), false);
-        }
-    }
-    cout<<"Vertical links"<<endl;
+    cout<<"Vertical links for soils of gravel part"<<endl;
     for (int i=0; i<mp.nr_g; i++)
         for (int j=0; j<mp.nz_g-1; j++)
         {
@@ -182,14 +172,93 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
 
 
-            L.SetName(("Soil (" + QString::number(i+1) + "$" + QString::number(j) + "-" + QString::number(i) + "$" + QString::number(j+1)+ ")").toStdString());
+            L.SetName(("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_g (" + QString::number(i+1) + "$" + QString::number(j+1)+ ")").toStdString());
             L.SetType("soil_to_soil_link");
 
             //L.SetVal("length",dr);
 
-            system->AddLink(L, ("Soil (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
+            system->AddLink(L, ("Soil_g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_g (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
         }
-*/
+
+    cout<<"Horizontal links for soils under well"<<endl;
+    for (int i=0; i<mp.nr_g; i++)
+        for (int j=0; j<mp.nz_g; j++)
+            if (j*dz<mp.DepthtoGroundWater)
+            {
+    {
+            {
+            Link L;
+            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
+
+
+            L.SetName(("Soil_uw (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_uw (" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
+            L.SetType("soil_to_soil_H_link");
+
+            L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
+            L.SetVal("length",dr);
+
+            system->AddLink(L, ("Soil_uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_uw (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
+            }
+            }
+    }
+
+    cout<<"Vertical links for soils under well"<<endl;
+    for (int i=0; i<mp.nr_g; i++)
+        for (int j=0; j<mp.nz_g; j++)
+            if (j*dz<mp.DepthtoGroundWater)
+            {
+        {
+            {
+            Link L;
+            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
+
+
+            L.SetName(("Soil_uw (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil_uw (" + QString::number(i+1) + "$" + QString::number(j+1)+ ")").toStdString());
+            L.SetType("soil_to_soil_link");
+
+            //L.SetVal("length",dr);
+
+            system->AddLink(L, ("Soil_uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil_uw (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
+            }
+            }
+    }
+
+    cout<<"Vertical links for soils under well"<<endl;
+    for (int i=0; i<mp.nr_g; i++)
+        {
+            Link L;
+            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
+
+            int j_g=9;
+            int j_uw=0;
+            L.SetName(("Soil_g (" + QString::number(i+1) + "$" + QString::number(j_g) + ") - Soil_uw (" + QString::number(i+1) + "$" + QString::number(j_uw)+ ")").toStdString());
+            L.SetType("soil_to_soil_link");
+
+            //L.SetVal("length",dr);
+
+            system->AddLink(L, ("Soil_g (" + QString::number(i+1) + "$" + QString::number(j_g) + ")").toStdString(), ("Soil_uw (" + QString::number(i+1) + "$" + QString::number(j_uw) + ")").toStdString(), false);
+        }
+
+    cout<<"Horizontal links for well to soils"<<endl;
+        int i_g=1;
+        for (int j=0; j<mp.nz_g; j++)
+            if (j*dz<mp.DepthtoGroundWater)
+                {
+                    {
+                        Link L;
+                        L.SetQuantities(system->GetMetaModel(), "Well2soil horizontal link");
+
+
+                        L.SetName(("Well_g - Soil_g (" + QString::number(i_g) + "$" + QString::number(j)+ ")").toStdString());
+                        L.SetType("Well2soil horizontal link");
+
+                        //L.SetVal("area",2*pi*((i_g+0.5)*dr+mp.rw_g));
+                        //L.SetVal("length",dr/2);
+
+                        system->AddLink(L, "Well_g", ("Soil_g (" + QString::number(i_g) + "$" + QString::number(j) + ")").toStdString(), false);
+                    }
+                }
+
     cout<<"Well_c"<<endl;
     Block well_c;
     well_c.SetQuantities(system->GetMetaModel(), "Well_aggregate");
@@ -242,6 +311,40 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     well_to_bottom.SetType("Well2soil vertical link");
     system->AddLink(well_to_bottom,"Well",("Soil (" + QString::number(0) + "$" + QString::number(well_layer) + ")").toStdString(), false);
 */
+
+    cout<<"Well to well leakage"<<endl;
+    Link well_to_well_leakage;
+    well_to_well_leakage.SetQuantities(system->GetMetaModel(), "Sewer_pipe");
+    well_to_well_leakage.SetName("Well_to_well_leakage");
+    well_to_well_leakage.SetType("Sewer_pipe");
+    system->AddLink(well_to_well_leakage,"Well_c","Well_g",false);
+
+    cout<<"Junction"<<endl;
+    Block junction;
+    junction.SetQuantities(system->GetMetaModel(), "junction_elastic");
+    junction.SetName("Junction_elastic");
+    junction.SetType("junction_elastic");
+    junction.SetVal("_height",1000);
+    junction.SetVal("_width",1000);
+    junction.SetVal("x",1000);
+    junction.SetVal("y",mp.DepthofWell_c*2000+1000);
+    junction.SetVal("elevation",0); // Should be calculated
+    system->AddBlock(junction,false);
+
+    cout<<"Well to junction"<<endl;
+    Link well_to_junction;
+    well_to_junction.SetQuantities(system->GetMetaModel(), "darcy_connector");
+    well_to_junction.SetName("Well_to_junction");
+    well_to_junction.SetType("darcy_connector");
+    system->AddLink(well_to_junction,"Well_c","Junction_elastic",false);
+
+    cout<<"Junction to well"<<endl;
+    Link junction_to_well;
+    junction_to_well.SetQuantities(system->GetMetaModel(), "darcy_connector");
+    junction_to_well.SetName("Junction_to_well");
+    junction_to_well.SetType("darcy_connector");
+    system->AddLink(junction_to_well,"Junction_elastic","Well_g",false);
+
     cout<<"Groundwater"<<endl;
     Block gw;
     gw.SetQuantities(system->GetMetaModel(), "fixed_head");
