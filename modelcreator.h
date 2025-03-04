@@ -28,7 +28,11 @@ struct model_parameters
     double initial_theta = 0.2;
     double porosity_c = 1;
     double porosity_g = 0.5;
-
+    double ManningCoeff_lp = 0.01; //leakage pipe
+    double diameter_lp = 0.15;
+    double length_lp = 10;
+    double ManningCoeff_cm = 0.03; //catchment
+    double area_cm = 100;
 
 };
 
