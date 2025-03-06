@@ -7,7 +7,8 @@ class System;
 
 struct model_parameters
 {
-    double ft=0.3048; //ft to m
+    double ft = 0.3048; //ft to m
+    double in = 0.0254; //in to m
     double DepthtoGroundWater = 20; // Should be estimated
     double DepthofWell_c = 16*ft; // 16'
     double DepthofWell_g = 24*ft; // 24'
@@ -28,11 +29,19 @@ struct model_parameters
     double initial_theta = 0.2;
     double porosity_c = 1;
     double porosity_g = 0.5;
-    double ManningCoeff_lp = 0.01; //leakage pipe
-    double diameter_lp = 0.15;
-    double length_lp = 10;
+    double ManningCoeff_of = 0.01; //overflow
+    double diameter_of = 8*in;
+    double length_of = 10;
+    double start_elevation_of = -2;
+    double end_elevation_of = -10;
     double ManningCoeff_cm = 0.03; //catchment
-    double area_cm = 100;
+    double Slope_cm = 0.01;
+    double area_cm = 2700;
+    double Width_cm = 15;
+    double ManningCoeff_cmw = 0.05; //catchment to well link
+    double length_cmw = 50;
+    double elevation_j = -1*DepthofWell_c;
+
 
 };
 

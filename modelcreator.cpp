@@ -20,6 +20,9 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Pond_Plugin.json");
     system->ReadSystemSettingsTemplate("/home/behzad/Projects/OpenHydroQual/resources/settings.json");
 
+    double Simulation_start_time=41973; // Simulation Start Date
+    double Simulation_end_time=42342; // Simulation End Date
+
     double dr;
     double dz;
 
@@ -223,15 +226,17 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     well_g.SetVal("y",(mp.DepthofWell_c+mp.DepthofWell_g)*1000);
     system->AddBlock(well_g,false);
 
-    cout<<"Well to well leakage"<<endl;
-    Link well_to_well_leakage;
-    well_to_well_leakage.SetQuantities(system->GetMetaModel(), "Sewer_pipe");
-    well_to_well_leakage.SetName("Well_to_well_leakage");
-    well_to_well_leakage.SetType("Sewer_pipe");
-    well_to_well_leakage.SetVal("ManningCoeff",mp.ManningCoeff_lp);
-    well_to_well_leakage.SetVal("diameter",mp.diameter_lp);
-    well_to_well_leakage.SetVal("length",mp.length_lp);
-    system->AddLink(well_to_well_leakage,"Well_c","Well_g",false);
+    cout<<"Well to well overflow"<<endl;
+    Link well_to_well_overflow;
+    well_to_well_overflow.SetQuantities(system->GetMetaModel(), "Sewer_pipe");
+    well_to_well_overflow.SetName("Well_to_well_overflow");
+    well_to_well_overflow.SetType("Sewer_pipe");
+    well_to_well_overflow.SetVal("ManningCoeff",mp.ManningCoeff_of);
+    well_to_well_overflow.SetVal("diameter",mp.diameter_of);
+    well_to_well_overflow.SetVal("length",mp.length_of);
+    well_to_well_overflow.SetVal("start_elevation",mp.start_elevation_of);
+    well_to_well_overflow.SetVal("end_elevation",mp.end_elevation_of);
+    system->AddLink(well_to_well_overflow,"Well_c","Well_g",false);
 
     cout<<"Junction"<<endl;
     Block junction;
@@ -242,7 +247,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     junction.SetVal("_width",1000);
     junction.SetVal("x",3000);
     junction.SetVal("y",mp.DepthofWell_c*2000+1000);
-    junction.SetVal("elevation",0); // Should be calculated
+    junction.SetVal("elevation",mp.elevation_j); // Should be calculated
     system->AddBlock(junction,false);
 
     cout<<"Well to junction"<<endl;
@@ -311,6 +316,18 @@ bool ModelCreator::Create(model_parameters mp, System *system)
         system->AddLink(L2, ("Soil_uw (" + QString::number(i) + "$" + QString::number(mp.nz_g-1) + ")").toStdString(), "Ground Water", false);
     }
 
+    cout<<"Rain"<<endl;
+    Source rain;
+    rain.SetQuantities(system->GetMetaModel(), "Precipitation");
+    rain.SetType("Precipitation");
+    rain.SetName("Rain");
+    rain.SetVal("_height",3000);
+    rain.SetVal("_width",3000);
+    rain.SetVal("x",-5000);
+    rain.SetVal("y",-500);
+    rain.SetProperty("timeseries","/home/behzad/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv");
+    system->AddSource(rain, false);
+
     cout<<"Catchment"<<endl;
     Block catchment;
     catchment.SetQuantities(system->GetMetaModel(), "Catchment");
@@ -321,20 +338,25 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     catchment.SetVal("x",-5000);
     catchment.SetVal("y",0);
     catchment.SetVal("ManningCoeff",mp.ManningCoeff_cm);
+    catchment.SetVal("Slope",mp.Slope_cm);
     catchment.SetVal("area",mp.area_cm);
+    catchment.SetVal("Width",mp.Width_cm);
     catchment.SetVal("y",0);
-
     system->AddBlock(catchment,false);
-
+    system->block("Catchment")->SetProperty("Precipitation","Rain");
     cout<<"Catchment to well link"<<endl;
 
     Link L3;
     L3.SetQuantities(system->GetMetaModel(), "Surface water to well");
-
     L3.SetName("Catchment to well");
     L3.SetType("Surface water to well");
-
+    L3.SetVal("ManningCoeff",mp.ManningCoeff_cmw);
+    L3.SetVal("length",mp.length_cmw);
     system->AddLink(L3, "Catchment", "Well_c", false);
+
+
+    system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
+    system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
 
     cout<<"Populate functions"<<endl;
     system->PopulateOperatorsFunctions();
