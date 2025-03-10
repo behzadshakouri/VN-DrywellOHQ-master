@@ -24,11 +24,12 @@ int main(int argc, char *argv[])
 
     cout<<"Solving ..."<<endl;
     system->Solve();
+
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
-    CTimeSeriesSet<double> output = system->GetOutputs();
-    output.writetofile(system->GetWorkingFolder() + system->OutputFileName());
+    CTimeSeriesSet<double> uniformoutput = system->GetOutputs().make_uniform(1);
+    uniformoutput.writetofile(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
-    ResultGrid resgrid(output,"theta",system);
+    ResultGrid resgrid(uniformoutput,"theta",system);
     cout<<"Writing VTPs"<<endl;
     resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"moisture.vtp");
 
