@@ -26,10 +26,11 @@ int main(int argc, char *argv[])
     system->Solve();
 
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
-    CTimeSeriesSet<double> uniformoutput = system->GetOutputs().make_uniform(1);
-    uniformoutput.writetofile(system->GetWorkingFolder() + system->OutputFileName());
+    CTimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
+    CTimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.01);
+    uniformoutput_HR.writetofile(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
-    ResultGrid resgrid(uniformoutput,"theta",system);
+    ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
     resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"moisture.vtp");
 

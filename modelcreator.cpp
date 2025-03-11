@@ -53,6 +53,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta",mp.initial_theta);
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
+            B.SetVal("L",mp.L);
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
             B.SetVal("y",j*dz*3000+mp.DepthofWell_c*2800);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
@@ -88,6 +89,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta",mp.initial_theta);
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
+            B.SetVal("L",mp.L);
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
             B.SetVal("y",37000+(j*dz)*2000);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
@@ -120,6 +122,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
             B.SetVal("theta",mp.initial_theta);
             B.SetVal("theta_sat",mp.theta_sat);
             B.SetVal("theta_res",mp.theta_r);
+            B.SetVal("L",mp.L);
             B.SetVal("x",-mp.rw_g*1000+2000);
             B.SetVal("y",37000+(j*dz)*2000);
             B.SetVal("act_X",0);
@@ -364,7 +367,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
     system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
 
-    //system->SetSystemSettings();
+    system->SetSystemSettings();
 
     cout<<"Populate functions"<<endl;
     system->PopulateOperatorsFunctions();
