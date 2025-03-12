@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
     CTimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
-    CTimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.01);
+    CTimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.1);
     uniformoutput_HR.writetofile(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
