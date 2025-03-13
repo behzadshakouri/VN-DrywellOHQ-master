@@ -21,7 +21,7 @@ struct model_parameters
 
     int nz_c = 5; // Depth discretization number (around concrete part)
     int nz_g = 15; // Depth discretization number (around gravel part)
-    int nz_uw = 60; // Depth discretization number (under well part)
+    int nz_uw = 15; // Depth discretization number (under well part)
 
     double K_sat = 0.075; //will be calculated
     double alpha = 5; //will be calculated

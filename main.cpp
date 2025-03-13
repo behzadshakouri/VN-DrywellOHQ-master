@@ -17,10 +17,10 @@ int main(int argc, char *argv[])
     ModCreate.Create(mp,system);
     cout<<"Creating model done..." <<endl;
 
-    system->SetWorkingFolder("/mnt/3rd900/Projects/VN Drywell_Models/");
+    system->SetWorkingFolder("/home/behzad/Projects/VN Drywell_Models/"); // Should be modified according to the users directory
     system->SetSilent(false);
     cout<<"Saving"<<endl;
-    system->SavetoScriptFile("/mnt/3rd900/Projects/VN Drywell_Models/CreatedModel.ohq");
+    system->SavetoScriptFile("/home/behzad/Projects/VN Drywell_Models/CreatedModel.ohq"); // Should be modified according to the users directory
 
     cout<<"Solving ..."<<endl;
     system->Solve();

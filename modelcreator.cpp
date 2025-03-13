@@ -12,13 +12,13 @@ ModelCreator::ModelCreator()
 
 bool ModelCreator::Create(model_parameters mp, System *system)
 {
-    system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
-    system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/Sewer_system.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/pipe_pump_tank.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/Pond_Plugin.json");
-    system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
+    system->GetQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/main_components.json");
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Well.json");
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Sewer_system.json");
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/pipe_pump_tank.json");
+    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Pond_Plugin.json");
+    system->ReadSystemSettingsTemplate("/home/behzad/Projects/OpenHydroQual/resources/settings.json");
 
     double Simulation_start_time=41973; // Simulation Start Date
     double Simulation_end_time=42342; // Simulation End Date
@@ -334,7 +334,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     rain.SetVal("_width",3000);
     rain.SetVal("x",-5000);
     rain.SetVal("y",-500);
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv");
+    rain.SetProperty("timeseries","/home/behzad/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv"); // Should be modified according to the users directory
     system->AddSource(rain, false);
 
     cout<<"Catchment"<<endl;
