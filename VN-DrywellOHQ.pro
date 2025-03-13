@@ -11,29 +11,43 @@ CONFIG += c++14
 
 DEFINES += GSL
 
-CONFIG += Behzad
-DEFINES += Behzad
+#CONFIG += Behzad
+#DEFINES += Behzad
+
+
+CONFIG += PowerEdge
+DEFINES += PowerEdge
 
 
 #CONFIG += Arash
 #DEFINES += Arash
 
-Behzad {
+contains(DEFINES, Behzad) {
     OHQPATH = /home/behzad/Projects/OpenHydroQual/aquifolium
     VTKBUILDPATH = /home/behzad/Projects/VTK-9.3.1/VTK-build
     VTKHEADERPATH = /home/behzad/Projects/VTK-9.3.1
     VTK_V = -9.3
 }
 
-#Arash {
-    #OHQPATH = /home/arash/Projects/QAquifolium/aquifolium
-    #VTKBUILDPATH = /home/arash/Projects/VTK/VTK-build
-    #VTKHEADERPATH = /home/arash/Projects/VTK
-    #VTK_V = -9.0
-#}
+contains(DEFINES, PowerEdge) {
+    OHQPATH = ../OpenHydroQual/aquifolium
+    VTKBUILDPATH = ../VTK-build
+    VTKHEADERPATH = ../VTK
+    VTK_V = -9.0
+}
+
+contains(DEFINES, Arash) {
+    OHQPATH = /home/arash/Projects/QAquifolium/aquifolium
+    VTKBUILDPATH = /home/arash/Projects/VTK/VTK-build
+    VTKHEADERPATH = /home/arash/Projects/VTK
+    VTK_V = -9.0
+}
 
 DEFINES += use_VTK ARMA_USE_SUPERLU
 CONFIG += use_VTK
+
+message("DEFINES: $$DEFINES")
+message("VTK: $$VTKHEADERPATH")
 
 INCLUDEPATH += $$OHQPATH/include
 INCLUDEPATH += $$OHQPATH/src
