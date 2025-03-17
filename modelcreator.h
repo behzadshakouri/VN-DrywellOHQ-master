@@ -21,7 +21,7 @@ struct model_parameters
 
     int nz_c = 5; // Depth discretization number (around concrete part)
     int nz_g = 15; // Depth discretization number (around gravel part)
-    int nz_uw = 15; // Depth discretization number (under well part)
+    int nz_uw = 30; // Depth discretization number (under well part)
 
     double K_sat = 0.075; //will be calculated
     double alpha = 5; //will be calculated
@@ -48,7 +48,8 @@ struct model_parameters
     double ManningCoeff_cmw = 0.05; //catchment to well link
     double length_cmw = 50;
     double elevation_j = -1*DepthofWell_c;
-
+    double depth_w_c=0; //depth of water in well
+    double depth_w_g=0.01; //depth of water in well
 
 };
 

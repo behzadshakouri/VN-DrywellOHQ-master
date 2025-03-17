@@ -12,13 +12,13 @@ ModelCreator::ModelCreator()
 
 bool ModelCreator::Create(model_parameters mp, System *system)
 {
-    system->GetQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/main_components.json");
-    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
-    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Well.json");
-    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Sewer_system.json");
-    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/pipe_pump_tank.json");
-    system->AppendQuanTemplate("/home/behzad/Projects/OpenHydroQual/resources/Pond_Plugin.json");
-    system->ReadSystemSettingsTemplate("/home/behzad/Projects/OpenHydroQual/resources/settings.json");
+    system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
+    system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
+    system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
+    system->AppendQuanTemplate("../OpenHydroQual/resources/Sewer_system.json");
+    system->AppendQuanTemplate("../OpenHydroQual/resources/pipe_pump_tank.json");
+    system->AppendQuanTemplate("../OpenHydroQual/resources/Pond_Plugin.json");
+    system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
 
     double Simulation_start_time=41973; // Simulation Start Date
     double Simulation_end_time=42342; // Simulation End Date
@@ -214,7 +214,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     well_c.SetVal("_width",mp.rw_c*1000);
     well_c.SetVal("bottom_elevation",-mp.DepthofWell_c);
     well_c.SetVal("diameter",mp.rw_c*2);
-    well_c.SetVal("depth",0.5);
+    well_c.SetVal("depth",mp.depth_w_c);
     well_c.SetVal("porosity",mp.porosity_c);
     well_c.SetVal("x",-mp.rw_c*1000+2000);
     well_c.SetVal("y",mp.DepthofWell_c*200);
@@ -229,7 +229,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     well_g.SetVal("_width",mp.rw_g*1000);
     well_g.SetVal("bottom_elevation",-(mp.DepthofWell_c+mp.DepthofWell_g));
     well_g.SetVal("diameter",mp.rw_g*2);
-    well_g.SetVal("depth",0.5);
+    well_g.SetVal("depth",mp.depth_w_g);
     well_g.SetVal("porosity",mp.porosity_g);
     well_g.SetVal("x",-mp.rw_g*1000+2000);
     well_g.SetVal("y",(mp.DepthofWell_c+mp.DepthofWell_g)*1000);
@@ -334,7 +334,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     rain.SetVal("_width",3000);
     rain.SetVal("x",-5000);
     rain.SetVal("y",-500);
-    rain.SetProperty("timeseries","/home/behzad/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv"); // Should be modified according to the users directory
+    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv");
     system->AddSource(rain, false);
 
     cout<<"Catchment"<<endl;
