@@ -20,8 +20,30 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     system->AppendQuanTemplate("../OpenHydroQual/resources/Pond_Plugin.json");
     system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
 
-    double Simulation_start_time=41973; // Simulation Start Date
-    double Simulation_end_time=42342; // Simulation End Date
+
+    int rain_data=2; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new
+
+        double Simulation_start_time; // Simulation Start Date
+        double Simulation_end_time; // Simulation End Date
+
+// --------------------2014-2015----------------------------------
+if (rain_data==1)
+    {
+    Simulation_start_time=41973; // Simulation Start Date
+    Simulation_end_time=42342; // Simulation End Date
+    }
+// --------------------2023-2024----------------------------------
+else if (rain_data==2)
+{
+    Simulation_start_time=45230; // Simulation Start Date
+    Simulation_end_time=45600; // Simulation End Date
+}
+// --------------------2019-2024----------------------------------
+else if (rain_data==3)
+{
+    Simulation_start_time=43750; // Simulation Start Date
+    Simulation_end_time=45600; // Simulation End Date
+}
 
     double dr;
     double dz;
@@ -334,7 +356,19 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     rain.SetVal("_width",3000);
     rain.SetVal("x",-5000);
     rain.SetVal("y",-500);
+    if (rain_data==1)
+    {
     rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv");
+    }
+    else if (rain_data==2)
+    {
+    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr new).csv");
+    }
+    else if (rain_data==3)
+    {
+    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (5 yr new).csv");
+    }
+
     system->AddSource(rain, false);
 
     cout<<"Catchment"<<endl;
