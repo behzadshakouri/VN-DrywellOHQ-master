@@ -204,7 +204,7 @@ else if (rain_data==3)
         Link L;
         L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
 
-        int j_g=9;
+        int j_g=mp.nz_g-1;
         int j_uw=0;
         L.SetName(("VL-Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ") - Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw)+ ")").toStdString());
         L.SetType("soil_to_soil_link");
