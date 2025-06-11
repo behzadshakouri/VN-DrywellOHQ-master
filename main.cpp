@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
 
     cout<<"Solving ..."<<endl;
     system->Solve();
-
+    system->SavetoJson("/mnt/3rd900/Projects/VN Drywell_Models/Model.json",system->addedtemplates, true, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
     CTimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
     CTimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.1);
