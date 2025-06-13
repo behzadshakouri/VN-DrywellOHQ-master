@@ -295,7 +295,13 @@ else if (rain_data==3)
     junction_to_well.SetType("darcy_connector");
     system->AddLink(junction_to_well,"Junction_elastic","Well_g",false);
 
+    // Well to gravel links
+
     cout<<"Horizontal links for well to gravel part soils"<<endl;
+
+    dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
+    dz = mp.DepthofWell_g/mp.nz_g;
+
     for (int j=0; j<mp.nz_g; j++)
         if (j*dz<mp.DepthofWell_t)
         {
@@ -313,6 +319,9 @@ else if (rain_data==3)
 
     cout<<"Vertical links for well to under well soils"<<endl;
 
+    dr = (mp.RadiousOfInfluence-mp.rw_uw)/mp.nr_uw;
+    dz = (mp.DepthtoGroundWater-mp.DepthofWell_t)/mp.nz_uw;
+
         Link L1;
         L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");
 
@@ -323,6 +332,7 @@ else if (rain_data==3)
 
         system->AddLink(L1, "Well_g", ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(), false);
 
+    // Graoundwater links
     cout<<"Groundwater"<<endl;
     Block gw;
     gw.SetQuantities(system->GetMetaModel(), "fixed_head");
