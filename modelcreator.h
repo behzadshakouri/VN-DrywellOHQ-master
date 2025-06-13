@@ -15,13 +15,13 @@ struct model_parameters
     double DepthofWell_t = DepthofWell_c + DepthofWell_g; // 40'
     double RadiousOfInfluence = 20; //Should be estimated
 
-    int nr_c = 1; // Radius discretization number (around concrete part), 4
-    int nr_g = 3; // Radius discretization number (around gravel part), 12
-    int nr_uw = 3; // Radius discretization number (under well part), 12
+    int nr_c = 4; // Radius discretization number (around concrete part), 4
+    int nr_g = 12; // Radius discretization number (around gravel part), 12
+    int nr_uw = 12; // Radius discretization number (under well part), 12
 
-    int nz_c = 1; // Depth discretization number (around concrete part), 5
-    int nz_g = 3; // Depth discretization number (around gravel part), 15
-    int nz_uw = 6; // Depth discretization number (under well part), 30
+    int nz_c = 5; // Depth discretization number (around concrete part), 5
+    int nz_g = 15; // Depth discretization number (around gravel part), 15
+    int nz_uw = 30; // Depth discretization number (under well part), 30
 
     double K_sat = 0.3; //will be calculated
     double alpha = 5; //will be calculated
