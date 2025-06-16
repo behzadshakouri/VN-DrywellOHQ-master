@@ -26,7 +26,7 @@ struct model_parameters
     double K_sat = 0.3; //will be calculated
     double alpha = 5; //will be calculated
     double n = 1.8;
-    double L = 0.365; // -0.874
+    double L = -0.874; // -0.874
     double rw_c = 4*ft; //4'
     double rw_c_t = 6*ft; //6'
     double rw_g = 4*ft; //4'
