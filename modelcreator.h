@@ -50,6 +50,8 @@ struct model_parameters
     double elevation_j = -1*DepthofWell_c;
     double depth_w_c=0; //depth of water in well
     double depth_w_g=0.01; //depth of water in well
+    double Maximum_time_allowed=10*86400; // 10 days
+    double Maximum_number_of_matrix_inverstions=10*200000; // 10x
 
 };
 

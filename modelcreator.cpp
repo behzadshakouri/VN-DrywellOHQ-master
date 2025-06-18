@@ -26,6 +26,9 @@ bool ModelCreator::Create(model_parameters mp, System *system)
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
 
+        double Maximum_time_allowed=10*86400; // 10 Days
+        double Maximum_number_of_matrix_inverstions=10*200000; // 10x
+
 // --------------------2014-2015----------------------------------
 if (rain_data==1)
     {
@@ -410,6 +413,10 @@ else if (rain_data==3)
 
     system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
     system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
+
+    system->SetSettingsParameter("maximum_time_allowed",Maximum_time_allowed);
+    system->SetSettingsParameter("maximum_number_of_matrix_inverstions",Maximum_number_of_matrix_inverstions);
+
 
     system->SetSystemSettings();
 
