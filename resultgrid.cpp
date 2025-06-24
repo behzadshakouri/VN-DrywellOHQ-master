@@ -16,6 +16,7 @@ ResultGrid::ResultGrid(const ResultGrid& rhs):CTimeSeriesSet<double>(rhs)
 {
     Positions = rhs.Positions;
 }
+
 ResultGrid::~ResultGrid()
 {
 

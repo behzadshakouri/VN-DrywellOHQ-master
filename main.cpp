@@ -34,6 +34,11 @@ int main(int argc, char *argv[])
     cout<<"Writing VTPs"<<endl;
     resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"moisture.vtp");
 
+    vector<string> well_block; well_block.push_back("Well");
+
+    ResultGrid well_depth = ResultGrid(uniformoutput_HR,well_block,"depth" );
+    well_depth.Sum().writefile(system->GetWorkingFolder()+"WaterDepth.csv");
+
     return 0;
 
 }

@@ -20,6 +20,7 @@ public:
     ResultGrid& operator=(const ResultGrid&);
     ResultGrid(const CTimeSeriesSet<double> &cts, const string &quantity, System *system);
     ResultGrid(const CTimeSeriesSet<double> &cts, const vector<string> &components, const string &quantity);
+
     CTimeSeries<double> Sum();
     CTimeSeries<double> SumIntegrate();
     vector<point> Positions;

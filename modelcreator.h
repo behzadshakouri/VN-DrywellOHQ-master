@@ -9,7 +9,7 @@ struct model_parameters
 {
     double ft = 0.3048; //ft to m
     double in = 0.0254; //in to m
-    double DepthtoGroundWater = 85; // Should be estimated
+    double DepthtoGroundWater = 85; // Should be estimated, 25 to 85 m
     double DepthofWell_c = 16*ft; // 16'
     double DepthofWell_g = 24*ft; // 24'
     double DepthofWell_t = DepthofWell_c + DepthofWell_g; // 40'
@@ -23,16 +23,18 @@ struct model_parameters
     int nz_g = 15; // Depth discretization number (around gravel part), 15
     int nz_uw = 30; // Depth discretization number (under well part), 30
 
-    double K_sat = 0.3; //will be calculated
-    double alpha = 5; //will be calculated
-    double n = 1.8;
-    double L = -0.874; // -0.874
+    // Soil properties
+    double theta_r = 0.049; // will be calculated, 0.049
+    double theta_sat = 0.39;// will be calculated, 0.39
+    double alpha = 3.47536; // will be calculated, 5
+    double n = 1.74582; // will be calculated, 1.8
+    double K_sat = 1.05196; // will be calculated, 0.3
+    double K_o = 0.24322; // will be calculated, 0.24322
+    double L = -0.874; // will be calculated, -0.874
     double rw_c = 4*ft; //4'
     double rw_c_t = 6*ft; //6'
     double rw_g = 4*ft; //4'
     double rw_uw = 4*ft; //4'
-    double theta_sat = 0.39;
-    double theta_r = 0.049;
     double initial_theta = 0.2;
     double porosity_c = 1;
     double porosity_g = 0.5;

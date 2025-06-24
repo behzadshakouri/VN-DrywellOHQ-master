@@ -21,7 +21,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
 
 
-    int rain_data=2; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new
+    int rain_data=4; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
@@ -47,6 +47,12 @@ else if (rain_data==3)
     Simulation_start_time=43750; // Simulation Start Date
     Simulation_end_time=45600; // Simulation End Date
 }
+// --------------------2023-2024----------------------------------
+else if (rain_data==4)
+{
+    Simulation_start_time=45230; // Simulation Start Date
+    Simulation_end_time=45320; // Simulation End Date
+}
 
     double dr;
     double dz;
@@ -69,6 +75,7 @@ else if (rain_data==3)
             B.SetName(("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             B.SetVal("K_sat_original",mp.K_sat);
+            //B.SetVal("K_sat_scale_factor",mp.K_o);
             B.SetVal("alpha",mp.alpha);
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
@@ -105,6 +112,7 @@ else if (rain_data==3)
             B.SetName(("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             B.SetVal("K_sat_original",mp.K_sat);
+            //B.SetVal("K_sat_scale_factor",mp.K_o);
             B.SetVal("alpha",mp.alpha);
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
@@ -138,6 +146,7 @@ else if (rain_data==3)
             B.SetName(("Soil-uw (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             B.SetVal("K_sat_original",mp.K_sat);
+            //B.SetVal("K_sat_scale_factor",mp.K_o);
             B.SetVal("alpha",mp.alpha);
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
@@ -346,7 +355,7 @@ else if (rain_data==3)
     gw.SetVal("head",-mp.DepthtoGroundWater);
     gw.SetVal("Storage",100000);
     gw.SetVal("x",-mp.nr_uw*1000);
-    gw.SetVal("y",mp.DepthtoGroundWater*2200);
+    gw.SetVal("y",(mp.nz_c+mp.nz_g+mp.nz_uw)*4000);
     system->AddBlock(gw,false);
 
     cout<<"Soil to Groundwater"<<endl;
@@ -380,6 +389,10 @@ else if (rain_data==3)
     else if (rain_data==3)
     {
     rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (5 yr new).csv");
+    }
+    else if (rain_data==4)
+    {
+    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr new).csv");
     }
 
     system->AddSource(rain, false);
