@@ -26,18 +26,23 @@ int main(int argc, char *argv[])
     system->Solve();
     system->SavetoJson("/mnt/3rd900/Projects/VN Drywell_Models/Model.json",system->addedtemplates, true, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
+
     CTimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
     CTimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.1);
     uniformoutput_HR.writetofile(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
+
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
     resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"moisture.vtp");
 
-    vector<string> well_block; well_block.push_back("Well");
+    vector<string> well_block_c; well_block_c.push_back("Well_c");
+    ResultGrid well_depth_c = ResultGrid(uniformoutput_HR,well_block_c,"depth");
+    well_depth_c.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_c.csv");
 
-    ResultGrid well_depth = ResultGrid(uniformoutput_HR,well_block,"depth" );
-    well_depth.Sum().writefile(system->GetWorkingFolder()+"WaterDepth.csv");
+    vector<string> well_block_g; well_block_g.push_back("Well_g");
+    ResultGrid well_depth_g = ResultGrid(uniformoutput_HR,well_block_g,"depth");
+    well_depth_g.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_g.csv");
 
     return 0;
 
