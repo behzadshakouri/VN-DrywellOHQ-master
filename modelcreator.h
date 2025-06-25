@@ -24,13 +24,13 @@ struct model_parameters
     int nz_uw = 6; // Depth discretization number (under well part), 30
 
     // Soil properties
-    double theta_r = 0.049; // will be calculated, 0.049
-    double theta_sat = 0.39;// will be calculated, 0.39
-    double alpha = 3.47536; // will be calculated, 5
-    double n = 1.74582; // will be calculated, 1.8
-    double K_sat = 1.05196; // will be calculated, 0.3
-    double K_o = 0.24322; // will be calculated, 0.24322
-    double L = -0.874; // will be calculated, -0.874
+    double theta_r = 0.049; // will be calculated, 0.049, Rosetta Sandy Loam Non-log 0.049
+    double theta_sat = 0.39;// will be calculated, 0.39, Rosetta Sandy Loam Non-log 0.39
+    double alpha = 3.47536; // will be calculated, 5, Rosetta Sandy Loam Non-log 3.47536
+    double n = 1.74582; // will be calculated, 1.8, Rosetta Sandy Loam Non-log 1.74582
+    double K_sat = 1.05196; // will be calculated, 0.3, Rosetta Sandy Loam Non-log 1.05196
+    double K_o = 0.24322; // will be calculated, 0.24322, Rosetta Sandy Loam Non-log 0.24322
+    double L = -0.874; // will be calculated, -0.874, Rosetta Sandy Loam Non-log -0.874
     double rw_c = 4*ft; //4'
     double rw_c_t = 6*ft; //6'
     double rw_g = 4*ft; //4'

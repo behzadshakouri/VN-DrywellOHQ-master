@@ -33,8 +33,9 @@ ResultGrid::ResultGrid(const CTimeSeriesSet<double> &cts, const vector<string> &
 {
     for (unsigned int i=0; i<components.size(); i++)
     {
-        if (cts.names[i]==components[i] + "_" + quantity)
-            append(cts.BTC[i],components[i]);
+        for (unsigned int j=0; j<cts.nvars; j++)
+            if (cts.names[j]==components[i] + "_" + quantity)
+                append(cts.BTC[j],components[i]);
     }
 }
 
