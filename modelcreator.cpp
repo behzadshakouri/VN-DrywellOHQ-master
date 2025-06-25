@@ -21,7 +21,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
 
 
-    int rain_data=4; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
+    int rain_data=3; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
