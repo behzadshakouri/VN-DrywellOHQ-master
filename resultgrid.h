@@ -20,6 +20,7 @@ public:
     virtual ~ResultGrid();
     ResultGrid& operator=(const ResultGrid&);
     ResultGrid(const TimeSeriesSet<double> &cts, const string &quantity, System *system);
+    ResultGrid(const string &quantity, System *system);
     ResultGrid(const TimeSeriesSet<double> &cts, const vector<string> &components, const string &quantity);
 
     TimeSeries<double> Sum();

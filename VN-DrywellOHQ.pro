@@ -16,12 +16,12 @@ DEFINES += GSL
 #DEFINES += Behzad
 
 
-CONFIG += PowerEdge
-DEFINES += PowerEdge
+#CONFIG += PowerEdge
+#DEFINES += PowerEdge
 
 
-#CONFIG += Arash
-#DEFINES += Arash
+CONFIG += Arash
+DEFINES += Arash
 
 contains(DEFINES, Behzad) {
     OHQPATH = /home/behzad/Projects/OpenHydroQual/aquifolium
@@ -38,10 +38,10 @@ contains(DEFINES, PowerEdge) {
 }
 
 contains(DEFINES, Arash) {
-    OHQPATH = /home/arash/Projects/QAquifolium/aquifolium
-    VTKBUILDPATH = /home/arash/Projects/VTK/VTK-build
-    VTKHEADERPATH = /home/arash/Projects/VTK
-    VTK_V = -9.0
+    OHQPATH = /home/arash/Projects/OpenHydroQual/aquifolium
+    VTKBUILDPATH = /home/arash/Projects/VTK-9.4.1/build
+    VTKHEADERPATH = /home/arash/Projects/VTK-9.4.1
+    VTK_V = -9.4
 }
 
 DEFINES += use_VTK ARMA_USE_SUPERLU
@@ -307,7 +307,6 @@ use_VTK {
     LIBS += -L$$VTKBUILDPATH/lib/ -lvtkfreetype$$VTK_V
     LIBS += -L$$VTKBUILDPATH/lib/ -lvtkGeovisCore$$VTK_V
     LIBS += -L$$VTKBUILDPATH/lib/ -lvtkgl2ps$$VTK_V
-    LIBS += -L$$VTKBUILDPATH/lib/ -lvtkglew$$VTK_V
     LIBS += -L$$VTKBUILDPATH/lib/ -lvtkhdf5$$VTK_V
     LIBS += -L$$VTKBUILDPATH/lib/ -lvtkhdf5_hl$$VTK_V
     LIBS += -L$$VTKBUILDPATH/lib/ -lvtkImagingColor$$VTK_V
@@ -421,6 +420,9 @@ use_VTK {
     INCLUDEPATH +=$${VTKHEADERPATH}/Imaging/Core
     INCLUDEPATH +=$${VTKBUILDPATH}/Imaging/Core
     INCLUDEPATH +=$${VTKBUILDPATH}/Utilities/KWSys
+    INCLUDEPATH += $${VTKBUILDPATH}/ThirdParty/nlohmannjson
+    INCLUDEPATH += $${VTKHEADERPATH}/ThirdParty/nlohmannjson
+
 
 }
 

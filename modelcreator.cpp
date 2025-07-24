@@ -13,7 +13,11 @@ ModelCreator::ModelCreator()
 bool ModelCreator::Create(model_parameters mp, System *system)
 {
     TimeSeriesSet<double> SoilData;
+#ifdef PowerEdge
     SoilData.read("/mnt/3rd900/Projects/VN Bioretention/Soil/Soil retention params vs depth.csv");
+#elif Arash
+    SoilData.read("/home/arash/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
+#endif
 
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version

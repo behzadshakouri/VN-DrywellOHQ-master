@@ -17,15 +17,25 @@ int main(int argc, char *argv[])
     ModCreate.Create(mp,system);
     cout<<"Creating model done..." <<endl;
 
-    system->SetWorkingFolder("/mnt/3rd900/Projects/VN Drywell_Models/"); // Should be modified according to the users directory
+#ifdef PowerEdge
+    string path = "/mnt/3rd900/Projects/VN Drywell_Models/";
+#elif Arash
+    string path = "/home/arash/Projects/VN Drywell_Models";
+#endif
+
+    system->SetWorkingFolder(path); // Should be modified according to the users directory
     system->SetSilent(false);
     cout<<"Saving"<<endl;
-    system->SavetoScriptFile("/mnt/3rd900/Projects/VN Drywell_Models/CreatedModel.ohq"); // Should be modified according to the users directory
+    system->SavetoScriptFile(path + "/CreatedModel.ohq"); // Should be modified according to the users directory
 
     cout<<"Solving ..."<<endl;
+    system->CalcAllInitialValues();
+
+    ResultGrid resgrid_ksat("K_sat_original",system);
+    resgrid_ksat.WriteToVTP("Ksat",path + "/Ksat.vtp",0);
 
     system->Solve();
-    system->SavetoJson("/mnt/3rd900/Projects/VN Drywell_Models/Model.json",system->addedtemplates, true, true );
+    system->SavetoJson(path + "/Model.json",system->addedtemplates, true, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
 
     TimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
