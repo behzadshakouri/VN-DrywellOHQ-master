@@ -7,12 +7,12 @@
 
 using namespace std;
 
-ResultGrid::ResultGrid():CTimeSeriesSet<double>()
+ResultGrid::ResultGrid():TimeSeriesSet<double>()
 {
 
 }
 
-ResultGrid::ResultGrid(const ResultGrid& rhs):CTimeSeriesSet<double>(rhs)
+ResultGrid::ResultGrid(const ResultGrid& rhs):TimeSeriesSet<double>(rhs)
 {
     Positions = rhs.Positions;
 }
@@ -24,43 +24,43 @@ ResultGrid::~ResultGrid()
 
 ResultGrid& ResultGrid::operator=(const ResultGrid &rhs)
 {
-    CTimeSeriesSet::operator=(rhs);
+    TimeSeriesSet::operator=(rhs);
     Positions = rhs.Positions;
     return *this;
 }
 
-ResultGrid::ResultGrid(const CTimeSeriesSet<double> &cts, const vector<string> &components, const string &quantity)
+ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts, const vector<string> &components, const string &quantity)
 {
     for (unsigned int i=0; i<components.size(); i++)
     {
-        for (unsigned int j=0; j<cts.nvars; j++)
-            if (cts.names[j]==components[i] + "_" + quantity)
-                append(cts.BTC[j],components[i]);
+        for (unsigned int j=0; j<cts.size(); j++)
+            if (cts.getSeriesName(j)==components[i] + "_" + quantity)
+                append(cts[j],components[i]);
     }
 }
 
-CTimeSeries<double> ResultGrid::Sum()
+TimeSeries<double> ResultGrid::Sum()
 {
-    CTimeSeries<double> out;
-    out = BTC[0];
-    for (unsigned int i = 1; i<BTC.size(); i++)
+    TimeSeries<double> out;
+    out = operator[](0);
+    for (unsigned int i = 1; i<size(); i++)
     {
-        out %= BTC[i];
+        out %= operator[](i);
     }
     return out;
 }
 
-CTimeSeries<double> ResultGrid::SumIntegrate()
+TimeSeries<double> ResultGrid::SumIntegrate()
 {
     return Sum().integrate();
 }
 
-ResultGrid::ResultGrid(const CTimeSeriesSet<double> &cts, const string &quantity, System *system)
+ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts, const string &quantity, System *system)
 {
-    for (int i=0; i<cts.nvars; i++)
+    for (int i=0; i<cts.size(); i++)
     {
-        string block_name = QString::fromStdString(cts.names[i]).split("_")[0].toStdString();
-        string quan = QString::fromStdString(cts.names[i]).split("_")[1].toStdString();
+        string block_name = QString::fromStdString(cts.getSeriesName(i)).split("_")[0].toStdString();
+        string quan = QString::fromStdString(cts.getSeriesName(i)).split("_")[1].toStdString();
         if (quan==quantity)
         {
             point pt;
@@ -69,7 +69,7 @@ ResultGrid::ResultGrid(const CTimeSeriesSet<double> &cts, const string &quantity
                 pt.x = system->block(block_name)->GetVal("act_X");
                 pt.y = system->block(block_name)->GetVal("act_Y");
                 Positions.push_back(pt);
-                append(cts.BTC[i],block_name);
+                append(cts[i],block_name);
             }
 
         }
@@ -93,14 +93,14 @@ void ResultGrid::WriteToVTP(const std::string &quanname, const std::string &file
 
 
 
-        for (unsigned int j = 0; j < nvars; j++)
+        for (unsigned int j = 0; j < size(); j++)
         {
             //cout<<"Positions "<<j<<endl;
             yy = Positions[j].y;
             xx = Positions[j].x;
-            zz = BTC[j].GetC(i)*scale;
+            zz = operator[](j).getValue(i)*scale;
             //cout<<"Positions "<<j<<":"<<xx<<":"<<yy<<":"<<zz<<" done!"<<endl;
-            float tt = float(BTC[j].GetC(i));
+            float tt = float(operator[](j).getValue(i));
             float t[1] = { tt };
             //cout<<"0.1"<<endl;
             points_3->InsertNextPoint(xx, yy, zz);
@@ -171,7 +171,7 @@ void ResultGrid::WriteToVTP(const std::string &quanname, const std::string &file
 
 void ResultGrid::WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale) const
 {
-    for (unsigned k=0; k<BTC[0].n; k++)
+    for (unsigned k=0; k<operator[](0).size(); k++)
     {
         cout<<"snapshot: "<<k<<endl;
         std::string name = aquiutils::split(filename,'.')[0]+"_"+aquiutils::numbertostring(k+1,4)+".vtp";

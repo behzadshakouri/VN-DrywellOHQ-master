@@ -7,7 +7,7 @@ QT += core
 CONFIG += console
 CONFIG -= app_bundle
 
-CONFIG += c++14
+CONFIG += c++17
 
 DEFINES += GSL
 
@@ -187,6 +187,10 @@ HEADERS += \
     $$OHQPATH/include/System.h \
     $$OHQPATH/include/Vector.h \
     $$OHQPATH/include/Vector_arma.h \
+    ../OpenHydroQual/aquifolium/include/TimeSeries.h \
+    ../OpenHydroQual/aquifolium/include/TimeSeriesSet.h \
+    ../OpenHydroQual/aquifolium/src/TimeSeries.hpp \
+    ../OpenHydroQual/aquifolium/src/TimeSeriesSet.hpp \
     ../jsoncpp/include/json/allocator.h \
     ../jsoncpp/include/json/assertions.h \
     ../jsoncpp/include/json/autolink.h \

@@ -1,7 +1,8 @@
 #ifndef RESULTGRID_H
 #define RESULTGRID_H
 
-#include <BTCSet.h>
+#include "TimeSeries.h"
+#include "TimeSeriesSet.h"
 
 struct point
 {
@@ -11,18 +12,18 @@ struct point
 
 class System;
 
-class ResultGrid: public CTimeSeriesSet<double>
+class ResultGrid: public TimeSeriesSet<double>
 {
 public:
     ResultGrid();
     ResultGrid(const ResultGrid&);
     virtual ~ResultGrid();
     ResultGrid& operator=(const ResultGrid&);
-    ResultGrid(const CTimeSeriesSet<double> &cts, const string &quantity, System *system);
-    ResultGrid(const CTimeSeriesSet<double> &cts, const vector<string> &components, const string &quantity);
+    ResultGrid(const TimeSeriesSet<double> &cts, const string &quantity, System *system);
+    ResultGrid(const TimeSeriesSet<double> &cts, const vector<string> &components, const string &quantity);
 
-    CTimeSeries<double> Sum();
-    CTimeSeries<double> SumIntegrate();
+    TimeSeries<double> Sum();
+    TimeSeries<double> SumIntegrate();
     vector<point> Positions;
     void WriteToVTP(const std::string &quanname, const std::string &filename, int i, const double &scale=1) const;
     void WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale=1) const;

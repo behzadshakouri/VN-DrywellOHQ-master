@@ -12,6 +12,9 @@ ModelCreator::ModelCreator()
 
 bool ModelCreator::Create(model_parameters mp, System *system)
 {
+    TimeSeriesSet<double> SoilData;
+    SoilData.read("/mnt/3rd900/Projects/VN Bioretention/Soil/Soil retention params vs depth.csv");
+
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
     system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
@@ -71,25 +74,27 @@ else if (rain_data==4)
             double r1 = mp.rw_g + i*dr;
             double r2 = mp.rw_g + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
-
+            double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
             B.SetName(("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
-            B.SetVal("K_sat_original",mp.K_sat);
+            //B.SetVal("K_sat_original",mp.K_sat);
+            B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
             //B.SetVal("K_sat_scale_factor",mp.K_o);
-            B.SetVal("alpha",mp.alpha);
+            B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
+            B.SetVal("n",SoilData["n"].interpol(actual_depth));
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_c);
             B.SetVal("depth",dz);
             B.SetVal("theta",mp.initial_theta);
-            B.SetVal("theta_sat",mp.theta_sat);
-            B.SetVal("theta_res",mp.theta_r);
+            B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
+            B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             B.SetVal("L",mp.L);
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
             B.SetVal("y",j*dz*3000+mp.DepthofWell_c*2800);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
-            B.SetVal("act_Y",-(j+0.5)*dz-mp.DepthofWell_c);
+            B.SetVal("act_Y",-actual_depth);
             system->AddBlock(B,false);
         }
 
