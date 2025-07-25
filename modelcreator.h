@@ -30,7 +30,7 @@ struct model_parameters
     double n = 1.74582; // will be calculated, 1.8, Rosetta Sandy Loam Non-log 1.74582
     double K_sat = 1.05196; // will be calculated, 0.3, Rosetta Sandy Loam Non-log 1.05196
     double K_o = 0.24322; // will be calculated, 0.24322, Rosetta Sandy Loam Non-log 0.24322
-    double L = -0.874; // will be calculated, -0.874, Rosetta Sandy Loam Non-log -0.874
+    double L = -0.5; // will be calculated, -0.874, Rosetta Sandy Loam Non-log -0.874, for new approach -0.5 (default)
     double rw_c = 4*ft; //4'
     double rw_c_t = 6*ft; //6'
     double rw_g = 4*ft; //4'

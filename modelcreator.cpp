@@ -14,7 +14,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 {
     TimeSeriesSet<double> SoilData;
 #ifdef PowerEdge
-    SoilData.read("/mnt/3rd900/Projects/VN Bioretention/Soil/Soil retention params vs depth.csv");
+    SoilData.read("/mnt/3rd900/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
 #elif Arash
     SoilData.read("/home/arash/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
 #endif
@@ -79,6 +79,7 @@ else if (rain_data==4)
             double r2 = mp.rw_g + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
             double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
+
             B.SetName(("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             //B.SetVal("K_sat_original",mp.K_sat);
@@ -117,25 +118,28 @@ else if (rain_data==4)
             double r1 = mp.rw_uw + i*dr;
             double r2 = mp.rw_uw + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
+            double actual_depth = (j+0.5)*dz-mp.DepthofWell_t;
 
             B.SetName(("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
-            B.SetVal("K_sat_original",mp.K_sat);
+            //B.SetVal("K_sat_original",mp.K_sat);
+            B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
             //B.SetVal("K_sat_scale_factor",mp.K_o);
-            B.SetVal("alpha",mp.alpha);
+            B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
+            B.SetVal("n",SoilData["n"].interpol(actual_depth));
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_t);
             B.SetVal("depth",dz);
             B.SetVal("theta",mp.initial_theta);
-            B.SetVal("theta_sat",mp.theta_sat);
-            B.SetVal("theta_res",mp.theta_r);
+            B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
+            B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             B.SetVal("L",mp.L);
             B.SetVal("x",-(i*dr+mp.rw_uw)*2000);
             B.SetVal("y",37000+(j*dz)*2000);
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_uw);
-            B.SetVal("act_Y",-(j+0.5)*dz-mp.DepthofWell_t);
+            B.SetVal("act_Y",-actual_depth);
             system->AddBlock(B,false);
     }
 
@@ -151,25 +155,28 @@ else if (rain_data==4)
             B.SetQuantities(system->GetMetaModel(), "Soil");
 
             double area = pi*pow(mp.rw_uw,2);
+            double actual_depth = (j+0.5)*dz-mp.DepthofWell_t;
 
             B.SetName(("Soil-uw (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
-            B.SetVal("K_sat_original",mp.K_sat);
+            //B.SetVal("K_sat_original",mp.K_sat);
+            B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
             //B.SetVal("K_sat_scale_factor",mp.K_o);
-            B.SetVal("alpha",mp.alpha);
+            B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
+            B.SetVal("n",SoilData["n"].interpol(actual_depth));
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_t);
             B.SetVal("depth",dz);
             B.SetVal("theta",mp.initial_theta);
-            B.SetVal("theta_sat",mp.theta_sat);
-            B.SetVal("theta_res",mp.theta_r);
+            B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
+            B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             B.SetVal("L",mp.L);
             B.SetVal("x",-mp.rw_uw*1000+2000);
             B.SetVal("y",37000+(j*dz)*2000);
             B.SetVal("act_X",0);
-            B.SetVal("act_Y",-(j+0.5)*dz-mp.DepthofWell_t);
+            B.SetVal("act_Y",-actual_depth);
             system->AddBlock(B,false);
         }
 
@@ -339,9 +346,6 @@ else if (rain_data==4)
         }
 
     cout<<"Vertical links for well to under well soils"<<endl;
-
-    dr = (mp.RadiousOfInfluence-mp.rw_uw)/mp.nr_uw;
-    dz = (mp.DepthtoGroundWater-mp.DepthofWell_t)/mp.nz_uw;
 
         Link L1;
         L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");

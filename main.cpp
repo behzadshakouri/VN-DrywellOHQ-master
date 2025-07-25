@@ -4,7 +4,8 @@
 #include "modelcreator.h"
 #include "resultgrid.h"
 #include "vtk.h"
-
+#include "ostream"
+using namespace std;
 
 int main(int argc, char *argv[])
 {
