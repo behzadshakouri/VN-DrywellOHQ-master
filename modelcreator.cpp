@@ -118,7 +118,7 @@ else if (rain_data==4)
             double r1 = mp.rw_uw + i*dr;
             double r2 = mp.rw_uw + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
-            double actual_depth = (j+0.5)*dz-mp.DepthofWell_t;
+            double actual_depth = (j+0.5)*dz+mp.DepthofWell_t;
 
             B.SetName(("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
@@ -155,7 +155,7 @@ else if (rain_data==4)
             B.SetQuantities(system->GetMetaModel(), "Soil");
 
             double area = pi*pow(mp.rw_uw,2);
-            double actual_depth = (j+0.5)*dz-mp.DepthofWell_t;
+            double actual_depth = (j+0.5)*dz+mp.DepthofWell_t;
 
             B.SetName(("Soil-uw (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");

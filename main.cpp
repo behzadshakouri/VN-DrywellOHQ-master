@@ -32,9 +32,23 @@ int main(int argc, char *argv[])
     cout<<"Solving ..."<<endl;
     system->CalcAllInitialValues();
 
-    ResultGrid resgrid_ksat("K_sat_original",system);
-    resgrid_ksat.WriteToVTP("Ksat",path + "/Ksat.vtp",0);
+    // Soil params VTP
+    ResultGrid resgrid_Ksat("K_sat_original",system);
+    resgrid_Ksat.WriteToVTP("Ksat",path + "/Ksat.vtp",0);
 
+    ResultGrid resgrid_alpha("alpha",system);
+    resgrid_alpha.WriteToVTP("alpha",path + "/alpha.vtp",0);
+
+    ResultGrid resgrid_n("n",system);
+    resgrid_n.WriteToVTP("n",path + "/n.vtp",0);
+
+    ResultGrid resgrid_theta_s("theta_sat",system);
+    resgrid_theta_s.WriteToVTP("theta_s",path + "/theta_s.vtp",0);
+
+    ResultGrid resgrid_theta_r("theta_res",system);
+    resgrid_theta_r.WriteToVTP("theta_r",path + "/theta_r.vtp",0);
+
+    // Solve
     system->Solve();
     system->SavetoJson(path + "/Model.json",system->addedtemplates, true, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
