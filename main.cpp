@@ -48,6 +48,11 @@ int main(int argc, char *argv[])
     ResultGrid resgrid_theta_r("theta_res",system);
     resgrid_theta_r.WriteToVTP("theta_r",path + "/theta_r.vtp",0);
 
+    vector<string> quantities = {"K_sat_original","alpha", "n","theta_sat", "theta_res"};
+    double dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
+    ResultGrid::Make3DVTK(quantities,dr,system,path+ "/3D_model.vtm");
+
+
     // Solve
     system->Solve();
     system->SavetoJson(path + "/Model.json",system->addedtemplates, true, true );

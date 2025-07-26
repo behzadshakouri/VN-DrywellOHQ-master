@@ -3,6 +3,7 @@
 
 #include "TimeSeries.h"
 #include "TimeSeriesSet.h"
+#include <vtk.h>
 
 struct point
 {
@@ -28,6 +29,14 @@ public:
     vector<point> Positions;
     void WriteToVTP(const std::string &quanname, const std::string &filename, int i, const double &scale=1) const;
     void WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale=1) const;
+
+    static vtkSmartPointer<vtkPolyData> MakeCylinder(double radius, double height, double centerZ);
+    static vtkSmartPointer<vtkPolyData> MakeHollowCylinder(double zCenter, double height, double outerRadius, double innerRadius,map<string, float> values);
+    static void Make3DVTK(vector<string> quantity, double dr,System *system, string filename);
+    static vtkSmartPointer<vtkPolyData> MakeTube(double radius, double height, double zCenter, std::map<std::string, float> values);
+    static vtkSmartPointer<vtkPolyData> MakeTube(double outerRadius, double innerRadius, double height, double zCenter, std::map<std::string, float> values);
+    static vtkSmartPointer<vtkPolyData> MakeHollowTubeManual(double outerRadius, double innerRadius, double height, double zCenter, std::map<std::string, float> values);
+    static vtkSmartPointer<vtkPolyData> MakeHollowTube(double outerRadius, double innerRadius, double height, double zCenter, std::map<std::string, float> values);
 
 };
 

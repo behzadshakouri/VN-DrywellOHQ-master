@@ -16,12 +16,12 @@ DEFINES += GSL
 #DEFINES += Behzad
 
 
-CONFIG += PowerEdge
-DEFINES += PowerEdge
+#CONFIG += PowerEdge
+#DEFINES += PowerEdge
 
 
-#CONFIG += Arash
-#DEFINES += Arash
+CONFIG += Arash
+DEFINES += Arash
 
 contains(DEFINES, Behzad) {
     OHQPATH = /home/behzad/Projects/OpenHydroQual/aquifolium
@@ -219,7 +219,8 @@ HEADERS += \
     $$OHQPATH/src/BTCSet.hpp \
     $$OHQPATH/include/reaction.h \
     modelcreator.h \
-    resultgrid.h
+    resultgrid.h \
+    vtk.h
 
 
 # Default rules for deployment.
@@ -422,6 +423,7 @@ use_VTK {
     INCLUDEPATH +=$${VTKBUILDPATH}/Utilities/KWSys
     INCLUDEPATH += $${VTKBUILDPATH}/ThirdParty/nlohmannjson
     INCLUDEPATH += $${VTKHEADERPATH}/ThirdParty/nlohmannjson
+    INCLUDEPATH += $${VTKBUILDPATH}/Common/Math
 
 
 }
