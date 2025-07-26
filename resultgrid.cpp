@@ -701,7 +701,7 @@ void ResultGrid::Make3DVTK(vector<string> quantity, double dr, System *system, s
             }
 
             // Create tube (solid cylinder if innerRadius=0, hollow tube otherwise)
-            auto tube = MakeTube(outerRadius, innerRadius, depth, pty - depth/2, quantityvaluemap);
+            auto tube = MakeTube(outerRadius, innerRadius, depth, pty, quantityvaluemap);
 
             if (tube && tube->GetNumberOfPoints() > 0) {
                 mb->SetBlock(validBlockCount, tube);
