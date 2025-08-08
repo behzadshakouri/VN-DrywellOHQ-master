@@ -5,6 +5,8 @@
 
 class System;
 
+enum class _realization_mode {deterministic, stochastic};
+
 struct model_parameters
 {
     double ft = 0.3048; //ft to m
@@ -55,6 +57,7 @@ struct model_parameters
     double Maximum_time_allowed=10*86400; // 10 days
     double Maximum_number_of_matrix_inverstions=10*200000; // 10x
 
+    double correlation_length_scale = 1.0;
 };
 
 class ModelCreator
@@ -62,7 +65,7 @@ class ModelCreator
 public:
     ModelCreator();
     bool Create(model_parameters mp, System *system);
-
+    _realization_mode Mode = _realization_mode::stochastic;
 private:
     const double pi = 3.141521;
 };

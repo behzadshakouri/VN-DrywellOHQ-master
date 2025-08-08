@@ -171,8 +171,6 @@ HEADERS += \
     $$OHQPATH/include/safevector.h \
     $$OHQPATH/include/safevector.hpp \
     $$OHQPATH/include/Block.h \
-    $$OHQPATH/include/BTC.h \
-    $$OHQPATH/include/BTCSet.h \
     $$OHQPATH/include/Expression.h \
     $$OHQPATH/include/Link.h \
     $$OHQPATH/include/Matrix.h \
@@ -215,8 +213,6 @@ HEADERS += \
     $$OHQPATH/include/Objective_Function.h \
     $$OHQPATH/include/Objective_Function_Set.h \
     $$OHQPATH/include/GA/GA.hpp \
-    $$OHQPATH/src/BTC.hpp \
-    $$OHQPATH/src/BTCSet.hpp \
     $$OHQPATH/include/reaction.h \
     modelcreator.h \
     resultgrid.h \

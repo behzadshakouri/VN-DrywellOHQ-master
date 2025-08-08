@@ -13,12 +13,13 @@ ModelCreator::ModelCreator()
 bool ModelCreator::Create(model_parameters mp, System *system)
 {
     TimeSeriesSet<double> SoilData;
+
 #ifdef PowerEdge
     SoilData.read("/mnt/3rd900/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
 #elif Arash
     SoilData.read("/home/arash/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
 #endif
-
+    TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
     system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
@@ -83,7 +84,10 @@ else if (rain_data==4)
             B.SetName(("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
             //B.SetVal("K_sat_original",mp.K_sat);
-            B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
+            if (Mode == _realization_mode::stochastic)
+                B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale));
+            else
+                B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
             //B.SetVal("K_sat_scale_factor",mp.K_o);
             B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
             B.SetVal("n",SoilData["n"].interpol(actual_depth));

@@ -32,3 +32,21 @@ build/Desktop_Qt_6_8_2-Debug/
 build/Desktop_Qt_6_8_2-Release/.qtc_clangd/.cache/clangd/index/
 
 build/Desktop_Qt_6_8_2-Release/.qtc_clangd/
+
+.qtc_clangd/.cache/clangd/index/
+
+*.stash
+
+build/Desktop_Qt_6_8_3-Debug/.qtc_clangd/.cache/clangd/index/
+
+build/Desktop_Qt_6_8_3-Debug/.qtc_clangd/
+
+build/Desktop_Qt_6_8_3-Debug/
+
+build/Desktop_Qt_6_8_3-Release/.qtc_clangd/.cache/clangd/index/
+
+build/Desktop_Qt_6_8_3-Release/.qtc_clangd/
+
+*.o
+
+.qtc_clangd/
