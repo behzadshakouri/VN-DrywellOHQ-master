@@ -20,6 +20,8 @@ bool ModelCreator::Create(model_parameters mp, System *system)
     SoilData.read("/home/arash/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
 #endif
     TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
+    SoilDataCDF.write("/mnt/3rd900/Projects/VN Drywell_Models/CDF.csv"); //Check CDF
+
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
     system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
@@ -395,6 +397,7 @@ else if (rain_data==4)
     rain.SetVal("_width",3000);
     rain.SetVal("x",-5000);
     rain.SetVal("y",-500);
+
     if (rain_data==1)
     {
     rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv");
