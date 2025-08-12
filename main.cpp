@@ -26,6 +26,8 @@ int main(int argc, char *argv[])
     string path = "/mnt/3rd900/Projects/VN Drywell_Models/";
 #elif Arash
     string path = "/home/arash/Projects/VN Drywell_Models";
+#elif SligoCreek
+    string path = "/media/arash/E/Projects/VN Drywell_Models";
 #endif
 
     system->SetWorkingFolder(path); // Should be modified according to the users directory

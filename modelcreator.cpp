@@ -14,15 +14,20 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 {
     TimeSeriesSet<double> SoilData;
 
-
-#ifdef PowerEdge
-    SoilData.read("/mnt/3rd900/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
+#ifdef Behzad
+    string path="/home/behzad/Projects/VN Drywell_Models/";
+#elifdef PowerEdge
+    string path="/mnt/3rd900/Projects/VN Drywell_Models/";
 #elif Arash
-    SoilData.read("/home/arash/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
+    string path="/home/arash/Projects/VN Drywell_Models/";
+#elif SligoCreek
+    string path="/media/arash/E/Projects/VN Drywell_Models/";
 #endif
 
+    SoilData.read(path+"Soil retention params vs depth.csv");
+
     TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
-    SoilDataCDF.write("/mnt/3rd900/Projects/VN Drywell_Models/CDF.csv"); //Check CDF
+    SoilDataCDF.write(path+"CDF.csv"); //Check CDF
 
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
@@ -450,19 +455,19 @@ else if (rain_data==4)
 
     if (rain_data==1)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv");
+    rain.SetProperty("timeseries",path+"/LA_Precipitaion (1 yr).csv");
     }
     else if (rain_data==2)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr new).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
     }
     else if (rain_data==3)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (5 yr new).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
     }
     else if (rain_data==4)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr new).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
     }
 
     system->AddSource(rain, false);
