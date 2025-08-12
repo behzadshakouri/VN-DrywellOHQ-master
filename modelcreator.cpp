@@ -14,11 +14,14 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 {
     TimeSeriesSet<double> SoilData;
 
+    SoilData.read("/mnt/3rd900/Projects/VN Drywell_Models/Soil retention params vs depth.csv",true);
+/*
 #ifdef PowerEdge
     SoilData.read("/mnt/3rd900/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
 #elif Arash
     SoilData.read("/home/arash/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
 #endif
+*/
     TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
     SoilDataCDF.write("/mnt/3rd900/Projects/VN Drywell_Models/CDF.csv"); //Check CDF
 
