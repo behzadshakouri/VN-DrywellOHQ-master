@@ -16,16 +16,16 @@ DEFINES += GSL
 #DEFINES += Behzad
 
 
-CONFIG += PowerEdge
-DEFINES += PowerEdge
+#CONFIG += PowerEdge
+#DEFINES += PowerEdge
 
 
 #CONFIG += Arash
 #DEFINES += Arash
 
 
-#CONFIG += SligoCreek
-#DEFINES += SligoCreek
+CONFIG += SligoCreek
+DEFINES += SligoCreek
 
 
 contains(DEFINES, Behzad) {

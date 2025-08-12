@@ -25,9 +25,9 @@ int main(int argc, char *argv[])
 #ifdef PowerEdge
     string path = "/mnt/3rd900/Projects/VN Drywell_Models/";
 #elif Arash
-    string path = "/home/arash/Projects/VN Drywell_Models";
+    string path = "/home/arash/Projects/VN Drywell_Models/";
 #elif SligoCreek
-    string path = "/media/arash/E/Projects/VN Drywell_Models";
+    string path = "/media/arash/E/Projects/VN Drywell_Models/";
 #endif
 
     system->SetWorkingFolder(path); // Should be modified according to the users directory
@@ -40,19 +40,19 @@ int main(int argc, char *argv[])
 
     // Soil params VTP
     ResultGrid resgrid_Ksat("K_sat_original",system);
-    resgrid_Ksat.WriteToVTP("Ksat",path + "/Ksat.vtp",0);
+    resgrid_Ksat.WriteToVTP("Ksat",path + "Ksat.vtp",0);
 
     ResultGrid resgrid_alpha("alpha",system);
-    resgrid_alpha.WriteToVTP("alpha",path + "/alpha.vtp",0);
+    resgrid_alpha.WriteToVTP("alpha",path + "alpha.vtp",0);
 
     ResultGrid resgrid_n("n",system);
-    resgrid_n.WriteToVTP("n",path + "/n.vtp",0);
+    resgrid_n.WriteToVTP("n",path + "n.vtp",0);
 
     ResultGrid resgrid_theta_s("theta_sat",system);
-    resgrid_theta_s.WriteToVTP("theta_s",path + "/theta_s.vtp",0);
+    resgrid_theta_s.WriteToVTP("theta_s",path + "theta_s.vtp",0);
 
     ResultGrid resgrid_theta_r("theta_res",system);
-    resgrid_theta_r.WriteToVTP("theta_r",path + "/theta_r.vtp",0);
+    resgrid_theta_r.WriteToVTP("theta_r",path + "theta_r.vtp",0);
 
     vector<string> quantities = {"K_sat_original","alpha", "n","theta_sat", "theta_res"};
     double dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
