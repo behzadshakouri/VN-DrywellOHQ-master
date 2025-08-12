@@ -78,11 +78,11 @@ else if (rain_data==4)
     for (int j=0; j<mp.nz_g; j++)
     {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
         //calculate Ksat, n, etc.
-        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale);
-        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale);
-        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale);
-        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale);
-        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale);
+        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,true);
+        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,true);
+        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,true);
+        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,true);
+        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,true);
 
         for (int i=0; i<mp.nr_g; i++)
         {
@@ -130,6 +130,7 @@ else if (rain_data==4)
             system->AddBlock(B,false);
         }
     }
+
     // Soil Blocks under well
 
     dr = (mp.RadiousOfInfluence-mp.rw_uw)/mp.nr_uw;
@@ -139,11 +140,11 @@ else if (rain_data==4)
     for (int j=0; j<mp.nz_uw; j++)
     {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
         //calculate Ksat, n, etc.
-        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale);
-        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale);
-        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale);
-        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale);
-        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale);
+        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale, true);
+        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,true);
+        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,true);
+        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,true);
+        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,true);
 
         for (int i=0; i<mp.nr_uw; i++)
         if (j*dz<mp.DepthtoGroundWater)
