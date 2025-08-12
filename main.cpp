@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
 
     vector<string> quantities = {"K_sat_original","alpha", "n","theta_sat", "theta_res"};
     double dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
-    ResultGrid::Make3DVTK(quantities,dr,system,path + "/3D_model.vtm");
+    ResultGrid::Make3DVTK(quantities,dr,system,path + "3D_model.vtm");
 
 
     // Solve
@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
-    resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"/Moisture/"+"moisture.vtp");
+    resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp");
 
 
     vector<string> well_block_c; well_block_c.push_back("Well_c");

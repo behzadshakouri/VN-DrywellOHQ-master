@@ -16,7 +16,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 
 #ifdef Behzad
     string path="/home/behzad/Projects/VN Drywell_Models/";
-#elifdef PowerEdge
+#elif PowerEdge
     string path="/mnt/3rd900/Projects/VN Drywell_Models/";
 #elif Arash
     string path="/home/arash/Projects/VN Drywell_Models/";
@@ -28,6 +28,7 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 
     TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
     SoilDataCDF.write(path+"CDF.csv"); //Check CDF
+
 
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
@@ -455,7 +456,7 @@ else if (rain_data==4)
 
     if (rain_data==1)
     {
-    rain.SetProperty("timeseries",path+"/LA_Precipitaion (1 yr).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr).csv");
     }
     else if (rain_data==2)
     {
