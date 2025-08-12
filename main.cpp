@@ -5,6 +5,10 @@
 #include "resultgrid.h"
 #include "vtk.h"
 #include "ostream"
+
+
+#define PATH "/mnt/3rd900/Projects/VN Drywell_Models/"
+
 using namespace std;
 
 int main(int argc, char *argv[])
