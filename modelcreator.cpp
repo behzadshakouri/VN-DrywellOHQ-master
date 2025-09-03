@@ -14,12 +14,22 @@ bool ModelCreator::Create(model_parameters mp, System *system)
 {
     TimeSeriesSet<double> SoilData;
 
-#ifdef PowerEdge
-    SoilData.read("/mnt/3rd900/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
+#ifdef Behzad
+    string path="/home/behzad/Projects/VN Drywell_Models/";
+#elif PowerEdge
+    string path="/mnt/3rd900/Projects/VN Drywell_Models/";
 #elif Arash
-    SoilData.read("/home/arash/Projects/VN Drywell_Models/Soil retention params vs depth.csv");
+    string path="/home/arash/Projects/VN Drywell_Models/";
+#elif SligoCreek
+    string path="/media/arash/E/Projects/VN Drywell_Models/";
 #endif
+
+    SoilData.read(path+"Soil retention params vs depth.csv");
+
     TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
+    SoilDataCDF.write(path+"CDF.csv"); //Check CDF
+
+
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
     system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
@@ -71,34 +81,53 @@ else if (rain_data==4)
     dz = mp.DepthofWell_g/mp.nz_g;
 
     cout<<"Soil Blocks around gravel part"<<endl;
-    for (int i=0; i<mp.nr_g; i++)
-        for (int j=0; j<mp.nz_g; j++)
+    for (int j=0; j<mp.nz_g; j++)
+    {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
+        //calculate Ksat, n, etc.
+        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
+        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
+        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
+        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
+        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+
+        for (int i=0; i<mp.nr_g; i++)
         {
             Block B;
             B.SetQuantities(system->GetMetaModel(), "Soil");
             double r1 = mp.rw_g + i*dr;
             double r2 = mp.rw_g + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
-            double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
+
 
             B.SetName(("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
-            //B.SetVal("K_sat_original",mp.K_sat);
+
             if (Mode == _realization_mode::stochastic)
-                B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale));
+            {
+                B.SetVal("K_sat_original",Ksat);
+                B.SetVal("alpha",alpha);
+                B.SetVal("n",n);
+                B.SetVal("theta_sat",theta_s);
+                B.SetVal("theta_res",theta_r);
+            }
+
             else
+            {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
+                B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
+                B.SetVal("n",SoilData["n"].interpol(actual_depth));
+                B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
+                B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
+            }
+
+            //B.SetVal("K_sat_original",mp.K_sat);
             //B.SetVal("K_sat_scale_factor",mp.K_o);
-            B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
-            B.SetVal("n",SoilData["n"].interpol(actual_depth));
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_c);
             B.SetVal("depth",dz);
             B.SetVal("theta",mp.initial_theta);
-            B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
-            B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             B.SetVal("L",mp.L);
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
             B.SetVal("y",j*dz*3000+mp.DepthofWell_c*2800);
@@ -106,6 +135,7 @@ else if (rain_data==4)
             B.SetVal("act_Y",-actual_depth);
             system->AddBlock(B,false);
         }
+    }
 
     // Soil Blocks under well
 
@@ -113,8 +143,16 @@ else if (rain_data==4)
     dz = (mp.DepthtoGroundWater-mp.DepthofWell_t)/mp.nz_uw;
 
     cout<<"Soil Blocks under well"<<endl;
-    for (int i=0; i<mp.nr_uw; i++)
-        for (int j=0; j<mp.nz_uw; j++)
+    for (int j=0; j<mp.nz_uw; j++)
+    {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
+        //calculate Ksat, n, etc.
+        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale, false);
+        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
+        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
+        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
+        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+
+        for (int i=0; i<mp.nr_uw; i++)
         if (j*dz<mp.DepthtoGroundWater)
         {
             Block B;
@@ -126,19 +164,31 @@ else if (rain_data==4)
 
             B.SetName(("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
-            //B.SetVal("K_sat_original",mp.K_sat);
-            B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
-            //B.SetVal("K_sat_scale_factor",mp.K_o);
-            B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
-            B.SetVal("n",SoilData["n"].interpol(actual_depth));
+
+            if (Mode == _realization_mode::stochastic)
+            {
+                B.SetVal("K_sat_original",Ksat);
+                B.SetVal("alpha",alpha);
+                B.SetVal("n",n);
+                B.SetVal("theta_sat",theta_s);
+                B.SetVal("theta_res",theta_r);
+            }
+
+            else
+            {
+                B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
+                B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
+                B.SetVal("n",SoilData["n"].interpol(actual_depth));
+                B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
+                B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
+            }
+
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_t);
             B.SetVal("depth",dz);
             B.SetVal("theta",mp.initial_theta);
-            B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
-            B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             B.SetVal("L",mp.L);
             B.SetVal("x",-(i*dr+mp.rw_uw)*2000);
             B.SetVal("y",37000+(j*dz)*2000);
@@ -149,10 +199,6 @@ else if (rain_data==4)
 
     cout<<"Soil Blocks directly under well"<<endl;
 
-    dr = (mp.RadiousOfInfluence-mp.rw_uw)/mp.nr_uw;
-    dz = (mp.DepthtoGroundWater-mp.DepthofWell_t)/mp.nz_uw;
-
-    for (int j=0; j<mp.nz_uw; j++)
         if (j*dz<mp.DepthtoGroundWater)
         {
             Block B;
@@ -163,19 +209,31 @@ else if (rain_data==4)
 
             B.SetName(("Soil-uw (" + QString::number(0) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
-            //B.SetVal("K_sat_original",mp.K_sat);
-            B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
-            //B.SetVal("K_sat_scale_factor",mp.K_o);
-            B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
-            B.SetVal("n",SoilData["n"].interpol(actual_depth));
+
+            if (Mode == _realization_mode::stochastic)
+            {
+                B.SetVal("K_sat_original",Ksat);
+                B.SetVal("alpha",alpha);
+                B.SetVal("n",n);
+                B.SetVal("theta_sat",theta_s);
+                B.SetVal("theta_res",theta_r);
+            }
+
+            else
+            {
+                B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
+                B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
+                B.SetVal("n",SoilData["n"].interpol(actual_depth));
+                B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
+                B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
+            }
+
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_t);
             B.SetVal("depth",dz);
             B.SetVal("theta",mp.initial_theta);
-            B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
-            B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             B.SetVal("L",mp.L);
             B.SetVal("x",-mp.rw_uw*1000+2000);
             B.SetVal("y",37000+(j*dz)*2000);
@@ -183,7 +241,7 @@ else if (rain_data==4)
             B.SetVal("act_Y",-actual_depth);
             system->AddBlock(B,false);
         }
-
+    }
     cout<<"Horizontal links for soils of gravel part"<<endl;
     for (int i=0; i<mp.nr_g; i++)
         for (int j=0; j<mp.nz_g; j++)
@@ -395,21 +453,22 @@ else if (rain_data==4)
     rain.SetVal("_width",3000);
     rain.SetVal("x",-5000);
     rain.SetVal("y",-500);
+
     if (rain_data==1)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr).csv");
     }
     else if (rain_data==2)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr new).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
     }
     else if (rain_data==3)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (5 yr new).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
     }
     else if (rain_data==4)
     {
-    rain.SetProperty("timeseries","/mnt/3rd900/Projects/VN Drywell_Models/LA_Precipitaion (1 yr new).csv");
+    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
     }
 
     system->AddSource(rain, false);

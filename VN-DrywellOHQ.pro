@@ -20,8 +20,13 @@ DEFINES += GSL
 #DEFINES += PowerEdge
 
 
-CONFIG += Arash
-DEFINES += Arash
+#CONFIG += Arash
+#DEFINES += Arash
+
+
+CONFIG += SligoCreek
+DEFINES += SligoCreek
+
 
 contains(DEFINES, Behzad) {
     OHQPATH = /home/behzad/Projects/OpenHydroQual/aquifolium
@@ -42,6 +47,13 @@ contains(DEFINES, Arash) {
     VTKBUILDPATH = /home/arash/Projects/VTK-9.4.1/build
     VTKHEADERPATH = /home/arash/Projects/VTK-9.4.1
     VTK_V = -9.4
+}
+
+contains(DEFINES, SligoCreek) {
+    OHQPATH = /media/arash/E/Projects/OpenHydroQual/aquifolium
+    VTKBUILDPATH = /media/arash/E/Projects/VTK-9.1.0/VTK-build
+    VTKHEADERPATH = /media/arash/E/Projects/VTK-9.1.0
+    VTK_V = -9.1
 }
 
 DEFINES += use_VTK ARMA_USE_SUPERLU
