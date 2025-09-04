@@ -108,7 +108,6 @@ private:
     void validatePointForInitialization(unsigned int index) const;
     double computeCorrelation(int i, int j) const;
     void validateCorrelationInputs(int targetIndex) const;
-    void initializeFirstPoint();
     unsigned int selectRandomUndeterminedPoint() const;
     bool allPointsDetermined() const;
     void validateFieldGeneration() const;
@@ -117,8 +116,15 @@ private:
     std::vector<ival> get_top_n(const std::vector<ival> &vec);
     std::vector<ival> get_closest_val_dets(unsigned int i);
     unsigned int GetNumberOfPointsDetermined() const;
-    std::vector<int> Determined();
+    std::vector<int> Determined() const;
     std::map<std::string,CTimeSeries<double>> marginal_distributions;
+    // Correlation matrix building helper methods
+    void buildCorrelationVectors(correl_mat_vec& correlationData,
+                                 const std::vector<int>& determinedIndices,
+                                 int targetIndex) const;
+
+    void buildCorrelationMatrix(correl_mat_vec& correlationData,
+                                const std::vector<int>& determinedIndices) const;
     double K_sat_alpha_correlation = 1;
     double K_sat_n_correlation = 1;
     const gsl_rng_type * T;

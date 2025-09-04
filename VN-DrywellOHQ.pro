@@ -20,13 +20,14 @@ DEFINES += GSL
 #DEFINES += PowerEdge
 
 
-#CONFIG += Arash
-#DEFINES += Arash
+CONFIG += Arash
+DEFINES += Arash
 
 
-CONFIG += SligoCreek
-DEFINES += SligoCreek
+#CONFIG += SligoCreek
+#DEFINES += SligoCreek
 
+DEFINES += _arma
 
 contains(DEFINES, Behzad) {
     OHQPATH = /home/behzad/Projects/OpenHydroQual/aquifolium
@@ -162,8 +163,10 @@ SOURCES += \
         ../jsoncpp/src/lib_json/json_reader.cpp \
         ../jsoncpp/src/lib_json/json_value.cpp \
         ../jsoncpp/src/lib_json/json_writer.cpp \
+        fieldgenerator.cpp \
         main.cpp \
         modelcreator.cpp \
+        propertygenerator.cpp \
         resultgrid.cpp
 
 HEADERS += \
@@ -226,7 +229,9 @@ HEADERS += \
     $$OHQPATH/include/Objective_Function_Set.h \
     $$OHQPATH/include/GA/GA.hpp \
     $$OHQPATH/include/reaction.h \
+    fieldgenerator.h \
     modelcreator.h \
+    propertygenerator.h \
     resultgrid.h \
     vtk.h
 

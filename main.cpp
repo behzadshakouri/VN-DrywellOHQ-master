@@ -5,6 +5,7 @@
 #include "resultgrid.h"
 #include "vtk.h"
 #include "ostream"
+#include "fieldgenerator.h"
 
 
 #define PATH "/mnt/3rd900/Projects/VN Drywell_Models/"
@@ -14,6 +15,63 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
+    // Field Generator Test
+    FieldGenerator gen(100, 42);
+
+    // Set grid spacing to 0.5 meters
+    gen.setDx(0.5);
+
+    // Get current grid spacing
+    double currentDx = gen.getDx();
+    std::cout << "Grid spacing: " << currentDx << " m\n";
+
+    TimeSeries<double> Ksat_marginal;
+    Ksat_marginal.readfile("K_sat_marginal.txt");
+
+    std::vector<std::pair<int,double>> knowns;
+    knowns.push_back(std::pair<int,double>{20,2});
+    gen.generateNormalScoreField("K_sat_normal", 20,knowns);
+
+    // Save to CSV
+    if (gen.saveFieldToCSV("K_sat_normal", "k_sat_normal_field.csv")) {
+        std::cout << "Field saved successfully!\n";
+    } else {
+        std::cout << "Failed to save field\n";
+    }
+
+    std::cout << "Mean: " << gen.mean("K_sat_normal") << std::endl;
+    std::cout << "Standard Deviation: " << gen.standardDeviation("K_sat_normal") << std::endl;
+    std::cout << "Field size: " << 1000 << " points" << std::endl;
+    std::cout << "Grid spacing: " << gen.getDx() << " m" << std::endl;
+    std::cout << "Total length: " << 1000 * gen.getDx() << " m" << std::endl;
+
+    // === AUTO-CORRELATION ANALYSIS ===
+    std::cout << "\n=== AUTO-CORRELATION ANALYSIS ===" << std::endl;
+
+    // Test correlation at various distances
+    std::vector<double> testDistances = {0.0, 0.2, 0.5, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 20.0};
+
+    std::cout << "Distance (m)  |  Correlation  |  Theoretical*" << std::endl;
+    std::cout << "------------- | ------------- | -------------" << std::endl;
+
+    for (double dist : testDistances) {
+        double empirical = gen.autoCorrelation("K_sat_normal", dist);
+        double theoretical = std::exp(-dist / 20.0);  // Theoretical exponential decay
+
+        std::cout << std::setw(10) << dist << "   |  "
+                  << std::setw(10) << empirical << "   |  "
+                  << std::setw(10) << theoretical << std::endl;
+    }
+
+    gen.normalToCDF("K_sat_normal","K_sat",Ksat_marginal);
+
+    if (gen.saveFieldToCSV("K_sat", "k_sat_field.csv")) {
+        std::cout << "Field saved successfully!\n";
+    } else {
+        std::cout << "Failed to save field\n";
+    }
+
+    return 0;
     model_parameters mp;
 
     System *system=new System();

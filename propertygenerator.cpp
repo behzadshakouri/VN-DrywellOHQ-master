@@ -54,35 +54,6 @@ unsigned long PropertyGenerator::generateSeed(int seed) const
 #endif
 }
 
-correl_mat_vec PropertyGenerator::get_correll_matrix_vec(int i)
-{
-    correl_mat_vec Correl_Matrix_Vector;
-    int num_determined = GetNumberOfPointsDetermined();
-    std::vector<int> determined = Determined();
-#ifdef _arma
-    Correl_Matrix_Vector.M_22 = CMatrix_arma(num_determined);
-    Correl_Matrix_Vector.V_21 = CVector_arma(num_determined);
-    Correl_Matrix_Vector.V_RHS = CVector_arma(num_determined);
-#else
-    Correl_Matrix_Vector.M_22 = CMatrix(num_determined);
-    Correl_Matrix_Vector.V_21 = CVector(num_determined);
-    Correl_Matrix_Vector.V_RHS = CVector(num_determined);
-#endif //  arma
-    for (int ii = 0; ii < num_determined; ii++)
-    {
-        Correl_Matrix_Vector.V_21[ii] = exp(-fabs(determined[ii]-i)*dx/correlation_length_scale);
-        Correl_Matrix_Vector.V_RHS[ii] = at(determined[ii]).normal_scores.K_sat;
-        for (int jj = 0; jj < num_determined; jj++)
-        {
-#ifdef _arma
-            Correl_Matrix_Vector.M_22(ii,jj) = exp(-fabs(determined[ii]-determined[jj])*dx/correlation_length_scale);
-#else
-            Correl_Matrix_Vector.M_22[ii][jj] = exp(-fabs(determined[ii]-determined[jj])*dx/correlation_length_scale);
-#endif // arma
-        }
-    }
-    return Correl_Matrix_Vector;
-}
 
 correl_mat_vec PropertyGenerator::get_correll_matrix_vec(int i)
 {
@@ -321,12 +292,6 @@ void PropertyGenerator::validatePointForInitialization(unsigned int index) const
     }
 }
 
-// Overloaded version for backward compatibility and convenience
-void PropertyGenerator::initializeFirstPoint()
-{
-    initializeFirstPoint(InitializationStrategy::RANDOM_LOCATION);
-}
-
 // Additional utility method to check if any points are initialized
 bool PropertyGenerator::hasInitializedPoints() const
 {
@@ -346,20 +311,6 @@ void PropertyGenerator::resetAllPoints()
         at(i).normal_scores.K_sat = 0.0;
         // Could also reset other properties if needed
     }
-}
-
-void PropertyGenerator::initializeFirstPoint()
-{
-    // Select random starting point
-    const unsigned int startIndex = static_cast<unsigned int>(
-        gsl_rng_uniform(r) * size());
-
-    // Generate unconditional Gaussian value
-    const double unconditionalValue = gsl_ran_ugaussian(r);
-
-    // Set the first point
-    at(startIndex).normal_scores.K_sat = unconditionalValue;
-    at(startIndex).k_det = true;
 }
 
 unsigned int PropertyGenerator::selectRandomUndeterminedPoint() const
@@ -436,7 +387,7 @@ void PropertyGenerator::generateKSatFieldWithProgress(std::function<void(unsigne
 
     while (!allPointsDetermined()) {
         const unsigned int targetIndex = selectRandomUndeterminedPoint();
-        assignKSatGaussian(targetIndex);
+        assign_Gaussian_scores(targetIndex);
 
         ++pointsGenerated;
         if (progressCallback) {
@@ -444,27 +395,6 @@ void PropertyGenerator::generateKSatFieldWithProgress(std::function<void(unsigne
         }
     }
 }
-
-void PropertyGenerator::assign_K_gauss()
-{
-    unsigned int n_filled = 0;
-    srand(time(NULL));
-    int i = gsl_rng_uniform(r)*(size()-1) + 0.5;
-    at(i).normal_scores.K_sat = gsl_ran_ugaussian(r);
-    at(i).k_det = true;
-    n_filled++;
-    while (n_filled<size())
-    {
-        i = gsl_rng_uniform(r)*(size()-1) + 0.5;
-        if (!at(i).k_det)
-        {
-            assign_K_gauss(i);
-            n_filled++;
-        }
-    }
-
-}
-
 
 unsigned int PropertyGenerator::GetNumberOfPointsDetermined() const
 {
@@ -475,7 +405,7 @@ unsigned int PropertyGenerator::GetNumberOfPointsDetermined() const
     return num_determined;
 }
 
-std::vector<int> PropertyGenerator::Determined()
+std::vector<int> PropertyGenerator::Determined() const
 {
     std::vector<int> determined;
     for (unsigned int i=0; i<size(); i++)
@@ -485,7 +415,7 @@ std::vector<int> PropertyGenerator::Determined()
 }
 
 
-void PropertyGenerator::Normalize_Ksat_normal_scores(const double &new_mean, const double &new_std)
+void PropertyGenerator::Normalize_Normal_Scores(const double &new_mean, const double &new_std)
 {
     double m = mean("K_sat_normal_score");
     double s= std("K_sat_normal_score");
@@ -634,7 +564,7 @@ void PropertyGenerator::SetCorr(params p, const double &value)
         K_sat_n_correlation = value;
 }
 
-void PropertyGenerator::Populate_Alpha_n_normal_scores(params p)
+void PropertyGenerator::Populate_Correlated_Normal_Scores(params p)
 {
     for (unsigned int i=0; i<size(); i++)
     {
@@ -642,5 +572,74 @@ void PropertyGenerator::Populate_Alpha_n_normal_scores(params p)
             at(i).normal_scores.alpha = K_sat_alpha_correlation + gsl_ran_ugaussian(r)*sqrt(1-pow(K_sat_alpha_correlation,2));
         if (p== params::n)
             at(i).normal_scores.n = K_sat_n_correlation + gsl_ran_ugaussian(r)*sqrt(1-pow(K_sat_n_correlation,2));
+    }
+}
+
+correl_mat_vec PropertyGenerator::buildCorrelationMatrix(int targetIndex) const
+{
+    // Validate inputs first
+    validateCorrelationInputs(targetIndex);
+
+    // Get determined points
+    const std::vector<int> determinedIndices = Determined();
+    const int numDetermined = static_cast<int>(determinedIndices.size());
+
+    if (numDetermined == 0) {
+        throw std::runtime_error("No determined points available for correlation matrix construction");
+    }
+
+    // Initialize correlation matrix and vectors
+    correl_mat_vec correlationData;
+
+#ifdef _arma
+    correlationData.M_22 = CMatrix_arma(numDetermined, numDetermined);
+    correlationData.V_21 = CVector_arma(numDetermined);
+    correlationData.V_RHS = CVector_arma(numDetermined);
+#else
+    correlationData.M_22 = CMatrix(numDetermined, numDetermined);
+    correlationData.V_21 = CVector(numDetermined);
+    correlationData.V_RHS = CVector(numDetermined);
+#endif
+
+    // Build correlation vectors and matrix
+    buildCorrelationVectors(correlationData, determinedIndices, targetIndex);
+    buildCorrelationMatrix(correlationData, determinedIndices);
+
+    return correlationData;
+}
+
+void PropertyGenerator::buildCorrelationVectors(correl_mat_vec& correlationData,
+                                                const std::vector<int>& determinedIndices,
+                                                int targetIndex) const
+{
+    const int numDetermined = static_cast<int>(determinedIndices.size());
+
+    for (int i = 0; i < numDetermined; ++i) {
+        const int determinedIndex = determinedIndices[i];
+
+        // V_21: correlation between target point and determined points
+        correlationData.V_21[i] = computeCorrelation(targetIndex, determinedIndex);
+
+        // V_RHS: observed values at determined points
+        correlationData.V_RHS[i] = at(determinedIndex).normal_scores.K_sat;
+    }
+}
+
+void PropertyGenerator::buildCorrelationMatrix(correl_mat_vec& correlationData,
+                                               const std::vector<int>& determinedIndices) const
+{
+    const int numDetermined = static_cast<int>(determinedIndices.size());
+
+    // Build M_22: correlation matrix between determined points
+    for (int i = 0; i < numDetermined; ++i) {
+        for (int j = 0; j < numDetermined; ++j) {
+            const double correlation = computeCorrelation(determinedIndices[i], determinedIndices[j]);
+
+#ifdef _arma
+            correlationData.M_22(i, j) = correlation;
+#else
+            correlationData.M_22[i][j] = correlation;
+#endif
+        }
     }
 }
