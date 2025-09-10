@@ -7,8 +7,11 @@
 #include "ostream"
 #include "fieldgenerator.h"
 
-
+#ifdef PowerEdge
 #define PATH "/mnt/3rd900/Projects/VN Drywell_Models/"
+#elif Arash
+#define PATH "/home/arash/Projects/VN Drywell_Models/"
+#endif
 
 using namespace std;
 
@@ -25,22 +28,19 @@ int main(int argc, char *argv[])
     double currentDx = gen.getDx();
     std::cout << "Grid spacing: " << currentDx << " m\n";
 
-    TimeSeries<double> Ksat_marginal;
-    Ksat_marginal.readfile("K_sat_marginal.txt");
 
-    std::vector<std::pair<int,double>> knowns;
-    knowns.push_back(std::pair<int,double>{20,2});
-    gen.generateNormalScoreField("K_sat_normal", 20,knowns);
+    std::cout<<"Reading data from '" <<std::string(PATH) + "Soil retention params vs depth.csv'"<<std::endl;
+    gen.generateFieldFromMeasurementData(
+        std::string(PATH) + "Soil retention params vs depth.csv",
+        "Ksat",                    // Parameter name in the CSV
+        "Ksat_normal",           // Field name to generate
+        20                       // Correlation length
+        );
 
-    // Save to CSV
-    if (gen.saveFieldToCSV("K_sat_normal", "k_sat_normal_field.csv")) {
-        std::cout << "Field saved successfully!\n";
-    } else {
-        std::cout << "Failed to save field\n";
-    }
+    gen.getMeasuredCDFs().write(std::string(PATH) + "Param_CDFs.txt");
 
-    std::cout << "Mean: " << gen.mean("K_sat_normal") << std::endl;
-    std::cout << "Standard Deviation: " << gen.standardDeviation("K_sat_normal") << std::endl;
+    std::cout << "Mean: " << gen.mean("Ksat_normal") << std::endl;
+    std::cout << "Standard Deviation: " << gen.standardDeviation("Ksat_normal") << std::endl;
     std::cout << "Field size: " << 1000 << " points" << std::endl;
     std::cout << "Grid spacing: " << gen.getDx() << " m" << std::endl;
     std::cout << "Total length: " << 1000 * gen.getDx() << " m" << std::endl;
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
     std::cout << "------------- | ------------- | -------------" << std::endl;
 
     for (double dist : testDistances) {
-        double empirical = gen.autoCorrelation("K_sat_normal", dist);
+        double empirical = gen.autoCorrelation("Ksat_normal", dist);
         double theoretical = std::exp(-dist / 20.0);  // Theoretical exponential decay
 
         std::cout << std::setw(10) << dist << "   |  "
@@ -63,9 +63,13 @@ int main(int argc, char *argv[])
                   << std::setw(10) << theoretical << std::endl;
     }
 
-    gen.normalToCDF("K_sat_normal","K_sat",Ksat_marginal);
+    if (gen.saveFieldToCSV("Ksat_normal", std::string(PATH) + "k_sat_normal_field.csv")) {
+        std::cout << "Field saved successfully!\n";
+    } else {
+        std::cout << "Failed to save field\n";
+    }
 
-    if (gen.saveFieldToCSV("K_sat", "k_sat_field.csv")) {
+    if (gen.saveFieldToCSV("Ksat", std::string(PATH) + "k_sat_field.csv")) {
         std::cout << "Field saved successfully!\n";
     } else {
         std::cout << "Failed to save field\n";
@@ -77,7 +81,7 @@ int main(int argc, char *argv[])
     System *system=new System();
     ModelCreator ModCreate;
     cout<<"Creating model ..." <<endl;
-    ModCreate.Create(mp,system);
+    ModCreate.Create(mp,system, &gen);
     cout<<"Creating model done..." <<endl;
 
 #ifdef PowerEdge

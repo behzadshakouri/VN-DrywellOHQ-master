@@ -9,6 +9,7 @@
 #include <Matrix_arma.h>
 #include <Vector_arma.h>
 #include "TimeSeries.h"
+#include "TimeSeriesSet.h"
 
 // Correlation matrix structure for kriging
     struct correl_mat_vec
@@ -80,6 +81,48 @@ public:
     void normalToCDF(const std::string& sourceField, const std::string& targetField, const TimeSeries<double> &CDF);
     void exponentialTransform(const std::string& sourceField, const std::string& targetField, double a, double b);
 
+    // Interpolate field value at any x position using linear interpolation
+    double interpolateAt(double x, const std::string& quantity = "K_sat_normal_score") const;
+
+    // Interpolate multiple points at once
+    std::vector<double> interpolateAt(const std::vector<double>& xPositions,
+                                      const std::string& quantity = "K_sat_normal_score") const;
+
+    // Get the x-coordinate for a given grid index
+    double indexToPosition(unsigned int index) const;
+
+    // Get the grid index closest to a given x position
+    unsigned int positionToIndex(double x) const;
+
+
+    // Find the closest grid node index to a given x position
+    unsigned int findClosestNode(double x) const;
+
+    // Set known values from a TimeSeries where t=x position and value=field value
+    void setKnownPointsFromTimeSeries(const std::string& fieldName,
+                                      const TimeSeries<double>& timeSeries,
+                                      double correlationLength);
+
+    // Write field to ASCII format file
+    bool writeFieldToCSV(const std::string& fieldName, const std::string& filename,
+                         int precision = 6, bool includeHeader = true) const;
+
+    // Generate field from measurement data file with full workflow
+    bool generateFieldFromMeasurementData(const std::string& dataFilePath,
+                                          const std::string& parameterName,
+                                          const std::string& fieldName,
+                                          double correlationLength,
+                                          bool verbose = true);
+
+    // Getter for measured CDFs
+    const TimeSeriesSet<double>& getMeasuredCDFs() const;
+
+    // Check if CDFs are available
+    bool hasMeasuredCDFs() const;
+
+    // Clear stored CDFs
+    void clearMeasuredCDFs();
+
 private:
     // Field properties
     std::vector<PropertyPoint> points;
@@ -123,6 +166,12 @@ private:
     void validateFieldGeneration() const;
     void validateTargetIndex(unsigned int targetIndex, const std::string& fieldName) const;
     bool hasAnyDeterminedPoints(const std::string& fieldName) const;
+    void validateFieldForInterpolation(const std::string& quantity) const;
+
+
+    // Member variable to store measured CDFs
+    TimeSeriesSet<double> measured_CDFs_;
+    bool has_measured_CDFs_ = false;
 };
 
 #endif // FIELDGENERATOR_H

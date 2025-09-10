@@ -4,6 +4,7 @@
 #include <gsl/gsl_rng.h>
 
 class System;
+class FieldGenerator;
 
 enum class _realization_mode {deterministic, stochastic};
 
@@ -64,7 +65,7 @@ class ModelCreator
 {
 public:
     ModelCreator();
-    bool Create(model_parameters mp, System *system);
+    bool Create(model_parameters mp, System *system, FieldGenerator *propgen = nullptr);
     _realization_mode Mode = _realization_mode::stochastic;
 private:
     const double pi = 3.141521;

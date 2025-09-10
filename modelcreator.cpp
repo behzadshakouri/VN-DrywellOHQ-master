@@ -1,7 +1,7 @@
 #include "modelcreator.h"
 #include "System.h"
 #include "QString"
-
+#include "fieldgenerator.h"
 #include <gsl/gsl_rng.h>
 
 ModelCreator::ModelCreator()
@@ -10,7 +10,7 @@ ModelCreator::ModelCreator()
 }
 
 
-bool ModelCreator::Create(model_parameters mp, System *system)
+bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *fieldgen)
 {
     TimeSeriesSet<double> SoilData;
 
@@ -84,11 +84,26 @@ else if (rain_data==4)
     for (int j=0; j<mp.nz_g; j++)
     {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
         //calculate Ksat, n, etc.
-        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
-        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
-        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
-        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
-        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+        double Ksat = 0;
+        double alpha = 0;
+        double n = 0;
+        double theta_s = 0;
+        double theta_r = 0;
+        if (!fieldgen)
+        {   Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
+            alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
+            n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
+            theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
+            theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+        }
+        else
+        {
+            Ksat = fieldgen->interpolate("Ksat", actual_depth);
+            alpha = fieldgen->interpolate("alpha", actual_depth);
+            n = fieldgen->interpolate("n", actual_depth);
+            theta_s = fieldgen->interpolate("theta_s", actual_depth);
+            theta_r = fieldgen->interpolate("theta_r", actual_depth);
+        }
 
         for (int i=0; i<mp.nr_g; i++)
         {

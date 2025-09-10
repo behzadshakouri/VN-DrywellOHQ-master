@@ -15,6 +15,8 @@
 #include <cmath>
 #include <numeric>
 #include <gsl/gsl_cdf.h>
+#include "TimeSeriesSet.h"
+
 
 // Default constructor
 FieldGenerator::FieldGenerator() : rng_type(gsl_rng_taus), rng(nullptr) {
@@ -797,4 +799,307 @@ double FieldGenerator::maximum(const std::string& fieldName) const {
     // Use std::max_element to find maximum value
     auto maxIt = std::max_element(fieldData.begin(), fieldData.end());
     return *maxIt;
+}
+
+// Interpolate field value at any x position using linear interpolation
+double FieldGenerator::interpolateAt(double x, const std::string& quantity) const {
+    validateFieldForInterpolation(quantity);
+
+    auto it = parameters.find(quantity);
+    if (it == parameters.end()) {
+        throw std::invalid_argument("Field '" + quantity + "' does not exist");
+    }
+
+    const std::vector<double>& fieldData = it->second;
+    if (fieldData.empty()) {
+        throw std::runtime_error("Field '" + quantity + "' is empty");
+    }
+
+    if (fieldData.size() == 1) {
+        return fieldData[0];
+    }
+
+    // Find the grid position
+    const double gridPosition = x / dx;
+
+    // Handle boundary cases
+    if (gridPosition <= 0.0) {
+        return fieldData[0];
+    }
+    if (gridPosition >= static_cast<double>(fieldData.size() - 1)) {
+        return fieldData.back();
+    }
+
+    // Find surrounding grid points
+    const unsigned int lowerIndex = static_cast<unsigned int>(std::floor(gridPosition));
+    const unsigned int upperIndex = lowerIndex + 1;
+
+    // Linear interpolation weights
+    const double fraction = gridPosition - static_cast<double>(lowerIndex);
+    const double lowerValue = fieldData[lowerIndex];
+    const double upperValue = fieldData[upperIndex];
+
+    return lowerValue + fraction * (upperValue - lowerValue);
+}
+
+// Interpolate multiple points at once
+std::vector<double> FieldGenerator::interpolateAt(const std::vector<double>& xPositions,
+                                                  const std::string& quantity) const {
+    std::vector<double> results;
+    results.reserve(xPositions.size());
+
+    for (double x : xPositions) {
+        results.push_back(interpolateAt(x, quantity));
+    }
+
+    return results;
+}
+
+// Get the x-coordinate for a given grid index
+double FieldGenerator::indexToPosition(unsigned int index) const {
+    if (index >= points.size()) {
+        throw std::out_of_range("Index out of bounds for position calculation");
+    }
+    return static_cast<double>(index) * dx;
+}
+
+// Get the grid index closest to a given x position
+unsigned int FieldGenerator::positionToIndex(double x) const {
+    if (x < 0.0) {
+        return 0;
+    }
+
+    const double indexDouble = x / dx;
+    const unsigned int index = static_cast<unsigned int>(std::round(indexDouble));
+
+    return std::min(index, static_cast<unsigned int>(points.size() - 1));
+}
+
+// Validation method for interpolation (add this to the private section)
+void FieldGenerator::validateFieldForInterpolation(const std::string& quantity) const {
+    if (points.empty()) {
+        throw std::runtime_error("Cannot interpolate: field is empty");
+    }
+
+    if (dx <= 0.0) {
+        throw std::invalid_argument("Grid spacing (dx) must be positive for interpolation");
+    }
+
+    auto it = parameters.find(quantity);
+    if (it == parameters.end()) {
+        throw std::invalid_argument("Field '" + quantity + "' does not exist");
+    }
+}
+
+// Implementation:
+unsigned int FieldGenerator::findClosestNode(double x) const {
+    if (points.empty()) {
+        throw std::runtime_error("Cannot find closest node: field is empty");
+    }
+
+    if (dx <= 0.0) {
+        throw std::invalid_argument("Grid spacing (dx) must be positive");
+    }
+
+    // Convert x position to continuous grid index
+    const double continuousIndex = x / dx;
+
+    // Round to nearest integer index
+    int nearestIndex = static_cast<int>(std::round(continuousIndex));
+
+    // Clamp to valid range [0, points.size()-1]
+    nearestIndex = std::max(0, std::min(nearestIndex, static_cast<int>(points.size() - 1)));
+
+    return static_cast<unsigned int>(nearestIndex);
+}
+
+void FieldGenerator::setKnownPointsFromTimeSeries(const std::string& fieldName,
+                                                  const TimeSeries<double>& timeSeries,
+                                                  double correlationLength) {
+    // Validate inputs
+    if (points.empty()) {
+        throw std::runtime_error("Cannot set known points: field is empty");
+    }
+
+    if (timeSeries.size() == 0) {
+        throw std::invalid_argument("TimeSeries is empty");
+    }
+
+    if (dx <= 0.0) {
+        throw std::invalid_argument("Grid spacing (dx) must be positive");
+    }
+
+    // Create or resize parameter field
+    if (parameters.find(fieldName) == parameters.end()) {
+        parameters[fieldName] = std::vector<double>(points.size(), 0.0);
+    } else if (parameters[fieldName].size() != points.size()) {
+        parameters[fieldName].resize(points.size(), 0.0);
+    }
+
+    // Reset determination flags for this field
+    for (auto& point : points) {
+        point.setDetermined(fieldName, false);
+    }
+
+    // Convert TimeSeries data to known points vector
+    std::vector<std::pair<int, double>> knownPoints;
+    knownPoints.reserve(timeSeries.size());
+
+    for (int i = 0; i < timeSeries.size(); ++i) {
+        double xPosition = timeSeries.getTime(i);  // t represents x position
+        double value = timeSeries.getValue(i);      // represents field value
+
+        // Find closest grid node to this x position
+        unsigned int closestIndex = findClosestNode(xPosition);
+
+        // Add to known points (avoiding duplicates by using the closest node)
+        knownPoints.emplace_back(static_cast<int>(closestIndex), value);
+    }
+
+    // Remove duplicate indices (keep the last value if multiple TimeSeries points map to same node)
+    std::map<int, double> uniqueKnownPoints;
+    for (const auto& knownPoint : knownPoints) {
+        uniqueKnownPoints[knownPoint.first] = knownPoint.second;
+    }
+
+    // Convert back to vector format
+    std::vector<std::pair<int, double>> finalKnownPoints;
+    finalKnownPoints.reserve(uniqueKnownPoints.size());
+    for (const auto& entry : uniqueKnownPoints) {
+        finalKnownPoints.emplace_back(entry.first, entry.second);
+    }
+
+    // Generate the field using the known points
+    generateNormalScoreField(fieldName, correlationLength, finalKnownPoints);
+}
+
+bool FieldGenerator::writeFieldToCSV(const std::string& fieldName, const std::string& filename,
+                                     int precision, bool includeHeader) const {
+    // Check if field exists
+    auto it = parameters.find(fieldName);
+    if (it == parameters.end()) {
+        return false; // Field doesn't exist
+    }
+
+    const std::vector<double>& fieldData = it->second;
+
+    // Check if field has data
+    if (fieldData.empty()) {
+        return false; // No data to write
+    }
+
+    // Check if field size matches points size
+    if (fieldData.size() != points.size()) {
+        return false; // Inconsistent data
+    }
+
+    // Open file for writing
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        return false; // Failed to open file
+    }
+
+    // Set precision for floating point output
+    file << std::fixed << std::setprecision(precision);
+
+    // Write CSV header if requested
+    if (includeHeader) {
+        file << "x," << fieldName << std::endl;
+    }
+
+    // Write data in CSV format
+    for (size_t i = 0; i < fieldData.size(); ++i) {
+        double xPosition = static_cast<double>(i) * dx;
+        file << xPosition << "," << fieldData[i] << std::endl;
+    }
+
+    file.close();
+    return true;
+}
+
+const TimeSeriesSet<double>& FieldGenerator::getMeasuredCDFs() const {
+    if (!has_measured_CDFs_) {
+        throw std::runtime_error("No measured CDFs available. Call generateFieldFromMeasurementData first.");
+    }
+    return measured_CDFs_;
+}
+
+bool FieldGenerator::hasMeasuredCDFs() const {
+    return has_measured_CDFs_;
+}
+
+void FieldGenerator::clearMeasuredCDFs() {
+    measured_CDFs_.clear();
+    has_measured_CDFs_ = false;
+}
+
+bool FieldGenerator::generateFieldFromMeasurementData(const std::string& dataFilePath,
+                                                      const std::string& parameterName,
+                                                      const std::string& fieldName,
+                                                      double correlationLength,
+                                                      bool verbose) {
+    try {
+        if (verbose) {
+            std::cout << "Reading data from '" << dataFilePath << "'" << std::endl;
+        }
+
+        // Step 1: Read measurement data
+        TimeSeriesSet<double> measured_data;
+        if (!measured_data.read(dataFilePath)) {
+            if (verbose) {
+                std::cerr << "Error: Failed to read data from " << dataFilePath << std::endl;
+            }
+            return false;
+        }
+
+        // Step 2: Check if parameter exists in the data
+        if (!measured_data.Contains(parameterName)) {
+            if (verbose) {
+                std::cerr << "Error: Parameter '" << parameterName << "' not found in data file" << std::endl;
+            }
+            return false;
+        }
+
+        // Step 3: Generate cumulative distribution functions and store them
+        measured_CDFs_ = measured_data.GetCummulativeDistribution();
+        has_measured_CDFs_ = true;
+
+        // Step 4: Convert to normal scores
+        TimeSeriesSet<double> normal_scores = measured_data.ConverttoNormalScore();
+
+        // Step 5: Check if the converted parameter exists
+        if (!normal_scores.Contains(parameterName)) {
+            if (verbose) {
+                std::cerr << "Error: Failed to convert parameter '" << parameterName << "' to normal scores" << std::endl;
+            }
+            return false;
+        }
+
+        // Step 6: Set known points and generate field
+        setKnownPointsFromTimeSeries(fieldName, normal_scores[parameterName], correlationLength);
+
+        // Step 7: Transform normal scores back to real values using measured CDF
+        if (!measured_CDFs_.Contains(parameterName)) {
+            if (verbose) {
+                std::cerr << "Error: CDF for parameter '" << parameterName << "' not found" << std::endl;
+            }
+            return false;
+        }
+
+        normalToCDF(fieldName, parameterName, measured_CDFs_[parameterName]);
+
+        if (verbose) {
+            std::cout << "Successfully generated field '" << fieldName << "' from parameter '"
+                      << parameterName << "'" << std::endl;
+            std::cout << "Transformed to real values in field '" << parameterName << "'" << std::endl;
+        }
+
+        return true;
+
+    } catch (const std::exception& e) {
+        if (verbose) {
+            std::cerr << "Error in generateFieldFromMeasurementData: " << e.what() << std::endl;
+        }
+        return false;
+    }
 }

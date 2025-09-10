@@ -28,6 +28,7 @@ DEFINES += Arash
 #DEFINES += SligoCreek
 
 DEFINES += _arma
+DEFINES += Q_JSON_SUPPORT
 
 contains(DEFINES, Behzad) {
     OHQPATH = /home/behzad/Projects/OpenHydroQual/aquifolium
@@ -68,6 +69,7 @@ INCLUDEPATH += $$OHQPATH/src
 INCLUDEPATH += $$OHQPATH/include/GA
 INCLUDEPATH += $$OHQPATH/include/MCMC
 INCLUDEPATH += ../jsoncpp/include/
+
 
 
 
