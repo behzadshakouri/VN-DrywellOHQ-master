@@ -16,8 +16,8 @@ DEFINES += GSL
 #DEFINES += Behzad
 
 
-#CONFIG += PowerEdge
-#DEFINES += PowerEdge
+CONFIG += PowerEdge
+DEFINES += PowerEdge
 
 
 CONFIG += Arash

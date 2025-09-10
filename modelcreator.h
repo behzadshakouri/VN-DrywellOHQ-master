@@ -12,7 +12,7 @@ struct model_parameters
 {
     double ft = 0.3048; //ft to m
     double in = 0.0254; //in to m
-    double DepthtoGroundWater = 25; // Should be estimated, 25 to 85 m
+    double DepthtoGroundWater = 85; // Should be estimated, 25 to 85 m
     double DepthofWell_c = 16*ft; // 16'
     double DepthofWell_g = 24*ft; // 24'
     double DepthofWell_t = DepthofWell_c + DepthofWell_g; // 40'
