@@ -166,6 +166,21 @@ else if (rain_data==4)
         double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
         double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
         double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+        if (!fieldgen)
+        {   Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
+            alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
+            n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
+            theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
+            theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+        }
+        else
+        {
+            Ksat = fieldgen->interpolate("Ksat", actual_depth);
+            alpha = fieldgen->interpolate("alpha", actual_depth);
+            n = fieldgen->interpolate("n", actual_depth);
+            theta_s = fieldgen->interpolate("theta_s", actual_depth);
+            theta_r = fieldgen->interpolate("theta_r", actual_depth);
+        }
 
         for (int i=0; i<mp.nr_uw; i++)
         if (j*dz<mp.DepthtoGroundWater)

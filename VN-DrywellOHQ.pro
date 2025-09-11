@@ -20,8 +20,8 @@ CONFIG += PowerEdge
 DEFINES += PowerEdge
 
 
-CONFIG += Arash
-DEFINES += Arash
+#CONFIG += Arash
+#DEFINES += Arash
 
 
 #CONFIG += SligoCreek
