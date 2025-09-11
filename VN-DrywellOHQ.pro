@@ -165,6 +165,7 @@ SOURCES += \
         ../jsoncpp/src/lib_json/json_reader.cpp \
         ../jsoncpp/src/lib_json/json_value.cpp \
         ../jsoncpp/src/lib_json/json_writer.cpp \
+        FieldGenHelper.cpp \
         fieldgenerator.cpp \
         main.cpp \
         modelcreator.cpp \
@@ -231,6 +232,7 @@ HEADERS += \
     $$OHQPATH/include/Objective_Function_Set.h \
     $$OHQPATH/include/GA/GA.hpp \
     $$OHQPATH/include/reaction.h \
+    FieldGenHelper.h \
     fieldgenerator.h \
     modelcreator.h \
     propertygenerator.h \
