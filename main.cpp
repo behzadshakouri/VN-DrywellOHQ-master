@@ -20,7 +20,7 @@ using namespace std;
 int main(int argc, char *argv[])
 {
     // === Field Generator Test ===
-    FieldGenerator gen(100, 42);
+    FieldGenerator gen(200, 42); // Grid number and seed
 
     // Set grid spacing to 0.5 meters
     gen.setDx(0.5);
@@ -34,10 +34,10 @@ int main(int argc, char *argv[])
     std::string outPrefix = std::string(PATH);
 
     // Distances to check auto-correlation
-    std::vector<double> testDistances = {0.0, 0.2, 0.5, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 20.0};
+    std::vector<double> testDistances = {0.0, 0.2, 0.5, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 20.0, 50.0, 100.0};
 
     // Parameters to generate
-    std::vector<std::string> parameters = {"Ksat", "alpha", "n", "theta_s", "theta_r"};
+    std::vector<std::string> parameters = {"alpha", "n", "theta_s", "theta_r", "Ksat"};
 
     // Loop through parameters
     for (const auto &param : parameters) {

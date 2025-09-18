@@ -531,7 +531,23 @@ else if (rain_data==4)
     L3.SetVal("length",mp.length_cmw);
     system->AddLink(L3, "Catchment", "Well_c", false);
 
+    cout<<"Tracer"<<endl;
+    Constituent mean_age_tracer;
+    mean_age_tracer.SetQuantities(system->GetMetaModel(), "Constituent");
+    mean_age_tracer.SetName("mean_age_tracer");
+    mean_age_tracer.SetType("Constituent");
+    system->AddConstituent(mean_age_tracer,false);
 
+    cout<<"Reaction"<<endl;
+    Reaction aging;
+    aging.SetQuantities(system->GetMetaModel(), "Reaction");
+    aging.SetName("aging");
+    aging.SetType("Reaction");
+    aging.SetProperty("mean_age_tracer:stoichiometric_constant","(1)");
+    aging.SetProperty("rate_expression","(1)");
+    system->AddReaction(aging,false);
+
+    // Solve properties
     system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
     system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
 
