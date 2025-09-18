@@ -89,6 +89,7 @@ else if (rain_data==4)
         double n = 0;
         double theta_s = 0;
         double theta_r = 0;
+
         if (!fieldgen)
         {   Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
             alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
@@ -161,11 +162,12 @@ else if (rain_data==4)
     for (int j=0; j<mp.nz_uw; j++)
     {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
         //calculate Ksat, n, etc.
-        double Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale, false);
-        double alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
-        double n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
-        double theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
-        double theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+        double Ksat = 0;
+        double alpha = 0;
+        double n = 0;
+        double theta_s = 0;
+        double theta_r = 0;
+
         if (!fieldgen)
         {   Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
             alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
@@ -545,60 +547,3 @@ else if (rain_data==4)
     system->SetVariableParents();
     return true;
 }
-
-
-
-
-/*
-    double dr = (mp.RadiousOfInfluence-mp.rw_c_t)/mp.nr_c;
-    double dz = mp.DepthofWell_c/mp.nz_c;
-
-    // Soil Blocks around concrete part
-    cout<<"Soil Blocks around concrete part"<<endl;
-    for (int i=0; i<mp.nr_c; i++)
-        for (int j=0; j<mp.nz_c; j++)
-        {
-            Block B;
-            B.SetQuantities(system->GetMetaModel(), "Soil");
-            double r1 = mp.rw_c_t + i*dr;
-            double r2 = mp.rw_c_t + (i+1)*dr;
-            double area = pi*(r2*r2-r1*r1);
-
-            B.SetName(("Soil-c (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
-            B.SetType("Soil");
-            B.SetVal("K_sat_original",mp.K_sat);
-            B.SetVal("alpha",mp.alpha);
-            B.SetVal("area",area);
-            B.SetVal("_width",dr*300);
-            B.SetVal("_height",dr*300);
-            B.SetVal("bottom_elevation",-(j+1)*dz);
-            B.SetVal("depth",dz);
-            B.SetVal("theta",mp.initial_theta);
-            B.SetVal("theta_sat",mp.theta_sat);
-            B.SetVal("theta_res",mp.theta_r);
-            B.SetVal("x",-(i*dr+mp.rw_c_t)*2000);
-            B.SetVal("y",1000+(j*dz)*2000);
-            B.SetVal("act_X",(i+0.5)*dr+mp.rw_c_t);
-            B.SetVal("act_Y",-(j+0.5)*dz);
-            system->AddBlock(B,false);
-        }
-    */
-
-/*
-    cout<<"Horizontal links for soils of concrete part"<<endl;
-    for (int i=0; mp.nr_c<i<mp.RadiousOfInfluence; i++)
-        for (int j=0; mp.nz_c<j<mp.DepthtoGroundWater; j++)
-        {
-            Link L;
-            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_H_link");
-
-
-            L.SetName(("Soil-c (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil-c (" + QString::number(i+2) + "$" + QString::number(j)+ ")").toStdString());
-            L.SetType("soil_to_soil_H_link");
-
-            L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
-            L.SetVal("length",dr);
-
-            system->AddLink(L, ("Soil-c (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil-c (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
-        }
-    */
