@@ -165,7 +165,6 @@ SOURCES += \
         ../jsoncpp/src/lib_json/json_reader.cpp \
         ../jsoncpp/src/lib_json/json_value.cpp \
         ../jsoncpp/src/lib_json/json_writer.cpp \
-        FieldGenHelper.cpp \
         fieldgenerator.cpp \
         main.cpp \
         modelcreator.cpp \

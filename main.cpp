@@ -41,10 +41,10 @@ int main(int argc, char *argv[])
 
     // Loop through parameters
     for (const auto &param : parameters) {
-        generateAndAnalyzeField(gen, csvFile, param, 20, testDistances, outPrefix);
+        generateAndAnalyzeField(gen, csvFile, param, 1, testDistances, outPrefix); // enter correlation length
     }
 
-    return 0;
+    //return 0;
 
     model_parameters mp;
 
