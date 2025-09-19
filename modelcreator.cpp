@@ -12,6 +12,7 @@ ModelCreator::ModelCreator()
 
 bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *fieldgen)
 {
+    modelparameters = mp;
     TimeSeriesSet<double> SoilData;
 
 #ifdef Behzad
@@ -37,9 +38,9 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     system->AppendQuanTemplate("../OpenHydroQual/resources/pipe_pump_tank.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/Pond_Plugin.json");
     system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
+    system->SetNumThreads(16);
 
-
-    int rain_data=2; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
+    int rain_data=4; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
@@ -534,7 +535,7 @@ else if (rain_data==4)
     cout<<"Tracer"<<endl;
     Constituent mean_age_tracer;
     mean_age_tracer.SetQuantities(system->GetMetaModel(), "Constituent");
-    mean_age_tracer.SetName("mean_age_tracer");
+    mean_age_tracer.SetName("meanagetracer");
     mean_age_tracer.SetType("Constituent");
     system->AddConstituent(mean_age_tracer,false);
 
@@ -543,7 +544,7 @@ else if (rain_data==4)
     aging.SetQuantities(system->GetMetaModel(), "Reaction");
     aging.SetName("aging");
     aging.SetType("Reaction");
-    aging.SetProperty("mean_age_tracer:stoichiometric_constant","(1)");
+    aging.SetProperty("meanagetracer:stoichiometric_constant","(1)");
     aging.SetProperty("rate_expression","(1)");
     system->AddReaction(aging,false);
 

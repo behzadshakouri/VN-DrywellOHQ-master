@@ -44,6 +44,7 @@ int main(int argc, char *argv[])
         generateAndAnalyzeField(gen, csvFile, param, 1, testDistances, outPrefix); // enter correlation length
     }
 
+
     //return 0;
 
     model_parameters mp;
@@ -106,9 +107,44 @@ int main(int argc, char *argv[])
     resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp");
 
 
+    ResultGrid resgrid_age(uniformoutput_LR,"mean_age_tracer:concentration",system);
+    cout<<"Writing age VTPs"<<endl;
+    resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp");
+
+
     vector<string> well_block_c; well_block_c.push_back("Well_c");
     ResultGrid well_depth_c = ResultGrid(uniformoutput_HR,well_block_c,"depth");
     well_depth_c.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_c.csv");
+
+    vector<string> age_tracer_locations;
+    vector<string> gw_rechage_locations;
+    for (unsigned int i = 0; i<ModCreate.ModelParameters().nr_uw; i++)
+    {   age_tracer_locations.push_back("Soil-uw ("+ aquiutils::numbertostring(i) +"$"+ aquiutils::numbertostring(ModCreate.ModelParameters().nz_uw-1)+")");
+        gw_rechage_locations.push_back("Soil to Groundwater (" + aquiutils::numbertostring(i) + ")");
+
+    }
+    ResultGrid age_tracer_res = ResultGrid(uniformoutput_HR,age_tracer_locations, "mean_age_tracer:concentration");
+    ResultGrid flow_to_gw_res = ResultGrid(uniformoutput_HR,gw_rechage_locations, "flow");
+
+
+    TimeSeries<double> mean_age;
+    TimeSeries<double> groundwater_recharge;
+    for (unsigned int j = 0; j<age_tracer_res.max_size(); j++)
+    {
+        double sumprod = 0;
+        double sumflow = 0;
+        for (unsigned int i = 0; i<ModCreate.ModelParameters().nr_uw; i++)
+        {
+            sumprod += age_tracer_res[i].getValue(j)*flow_to_gw_res[i].getValue(j);
+            sumflow += flow_to_gw_res[i].getValue(j);
+            mean_age.append(age_tracer_res[i].getTime(j),sumprod/sumflow);
+            groundwater_recharge.append(age_tracer_res[i].getTime(j),sumflow);
+        }
+    }
+
+    mean_age.writefile(system->GetWorkingFolder()+"mean_age_at_gw.csv");
+    groundwater_recharge.writefile(system->GetWorkingFolder()+"gw_recharge.csv");
+
 
     vector<string> well_block_g; well_block_g.push_back("Well_g");
     ResultGrid well_depth_g = ResultGrid(uniformoutput_HR,well_block_g,"depth");

@@ -14,9 +14,9 @@ EQ            = =
 
 CC            = gcc
 CXX           = g++
-DEFINES       = -DGSL -DArash -Duse_VTK -DARMA_USE_SUPERLU -Dubuntu_version -DTerminal_version -DARMA_USE_LAPACK -DARMA_USE_BLAS -DQT_NO_DEBUG -DQT_CORE_LIB
+DEFINES       = -DGSL -DArash -D_arma -DQ_JSON_SUPPORT -Duse_VTK -DARMA_USE_SUPERLU -Dubuntu_version -DTerminal_version -DARMA_USE_LAPACK -DARMA_USE_BLAS -DQT_NO_DEBUG -DQT_CORE_LIB
 CFLAGS        = -pipe -O2 -Wall -Wextra -fPIC -D_REENTRANT $(DEFINES)
-CXXFLAGS      = -pipe -Xpreprocessor -fopenmp -O2 -std=gnu++1z -Wall -Wextra -fPIC -D_REENTRANT $(DEFINES)
+CXXFLAGS      = -pipe -fsanitize=address -fno-omit-frame-pointer -g -Xpreprocessor -fopenmp -O2 -std=gnu++1z -Wall -Wextra -fPIC -D_REENTRANT $(DEFINES)
 INCPATH       = -I. -I../OpenHydroQual/aquifolium/include -I../OpenHydroQual/aquifolium/src -I../OpenHydroQual/aquifolium/include/GA -I../OpenHydroQual/aquifolium/include/MCMC -I../jsoncpp/include -I../VTK-9.4.1 -I../VTK-9.4.1/Common/Core -I../VTK-9.4.1/build/Common/Core -I../VTK-9.4.1/Common/Color -I../VTK-9.4.1/Common/Transforms -I../VTK-9.4.1/build/Common/Transforms -I../VTK-9.4.1/build/Common/Color -I../VTK-9.4.1/build/Common/DataModel -I../VTK-9.4.1/build/Utilities/KWIML -I../VTK-9.4.1/Utilities/KWIML -I../VTK-9.4.1/Rendering/Core -I../VTK-9.4.1/build/Rendering/Core -I../VTK-9.4.1/build/Filters/Core -I../VTK-9.4.1/Charts/Core -I../VTK-9.4.1/build/Charts/Core -I../VTK-9.4.1/build/Filters/General -I../VTK-9.4.1/build/Rendering/Context2D -I../VTK-9.4.1/Rendering/Context2D -I../VTK-9.4.1/Common/DataModel -I../VTK-9.4.1/Common/Math -I../VTK-9.4.1/Views/Context2D -I../VTK-9.4.1/build/Views/Context2D -I../VTK-9.4.1/build/Views/Core -I../VTK-9.4.1/build/Interaction/Widgets -I../VTK-9.4.1/Views/Core -I../VTK-9.4.1/Interaction/Style -I../VTK-9.4.1/build/Interaction/Style -I../VTK-9.4.1/Filters/Modeling -I../VTK-9.4.1/build/Filters/Modeling -I../VTK-9.4.1/Common/ExecutionModel -I../VTK-9.4.1/build/Common/ExecutionModel -I../VTK-9.4.1/Interaction/Widgets -I../VTK-9.4.1/Filters/Core -I../VTK-9.4.1/Common/Misc -I../VTK-9.4.1/build/Common/Misc -I../VTK-9.4.1/IO/XML -I../VTK-9.4.1/build/IO/XML -I../VTK-9.4.1/Filters/Sources -I../VTK-9.4.1/build/Filters/Sources -I../VTK-9.4.1/Filters/General -I../VTK-9.4.1/IO/Image -I../VTK-9.4.1/build/IO/Image -I../VTK-9.4.1/Imaging/Core -I../VTK-9.4.1/build/Imaging/Core -I../VTK-9.4.1/build/Utilities/KWSys -I../VTK-9.4.1/build/ThirdParty/nlohmannjson -I../VTK-9.4.1/ThirdParty/nlohmannjson -I../VTK-9.4.1/build/Common/Math -I../../Qt/6.8.3/gcc_64/include -I../../Qt/6.8.3/gcc_64/include/QtCore -I. -I../../Qt/6.8.3/gcc_64/mkspecs/linux-g++
 QMAKE         = /home/arash/Qt/6.8.3/gcc_64/bin/qmake
 DEL_FILE      = rm -f
@@ -39,7 +39,7 @@ COMPRESS      = gzip -9f
 DISTNAME      = DrywellOHQ1.0.0
 DISTDIR = /home/arash/Projects/VN-DrywellOHQ-master/.tmp/DrywellOHQ1.0.0
 LINK          = g++
-LFLAGS        = -fopenmp -Wl,-O1 -Wl,-rpath,/home/arash/Qt/6.8.3/gcc_64/lib
+LFLAGS        = -fsanitize=address -fopenmp -Wl,-O1 -Wl,-rpath,/home/arash/Qt/6.8.3/gcc_64/lib
 LIBS          = $(SUBLIBS) -lgomp -larmadillo -llapack -lblas -lgsl -L/home/arash/Projects/VTK-9.4.1/build/lib/ -lvtkChartsCore-9.4 -lvtkCommonColor-9.4 -lvtkCommonComputationalGeometry-9.4 -lvtkCommonCore-9.4 -lvtkCommonDataModel-9.4 -lvtkCommonExecutionModel-9.4 -lvtkCommonMath-9.4 -lvtkCommonMisc-9.4 -lvtkCommonSystem-9.4 -lvtkCommonTransforms-9.4 -lvtkDICOMParser-9.4 -lvtkexpat-9.4 -lvtkFiltersAMR-9.4 -lvtkFiltersCore-9.4 -lvtkFiltersExtraction-9.4 -lvtkFiltersFlowPaths-9.4 -lvtkFiltersGeneral-9.4 -lvtkFiltersGeneric-9.4 -lvtkFiltersGeometry-9.4 -lvtkFiltersHybrid-9.4 -lvtkFiltersHyperTree-9.4 -lvtkFiltersImaging-9.4 -lvtkFiltersModeling-9.4 -lvtkFiltersParallel-9.4 -lvtkFiltersParallelImaging-9.4 -lvtkFiltersPoints-9.4 -lvtkFiltersProgrammable-9.4 -lvtkFiltersSelection-9.4 -lvtkFiltersSMP-9.4 -lvtkFiltersSources-9.4 -lvtkFiltersStatistics-9.4 -lvtkFiltersTexture-9.4 -lvtkFiltersTopology-9.4 -lvtkFiltersVerdict-9.4 -lvtkfreetype-9.4 -lvtkGeovisCore-9.4 -lvtkgl2ps-9.4 -lvtkhdf5-9.4 -lvtkhdf5_hl-9.4 -lvtkImagingColor-9.4 -lvtkImagingCore-9.4 -lvtkImagingFourier-9.4 -lvtkImagingGeneral-9.4 -lvtkImagingHybrid-9.4 -lvtkImagingMath-9.4 -lvtkImagingMorphological-9.4 -lvtkImagingSources-9.4 -lvtkImagingStatistics-9.4 -lvtkImagingStencil-9.4 -lvtkInfovisCore-9.4 -lvtkInfovisLayout-9.4 -lvtkInteractionImage-9.4 -lvtkInteractionStyle-9.4 -lvtkInteractionWidgets-9.4 -lvtkIOAMR-9.4 -lvtkIOCore-9.4 -lvtkIOEnSight-9.4 -lvtkIOExodus-9.4 -lvtkIOGeometry-9.4 -lvtkIOImage-9.4 -lvtkIOImport-9.4 -lvtkIOInfovis-9.4 -lvtkIOLegacy-9.4 -lvtkIOLSDyna-9.4 -lvtkIOMINC-9.4 -lvtkIOMovie-9.4 -lvtkIONetCDF-9.4 -lvtkIOParallel-9.4 -lvtkIOParallelXML-9.4 -lvtkIOPLY-9.4 -lvtkIOSQL-9.4 -lvtkIOTecplotTable-9.4 -lvtkIOVideo-9.4 -lvtkIOXML-9.4 -lvtkIOXMLParser-9.4 -lvtkjpeg-9.4 -lvtkjsoncpp-9.4 -lvtklibharu-9.4 -lvtklibxml2-9.4 -lvtklz4-9.4 -lvtkmetaio-9.4 -lvtkParallelCore-9.4 -lvtkpng-9.4 -lvtkRenderingAnnotation-9.4 -lvtkRenderingContext2D-9.4 -lvtkRenderingCore-9.4 -lvtkRenderingFreeType-9.4 -lvtkRenderingGL2PSOpenGL2-9.4 -lvtkRenderingImage-9.4 -lvtkRenderingLabel-9.4 -lvtkRenderingLOD-9.4 -lvtkRenderingOpenGL2-9.4 -lvtkRenderingVolume-9.4 -lvtkRenderingVolumeOpenGL2-9.4 -lvtksqlite-9.4 -lvtksys-9.4 -lvtktiff-9.4 -lvtkverdict-9.4 -lvtkViewsContext2D-9.4 -lvtkViewsCore-9.4 -lvtkViewsInfovis-9.4 -lvtkzlib-9.4 -L/usr/local/lib/\ -lsuperlu.so /home/arash/Qt/6.8.3/gcc_64/lib/libQt6Core.so -lpthread   
 AR            = ar cqs
 RANLIB        = 
@@ -92,8 +92,10 @@ SOURCES       = ../OpenHydroQual/aquifolium/src/Block.cpp \
 		../jsoncpp/src/lib_json/json_reader.cpp \
 		../jsoncpp/src/lib_json/json_value.cpp \
 		../jsoncpp/src/lib_json/json_writer.cpp \
+		fieldgenerator.cpp \
 		main.cpp \
 		modelcreator.cpp \
+		propertygenerator.cpp \
 		resultgrid.cpp 
 OBJECTS       = Block.o \
 		Command.o \
@@ -135,8 +137,10 @@ OBJECTS       = Block.o \
 		json_reader.o \
 		json_value.o \
 		json_writer.o \
+		fieldgenerator.o \
 		main.o \
 		modelcreator.o \
+		propertygenerator.o \
 		resultgrid.o
 DIST          = ../../Qt/6.8.3/gcc_64/mkspecs/features/spec_pre.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/common/unix.conf \
@@ -485,6 +489,7 @@ DIST          = ../../Qt/6.8.3/gcc_64/mkspecs/features/spec_pre.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/qt_config.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/linux-g++/qmake.conf \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/spec_post.prf \
+		.qmake.stash \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/exclusive_builds.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/toolchain.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/default_pre.prf \
@@ -563,7 +568,10 @@ DIST          = ../../Qt/6.8.3/gcc_64/mkspecs/features/spec_pre.prf \
 		../OpenHydroQual/aquifolium/include/Objective_Function_Set.h \
 		../OpenHydroQual/aquifolium/include/GA/GA.hpp \
 		../OpenHydroQual/aquifolium/include/reaction.h \
+		FieldGenHelper.h \
+		fieldgenerator.h \
 		modelcreator.h \
+		propertygenerator.h \
 		resultgrid.h \
 		vtk.h \
 		../OpenHydroQual/aquifolium/src/BTC.hpp \
@@ -607,8 +615,10 @@ DIST          = ../../Qt/6.8.3/gcc_64/mkspecs/features/spec_pre.prf \
 		../jsoncpp/src/lib_json/json_reader.cpp \
 		../jsoncpp/src/lib_json/json_value.cpp \
 		../jsoncpp/src/lib_json/json_writer.cpp \
+		fieldgenerator.cpp \
 		main.cpp \
 		modelcreator.cpp \
+		propertygenerator.cpp \
 		resultgrid.cpp
 QMAKE_TARGET  = DrywellOHQ
 DESTDIR       = 
@@ -968,6 +978,7 @@ Makefile: VN-DrywellOHQ.pro ../../Qt/6.8.3/gcc_64/mkspecs/linux-g++/qmake.conf .
 		../../Qt/6.8.3/gcc_64/mkspecs/features/qt_config.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/linux-g++/qmake.conf \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/spec_post.prf \
+		.qmake.stash \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/exclusive_builds.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/toolchain.prf \
 		../../Qt/6.8.3/gcc_64/mkspecs/features/default_pre.prf \
@@ -1337,6 +1348,7 @@ Makefile: VN-DrywellOHQ.pro ../../Qt/6.8.3/gcc_64/mkspecs/linux-g++/qmake.conf .
 ../../Qt/6.8.3/gcc_64/mkspecs/features/qt_config.prf:
 ../../Qt/6.8.3/gcc_64/mkspecs/linux-g++/qmake.conf:
 ../../Qt/6.8.3/gcc_64/mkspecs/features/spec_post.prf:
+.qmake.stash:
 ../../Qt/6.8.3/gcc_64/mkspecs/features/exclusive_builds.prf:
 ../../Qt/6.8.3/gcc_64/mkspecs/features/toolchain.prf:
 ../../Qt/6.8.3/gcc_64/mkspecs/features/default_pre.prf:
@@ -1373,8 +1385,8 @@ distdir: FORCE
 	@test -d $(DISTDIR) || mkdir -p $(DISTDIR)
 	$(COPY_FILE) --parents $(DIST) $(DISTDIR)/
 	$(COPY_FILE) --parents ../../Qt/6.8.3/gcc_64/mkspecs/features/data/dummy.cpp $(DISTDIR)/
-	$(COPY_FILE) --parents ../OpenHydroQual/aquifolium/include/Objective_Function.h ../OpenHydroQual/aquifolium/include/Objective_Function_Set.h ../OpenHydroQual/aquifolium/include/Precipitation.h ../OpenHydroQual/aquifolium/include/RxnParameter.h ../OpenHydroQual/aquifolium/include/constituent.h ../OpenHydroQual/aquifolium/include/observation.h ../OpenHydroQual/aquifolium/include/precalculatedfunction.h ../OpenHydroQual/aquifolium/include/solutionlogger.h ../OpenHydroQual/aquifolium/include/GA/GA.h ../OpenHydroQual/aquifolium/include/MCMC/MCMC.h ../OpenHydroQual/aquifolium/include/MCMC/MCMC.hpp ../OpenHydroQual/aquifolium/include/Utilities.h ../OpenHydroQual/aquifolium/include/restorepoint.h ../OpenHydroQual/aquifolium/include/safevector.h ../OpenHydroQual/aquifolium/include/safevector.hpp ../OpenHydroQual/aquifolium/include/Block.h ../OpenHydroQual/aquifolium/include/Expression.h ../OpenHydroQual/aquifolium/include/Link.h ../OpenHydroQual/aquifolium/include/Matrix.h ../OpenHydroQual/aquifolium/include/Matrix_arma.h ../OpenHydroQual/aquifolium/include/MetaModel.h ../OpenHydroQual/aquifolium/include/NormalDist.h ../OpenHydroQual/aquifolium/include/Object.h ../OpenHydroQual/aquifolium/include/Quan.h ../OpenHydroQual/aquifolium/include/QuanSet.h ../OpenHydroQual/aquifolium/include/QuickSort.h /home/arash/Projects/OpenHydroQual/aquifolium/include/StringOP.h ../OpenHydroQual/aquifolium/include/System.h ../OpenHydroQual/aquifolium/include/Vector.h ../OpenHydroQual/aquifolium/include/Vector_arma.h ../OpenHydroQual/aquifolium/include/TimeSeries.h ../OpenHydroQual/aquifolium/include/TimeSeriesSet.h ../OpenHydroQual/aquifolium/src/TimeSeries.hpp ../OpenHydroQual/aquifolium/src/TimeSeriesSet.hpp ../jsoncpp/include/json/allocator.h ../jsoncpp/include/json/assertions.h ../jsoncpp/include/json/autolink.h ../jsoncpp/include/json/config.h ../jsoncpp/include/json/features.h ../jsoncpp/include/json/forwards.h ../jsoncpp/include/json/json.h ../jsoncpp/include/json/reader.h ../jsoncpp/include/json/value.h ../jsoncpp/include/json/version.h ../jsoncpp/include/json/writer.h ../jsoncpp/src/lib_json/json_tool.h ../jsoncpp/src/lib_json/version.h.in ../OpenHydroQual/aquifolium/include/Parameter.h ../OpenHydroQual/aquifolium/include/Parameter_Set.h ../OpenHydroQual/aquifolium/include/Command.h ../OpenHydroQual/aquifolium/include/Script.h ../OpenHydroQual/aquifolium/include/GA/Binary.h ../OpenHydroQual/aquifolium/include/GA/Distribution.h ../OpenHydroQual/aquifolium/include/GA/DistributionNUnif.h ../OpenHydroQual/aquifolium/include/GA/Individual.h ../OpenHydroQual/aquifolium/include/Objective_Function.h ../OpenHydroQual/aquifolium/include/Objective_Function_Set.h ../OpenHydroQual/aquifolium/include/GA/GA.hpp ../OpenHydroQual/aquifolium/include/reaction.h modelcreator.h resultgrid.h vtk.h ../OpenHydroQual/aquifolium/src/BTC.hpp ../OpenHydroQual/aquifolium/src/BTCSet.hpp $(DISTDIR)/
-	$(COPY_FILE) --parents ../OpenHydroQual/aquifolium/src/Block.cpp ../OpenHydroQual/aquifolium/src/Command.cpp ../OpenHydroQual/aquifolium/src/Condition.cpp ../OpenHydroQual/aquifolium/src/ErrorHandler.cpp ../OpenHydroQual/aquifolium/src/Expression.cpp ../OpenHydroQual/aquifolium/src/Link.cpp ../OpenHydroQual/aquifolium/src/Matrix.cpp ../OpenHydroQual/aquifolium/src/Matrix_arma.cpp ../OpenHydroQual/aquifolium/src/MetaModel.cpp ../OpenHydroQual/aquifolium/src/NormalDist.cpp ../OpenHydroQual/aquifolium/src/Object.cpp ../OpenHydroQual/aquifolium/src/Objective_Function.cpp ../OpenHydroQual/aquifolium/src/Objective_Function_Set.cpp ../OpenHydroQual/aquifolium/src/Parameter.cpp ../OpenHydroQual/aquifolium/src/Parameter_Set.cpp ../OpenHydroQual/aquifolium/src/Precipitation.cpp ../OpenHydroQual/aquifolium/src/Quan.cpp ../OpenHydroQual/aquifolium/src/QuanSet.cpp ../OpenHydroQual/aquifolium/src/QuickSort.cpp ../OpenHydroQual/aquifolium/src/Rule.cpp ../OpenHydroQual/aquifolium/src/RxnParameter.cpp ../OpenHydroQual/aquifolium/src/Script.cpp ../OpenHydroQual/aquifolium/src/Source.cpp ../OpenHydroQual/aquifolium/src/System.cpp ../OpenHydroQual/aquifolium/src/Utilities.cpp ../OpenHydroQual/aquifolium/src/Vector.cpp ../OpenHydroQual/aquifolium/src/Vector_arma.cpp ../OpenHydroQual/aquifolium/src/constituent.cpp ../OpenHydroQual/aquifolium/src/observation.cpp ../OpenHydroQual/aquifolium/src/precalculatedfunction.cpp ../OpenHydroQual/aquifolium/src/reaction.cpp ../OpenHydroQual/aquifolium/src/restorepoint.cpp ../OpenHydroQual/aquifolium/src/solutionlogger.cpp ../OpenHydroQual/aquifolium/src/GA/Binary.cpp ../OpenHydroQual/aquifolium/src/GA/Individual.cpp ../OpenHydroQual/aquifolium/src/GA/DistributionNUnif.cpp ../OpenHydroQual/aquifolium/src/GA/Distribution.cpp ../jsoncpp/src/lib_json/json_reader.cpp ../jsoncpp/src/lib_json/json_value.cpp ../jsoncpp/src/lib_json/json_writer.cpp main.cpp modelcreator.cpp resultgrid.cpp $(DISTDIR)/
+	$(COPY_FILE) --parents ../OpenHydroQual/aquifolium/include/Objective_Function.h ../OpenHydroQual/aquifolium/include/Objective_Function_Set.h ../OpenHydroQual/aquifolium/include/Precipitation.h ../OpenHydroQual/aquifolium/include/RxnParameter.h ../OpenHydroQual/aquifolium/include/constituent.h ../OpenHydroQual/aquifolium/include/observation.h ../OpenHydroQual/aquifolium/include/precalculatedfunction.h ../OpenHydroQual/aquifolium/include/solutionlogger.h ../OpenHydroQual/aquifolium/include/GA/GA.h ../OpenHydroQual/aquifolium/include/MCMC/MCMC.h ../OpenHydroQual/aquifolium/include/MCMC/MCMC.hpp ../OpenHydroQual/aquifolium/include/Utilities.h ../OpenHydroQual/aquifolium/include/restorepoint.h ../OpenHydroQual/aquifolium/include/safevector.h ../OpenHydroQual/aquifolium/include/safevector.hpp ../OpenHydroQual/aquifolium/include/Block.h ../OpenHydroQual/aquifolium/include/Expression.h ../OpenHydroQual/aquifolium/include/Link.h ../OpenHydroQual/aquifolium/include/Matrix.h ../OpenHydroQual/aquifolium/include/Matrix_arma.h ../OpenHydroQual/aquifolium/include/MetaModel.h ../OpenHydroQual/aquifolium/include/NormalDist.h ../OpenHydroQual/aquifolium/include/Object.h ../OpenHydroQual/aquifolium/include/Quan.h ../OpenHydroQual/aquifolium/include/QuanSet.h ../OpenHydroQual/aquifolium/include/QuickSort.h /home/arash/Projects/OpenHydroQual/aquifolium/include/StringOP.h ../OpenHydroQual/aquifolium/include/System.h ../OpenHydroQual/aquifolium/include/Vector.h ../OpenHydroQual/aquifolium/include/Vector_arma.h ../OpenHydroQual/aquifolium/include/TimeSeries.h ../OpenHydroQual/aquifolium/include/TimeSeriesSet.h ../OpenHydroQual/aquifolium/src/TimeSeries.hpp ../OpenHydroQual/aquifolium/src/TimeSeriesSet.hpp ../jsoncpp/include/json/allocator.h ../jsoncpp/include/json/assertions.h ../jsoncpp/include/json/autolink.h ../jsoncpp/include/json/config.h ../jsoncpp/include/json/features.h ../jsoncpp/include/json/forwards.h ../jsoncpp/include/json/json.h ../jsoncpp/include/json/reader.h ../jsoncpp/include/json/value.h ../jsoncpp/include/json/version.h ../jsoncpp/include/json/writer.h ../jsoncpp/src/lib_json/json_tool.h ../jsoncpp/src/lib_json/version.h.in ../OpenHydroQual/aquifolium/include/Parameter.h ../OpenHydroQual/aquifolium/include/Parameter_Set.h ../OpenHydroQual/aquifolium/include/Command.h ../OpenHydroQual/aquifolium/include/Script.h ../OpenHydroQual/aquifolium/include/GA/Binary.h ../OpenHydroQual/aquifolium/include/GA/Distribution.h ../OpenHydroQual/aquifolium/include/GA/DistributionNUnif.h ../OpenHydroQual/aquifolium/include/GA/Individual.h ../OpenHydroQual/aquifolium/include/Objective_Function.h ../OpenHydroQual/aquifolium/include/Objective_Function_Set.h ../OpenHydroQual/aquifolium/include/GA/GA.hpp ../OpenHydroQual/aquifolium/include/reaction.h FieldGenHelper.h fieldgenerator.h modelcreator.h propertygenerator.h resultgrid.h vtk.h ../OpenHydroQual/aquifolium/src/BTC.hpp ../OpenHydroQual/aquifolium/src/BTCSet.hpp $(DISTDIR)/
+	$(COPY_FILE) --parents ../OpenHydroQual/aquifolium/src/Block.cpp ../OpenHydroQual/aquifolium/src/Command.cpp ../OpenHydroQual/aquifolium/src/Condition.cpp ../OpenHydroQual/aquifolium/src/ErrorHandler.cpp ../OpenHydroQual/aquifolium/src/Expression.cpp ../OpenHydroQual/aquifolium/src/Link.cpp ../OpenHydroQual/aquifolium/src/Matrix.cpp ../OpenHydroQual/aquifolium/src/Matrix_arma.cpp ../OpenHydroQual/aquifolium/src/MetaModel.cpp ../OpenHydroQual/aquifolium/src/NormalDist.cpp ../OpenHydroQual/aquifolium/src/Object.cpp ../OpenHydroQual/aquifolium/src/Objective_Function.cpp ../OpenHydroQual/aquifolium/src/Objective_Function_Set.cpp ../OpenHydroQual/aquifolium/src/Parameter.cpp ../OpenHydroQual/aquifolium/src/Parameter_Set.cpp ../OpenHydroQual/aquifolium/src/Precipitation.cpp ../OpenHydroQual/aquifolium/src/Quan.cpp ../OpenHydroQual/aquifolium/src/QuanSet.cpp ../OpenHydroQual/aquifolium/src/QuickSort.cpp ../OpenHydroQual/aquifolium/src/Rule.cpp ../OpenHydroQual/aquifolium/src/RxnParameter.cpp ../OpenHydroQual/aquifolium/src/Script.cpp ../OpenHydroQual/aquifolium/src/Source.cpp ../OpenHydroQual/aquifolium/src/System.cpp ../OpenHydroQual/aquifolium/src/Utilities.cpp ../OpenHydroQual/aquifolium/src/Vector.cpp ../OpenHydroQual/aquifolium/src/Vector_arma.cpp ../OpenHydroQual/aquifolium/src/constituent.cpp ../OpenHydroQual/aquifolium/src/observation.cpp ../OpenHydroQual/aquifolium/src/precalculatedfunction.cpp ../OpenHydroQual/aquifolium/src/reaction.cpp ../OpenHydroQual/aquifolium/src/restorepoint.cpp ../OpenHydroQual/aquifolium/src/solutionlogger.cpp ../OpenHydroQual/aquifolium/src/GA/Binary.cpp ../OpenHydroQual/aquifolium/src/GA/Individual.cpp ../OpenHydroQual/aquifolium/src/GA/DistributionNUnif.cpp ../OpenHydroQual/aquifolium/src/GA/Distribution.cpp ../jsoncpp/src/lib_json/json_reader.cpp ../jsoncpp/src/lib_json/json_value.cpp ../jsoncpp/src/lib_json/json_writer.cpp fieldgenerator.cpp main.cpp modelcreator.cpp propertygenerator.cpp resultgrid.cpp $(DISTDIR)/
 
 
 clean: compiler_clean 
@@ -1404,7 +1416,7 @@ compiler_moc_predefs_make_all: moc_predefs.h
 compiler_moc_predefs_clean:
 	-$(DEL_FILE) moc_predefs.h
 moc_predefs.h: ../../Qt/6.8.3/gcc_64/mkspecs/features/data/dummy.cpp
-	g++ -pipe -Xpreprocessor -fopenmp -O2 -std=gnu++1z -Wall -Wextra -fPIC -dM -E -o moc_predefs.h ../../Qt/6.8.3/gcc_64/mkspecs/features/data/dummy.cpp
+	g++ -pipe -fsanitize=address -fno-omit-frame-pointer -g -Xpreprocessor -fopenmp -O2 -std=gnu++1z -Wall -Wextra -fPIC -dM -E -o moc_predefs.h ../../Qt/6.8.3/gcc_64/mkspecs/features/data/dummy.cpp
 
 compiler_moc_header_make_all:
 compiler_moc_header_clean:
@@ -6816,6 +6828,157 @@ json_writer.o: ../jsoncpp/src/lib_json/json_writer.cpp ../jsoncpp/src/lib_json/j
 		../jsoncpp/include/json/forwards.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o json_writer.o ../jsoncpp/src/lib_json/json_writer.cpp
 
+fieldgenerator.o: fieldgenerator.cpp fieldgenerator.h \
+		../OpenHydroQual/aquifolium/include/Matrix_arma.h \
+		../OpenHydroQual/aquifolium/include/Vector_arma.h \
+		../OpenHydroQual/aquifolium/include/TimeSeries.h \
+		../OpenHydroQual/aquifolium/include/QuickSort.h \
+		../OpenHydroQual/aquifolium/include/Vector.h \
+		../OpenHydroQual/aquifolium/include/NormalDist.h \
+		../OpenHydroQual/aquifolium/include/Matrix.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QMap \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmap.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qhashfunctions.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstring.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qchar.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qglobal.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtversionchecks.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtconfiginclude.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qconfig.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtcore-config.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtconfigmacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtdeprecationdefinitions.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtcoreexports.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcompilerdetection.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qprocessordetection.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsystemdetection.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtdeprecationmarkers.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtclasshelpermacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtpreprocessorsupport.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qassert.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtnoop.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtypes.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtversion.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtypeinfo.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontainerfwd.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsysinfo.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlogging.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qflags.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcompare_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qatomic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbasicatomic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qatomic_cxx11.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qgenericatomic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qyieldcpu.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qconstructormacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdarwinhelpers.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qexceptionhandling.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qforeach.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qttypetraits.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfunctionpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qglobalstatic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmalloc.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qminmax.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qnumeric.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qoverload.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qswap.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtenvironmentvariables.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtresource.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qttranslation.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qversiontagging.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcompare.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcomparehelpers.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20type_traits.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearray.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qrefcount.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qnamespace.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtmetamacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qarraydata.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qpair.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qarraydatapointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qarraydataops.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontainertools_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qxptype_traits.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20functional.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20memory.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearrayalgorithms.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearrayview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringfwd.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringliteral.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringalgorithms.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlatin1stringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qanystringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qutf8stringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringtokenizer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringbuilder.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringconverter.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringconverter_base.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiterator.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlist.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearraylist.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringlist.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qalgorithms.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringmatcher.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qshareddata.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qshareddata_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QList \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QJsonObject \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qjsonobject.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qjsonvalue.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcborvalue.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcborcommon.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobjectdefs.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobjectdefs_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfunctionaltools_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmetatype.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdatastream.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qscopedpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiodevicebase.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfloat16.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmath.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiterable.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmetacontainer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontainerinfo.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtaggedpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qscopeguard.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdebug.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtextstream.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontiguouscache.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsharedpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsharedpointer_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qset.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qhash.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qvarlengtharray.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdatetime.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcalendar.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlocale.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qvariant.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q23utility.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20utility.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobject.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcoreevent.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobject_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbindingstorage.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qregularexpression.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qurl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/quuid.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qendian.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QVariant \
+		../OpenHydroQual/aquifolium/src/TimeSeries.hpp \
+		../OpenHydroQual/aquifolium/include/Utilities.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QJsonArray \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qjsonarray.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfile.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfiledevice.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiodevice.h \
+		../OpenHydroQual/aquifolium/include/TimeSeriesSet.h \
+		../OpenHydroQual/aquifolium/src/TimeSeriesSet.hpp \
+		../OpenHydroQual/aquifolium/include/GA/DistributionNUnif.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QFile \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QTextStream
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o fieldgenerator.o fieldgenerator.cpp
+
 main.o: main.cpp ../OpenHydroQual/aquifolium/include/System.h \
 		../OpenHydroQual/aquifolium/include/Block.h \
 		../OpenHydroQual/aquifolium/include/Expression.h \
@@ -7161,7 +7324,9 @@ main.o: main.cpp ../OpenHydroQual/aquifolium/include/System.h \
 		../VTK-9.4.1/Filters/Core/vtkTubeFilter.h \
 		../VTK-9.4.1/Common/DataModel/vtkQuad.h \
 		../VTK-9.4.1/Common/Core/vtkInformation.h \
-		../VTK-9.4.1/Filters/Core/vtkPolyDataNormals.h
+		../VTK-9.4.1/Filters/Core/vtkPolyDataNormals.h \
+		fieldgenerator.h \
+		FieldGenHelper.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o main.o main.cpp
 
 modelcreator.o: modelcreator.cpp modelcreator.h \
@@ -7349,8 +7514,153 @@ modelcreator.o: modelcreator.cpp modelcreator.h \
 		../OpenHydroQual/aquifolium/include/RxnParameter.h \
 		../OpenHydroQual/aquifolium/include/solutionlogger.h \
 		../../Qt/6.8.3/gcc_64/include/QtCore/QTime \
-		../OpenHydroQual/aquifolium/include/Matrix_arma_sp.h
+		../OpenHydroQual/aquifolium/include/Matrix_arma_sp.h \
+		fieldgenerator.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o modelcreator.o modelcreator.cpp
+
+propertygenerator.o: propertygenerator.cpp propertygenerator.h \
+		../OpenHydroQual/aquifolium/include/Matrix.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QMap \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmap.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qhashfunctions.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstring.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qchar.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qglobal.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtversionchecks.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtconfiginclude.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qconfig.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtcore-config.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtconfigmacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtdeprecationdefinitions.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtcoreexports.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcompilerdetection.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qprocessordetection.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsystemdetection.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtdeprecationmarkers.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtclasshelpermacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtpreprocessorsupport.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qassert.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtnoop.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtypes.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtversion.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtypeinfo.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontainerfwd.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsysinfo.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlogging.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qflags.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcompare_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qatomic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbasicatomic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qatomic_cxx11.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qgenericatomic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qyieldcpu.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qconstructormacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdarwinhelpers.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qexceptionhandling.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qforeach.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qttypetraits.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfunctionpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qglobalstatic.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmalloc.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qminmax.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qnumeric.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qoverload.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qswap.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtenvironmentvariables.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtresource.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qttranslation.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qversiontagging.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcompare.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcomparehelpers.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20type_traits.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearray.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qrefcount.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qnamespace.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtmetamacros.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qarraydata.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qpair.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qarraydatapointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qarraydataops.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontainertools_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qxptype_traits.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20functional.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20memory.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearrayalgorithms.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearrayview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringfwd.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringliteral.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringalgorithms.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlatin1stringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qanystringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qutf8stringview.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringtokenizer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringbuilder.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringconverter.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringconverter_base.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiterator.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlist.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbytearraylist.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringlist.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qalgorithms.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qstringmatcher.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qshareddata.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qshareddata_impl.h \
+		../OpenHydroQual/aquifolium/include/Vector.h \
+		../OpenHydroQual/aquifolium/include/Matrix_arma.h \
+		../OpenHydroQual/aquifolium/include/Vector_arma.h \
+		../OpenHydroQual/aquifolium/include/BTC.h \
+		../OpenHydroQual/aquifolium/include/QuickSort.h \
+		../OpenHydroQual/aquifolium/include/NormalDist.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qvariant.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmetatype.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdatastream.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qscopedpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiodevicebase.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfloat16.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmath.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiterable.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qmetacontainer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontainerinfo.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtaggedpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobjectdefs.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobjectdefs_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfunctionaltools_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qscopeguard.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdebug.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qtextstream.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcontiguouscache.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsharedpointer.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qsharedpointer_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qset.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qhash.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qvarlengtharray.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q23utility.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/q20utility.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobject.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcoreevent.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qobject_impl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qbindingstorage.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QJsonObject \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qjsonobject.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qjsonvalue.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcborvalue.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcborcommon.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qdatetime.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qcalendar.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qlocale.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qregularexpression.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qurl.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/quuid.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qendian.h \
+		../OpenHydroQual/aquifolium/src/BTC.hpp \
+		../OpenHydroQual/aquifolium/include/Utilities.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/QJsonArray \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qjsonarray.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfile.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qfiledevice.h \
+		../../Qt/6.8.3/gcc_64/include/QtCore/qiodevice.h
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o propertygenerator.o propertygenerator.cpp
 
 resultgrid.o: resultgrid.cpp resultgrid.h \
 		../OpenHydroQual/aquifolium/include/TimeSeries.h \

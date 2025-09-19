@@ -16,12 +16,12 @@ DEFINES += GSL
 #DEFINES += Behzad
 
 
-CONFIG += PowerEdge
-DEFINES += PowerEdge
+#CONFIG += PowerEdge
+#DEFINES += PowerEdge
 
 
-#CONFIG += Arash
-#DEFINES += Arash
+CONFIG += Arash
+DEFINES += Arash
 
 
 #CONFIG += SligoCreek
@@ -57,6 +57,9 @@ contains(DEFINES, SligoCreek) {
     VTKHEADERPATH = /media/arash/E/Projects/VTK-9.1.0
     VTK_V = -9.1
 }
+
+QMAKE_CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer -g
+QMAKE_LFLAGS   += -fsanitize=address
 
 DEFINES += use_VTK ARMA_USE_SUPERLU
 CONFIG += use_VTK

@@ -18,6 +18,8 @@ struct model_parameters
     double DepthofWell_t = DepthofWell_c + DepthofWell_g; // 40'
     double RadiousOfInfluence = 20; //Should be estimated
 
+
+    /*
     int nr_c = 4; // Radius discretization number (around concrete part), 4
     int nr_g = 12; // Radius discretization number (around gravel part), 12
     int nr_uw = 12; // Radius discretization number (under well part), 12
@@ -25,6 +27,17 @@ struct model_parameters
     int nz_c = 5; // Depth discretization number (around concrete part), 5
     int nz_g = 15; // Depth discretization number (around gravel part), 15
     int nz_uw = 30; // Depth discretization number (under well part), 30
+    */
+
+
+    //testing
+    int nr_c = 4; // Radius discretization number (around concrete part), 4
+    int nr_g = 6; // Radius discretization number (around gravel part), 12
+    int nr_uw = 6; // Radius discretization number (under well part), 12
+
+    int nz_c = 5; // Depth discretization number (around concrete part), 5
+    int nz_g = 5; // Depth discretization number (around gravel part), 15
+    int nz_uw = 8; // Depth discretization number (under well part), 30
 
     // Soil properties
     double theta_r = 0.049; // will be calculated, 0.049, Rosetta Sandy Loam Non-log 0.049
@@ -64,11 +77,13 @@ struct model_parameters
 class ModelCreator
 {
 public:
+    model_parameters ModelParameters() {return modelparameters;}
     ModelCreator();
     bool Create(model_parameters mp, System *system, FieldGenerator *propgen = nullptr);
     _realization_mode Mode = _realization_mode::stochastic;
 private:
     const double pi = 3.141521;
+    model_parameters modelparameters;
 };
 
 #endif // MODELCREATOR_H
