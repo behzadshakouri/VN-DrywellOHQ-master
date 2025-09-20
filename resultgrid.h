@@ -27,8 +27,8 @@ public:
     TimeSeries<double> Sum();
     TimeSeries<double> SumIntegrate();
     vector<point> Positions;
-    void WriteToVTP(const std::string &quanname, const std::string &filename, int i, const double &scale=1) const;
-    void WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale=1) const;
+    void WriteToVTP(const std::string &quanname, const std::string &filename, int i, const double &scale) const;
+    void WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale) const;
 
     static vtkSmartPointer<vtkPolyData> MakeCylinder(double radius, double height, double centerZ);
     static vtkSmartPointer<vtkPolyData> MakeHollowCylinder(double zCenter, double height, double outerRadius, double innerRadius,map<string, float> values);
