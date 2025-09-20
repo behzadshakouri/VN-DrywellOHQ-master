@@ -31,6 +31,16 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     SoilDataCDF.write(path+"CDF.csv"); //Check CDF
 
 
+#ifdef Arash
+    system->GetQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/main_components.json");
+    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
+    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/Well.json");
+    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/Sewer_system.json");
+    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/pipe_pump_tank.json");
+    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/Pond_Plugin.json");
+    system->ReadSystemSettingsTemplate("/home/arash/Projects/OpenHydroQual/resources/settings.json");
+    system->SetNumThreads(16);
+#else
     system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
     system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
     system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
@@ -39,8 +49,9 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     system->AppendQuanTemplate("../OpenHydroQual/resources/Pond_Plugin.json");
     system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
     system->SetNumThreads(16);
+#endif
 
-    int rain_data=4; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
+    int rain_data=1; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date

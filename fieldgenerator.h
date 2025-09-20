@@ -49,8 +49,8 @@ public:
     ~FieldGenerator();
 
     // Copy constructor and assignment operator (needed for GSL cleanup)
-    FieldGenerator(const FieldGenerator& other);
-    FieldGenerator& operator=(const FieldGenerator& other);
+    FieldGenerator(const FieldGenerator& other) = delete;
+    FieldGenerator& operator=(const FieldGenerator& other) = delete;
 
     // Normal score field generation with conditional simulation
     void generateNormalScoreField(const std::string& fieldName,

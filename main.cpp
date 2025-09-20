@@ -19,7 +19,11 @@ using namespace std;
 
 int main(int argc, char *argv[])
 {
+
+    omp_set_nested(0);          // Disable nested parallelism
+    omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
     // === Field Generator Test ===
+
     FieldGenerator gen(200, 42); // Grid number and seed
 
     // Set grid spacing to 0.5 meters
@@ -34,8 +38,8 @@ int main(int argc, char *argv[])
     std::string outPrefix = std::string(PATH);
 
     // Distances to check auto-correlation
-    std::vector<double> testDistances = {0.0, 0.2, 0.5, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 20.0, 50.0, 100.0};
-
+    //std::vector<double> testDistances = {0.0, 0.2, 0.5, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 20.0, 50.0, 100.0};
+    std::vector<double> testDistances = {};
     // Parameters to generate
     std::vector<std::string> parameters = {"alpha", "n", "theta_s", "theta_r", "Ksat"};
 
@@ -45,14 +49,13 @@ int main(int argc, char *argv[])
     }
 
 
-    //return 0;
-
     model_parameters mp;
 
     System *system=new System();
     ModelCreator ModCreate;
     cout<<"Creating model ..." <<endl;
-    ModCreate.Create(mp,system, &gen);
+    //ModCreate.Create(mp,system, &gen);
+    ModCreate.Create(mp,system);
     cout<<"Creating model done..." <<endl;
 
 #ifdef PowerEdge
@@ -93,7 +96,13 @@ int main(int argc, char *argv[])
 
 
     // Solve
-    system->Solve();
+    auto start = std::chrono::high_resolution_clock::now();
+    system->Solve(false, false);
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
+
+
     system->SavetoJson(path + "/Model.json",system->addedtemplates, true, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
 
@@ -104,12 +113,12 @@ int main(int argc, char *argv[])
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
-    resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp");
+    resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp",0);
 
 
-    ResultGrid resgrid_age(uniformoutput_LR,"mean_age_tracer:concentration",system);
+    ResultGrid resgrid_age(uniformoutput_LR,"meanagetracer:concentration",system);
     cout<<"Writing age VTPs"<<endl;
-    resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp");
+    resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp",0);
 
 
     vector<string> well_block_c; well_block_c.push_back("Well_c");
@@ -118,18 +127,18 @@ int main(int argc, char *argv[])
 
     vector<string> age_tracer_locations;
     vector<string> gw_rechage_locations;
-    for (unsigned int i = 0; i<ModCreate.ModelParameters().nr_uw; i++)
+    for (unsigned int i = 0; i<=ModCreate.ModelParameters().nr_uw; i++)
     {   age_tracer_locations.push_back("Soil-uw ("+ aquiutils::numbertostring(i) +"$"+ aquiutils::numbertostring(ModCreate.ModelParameters().nz_uw-1)+")");
         gw_rechage_locations.push_back("Soil to Groundwater (" + aquiutils::numbertostring(i) + ")");
 
     }
-    ResultGrid age_tracer_res = ResultGrid(uniformoutput_HR,age_tracer_locations, "mean_age_tracer:concentration");
+    ResultGrid age_tracer_res = ResultGrid(uniformoutput_HR,age_tracer_locations, "meanagetracer:concentration");
     ResultGrid flow_to_gw_res = ResultGrid(uniformoutput_HR,gw_rechage_locations, "flow");
 
 
     TimeSeries<double> mean_age;
     TimeSeries<double> groundwater_recharge;
-    for (unsigned int j = 0; j<age_tracer_res.max_size(); j++)
+    for (unsigned int j = 0; j<age_tracer_res.maxnumpoints(); j++)
     {
         double sumprod = 0;
         double sumflow = 0;

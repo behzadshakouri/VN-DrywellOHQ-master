@@ -44,6 +44,7 @@ FieldGenerator::~FieldGenerator() {
 }
 
 // Copy constructor
+/*
 FieldGenerator::FieldGenerator(const FieldGenerator& other)
     : points(other.points), parameters(other.parameters),
     dx(other.dx), correlation_length_scale(other.correlation_length_scale),
@@ -72,6 +73,7 @@ FieldGenerator& FieldGenerator::operator=(const FieldGenerator& other) {
     }
     return *this;
 }
+*/
 
 // Helper method to initialize RNG
 void FieldGenerator::initializeRNG(int seed) {

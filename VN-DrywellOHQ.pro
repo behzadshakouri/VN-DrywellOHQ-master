@@ -58,8 +58,6 @@ contains(DEFINES, SligoCreek) {
     VTK_V = -9.1
 }
 
-QMAKE_CXXFLAGS += -fsanitize=address -fno-omit-frame-pointer -g
-QMAKE_LFLAGS   += -fsanitize=address
 
 DEFINES += use_VTK ARMA_USE_SUPERLU
 CONFIG += use_VTK
