@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
 
     double start_counter;
 
-    start_counter = Simulation_days * (Simulation_num - 1);
+    start_counter = Simulation_start_time - Simulation_start_time_0;
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
