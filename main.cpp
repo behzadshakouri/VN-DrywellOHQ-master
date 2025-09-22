@@ -22,11 +22,12 @@ int main(int argc, char *argv[])
 
     bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
-    double Simulation_num = 2; // Simulation Number; Set it for every simulation
-    double Simulation_days = 5; // Simulation Days
+    double Simulation_num = 3; // Simulation Number; Set it for every simulation
+    double Simulation_days = 5; // Simulation Days for Json file
 
     double Simulation_start_time_0 = 44864; // Simulation Start Date for Model_Creator
-    double Simulation_end_time_0 = Simulation_start_time_0 + Simulation_days; // Simulation Start Date for Model_Creator
+    double Simulation_end_time_0 = 44866; // Simulation Start Date for Model_Creator
+    double Simulation_days_0 = 2; // Simulation Days for Model_Creator
 
     double Simulation_start_time; // Simulation Start Date
     double Simulation_end_time; // Simulation End Date
@@ -40,7 +41,7 @@ int main(int argc, char *argv[])
      }
     else
     {
-        Simulation_start_time = Simulation_start_time_0 + Simulation_days * (Simulation_num - 1); // Simulation Start Date
+        Simulation_start_time = Simulation_end_time_0 + Simulation_days * (Simulation_num - 2); // Simulation Start Date
         Simulation_end_time = Simulation_start_time + Simulation_days; // Simulation End Date
     }
 
