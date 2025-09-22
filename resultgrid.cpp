@@ -99,7 +99,7 @@ ResultGrid::ResultGrid(const string &quantity, System *system)
 }
 
 #ifdef use_VTK
-void ResultGrid::WriteToVTP(const std::string &quanname, const std::string &filename, int i, const double &scale) const
+void ResultGrid::WriteToVTPSnapShot(const std::string &quanname, const std::string &filename, int i, const double &scale) const
 {
     vtkSmartPointer<vtkPoints> points_3 =
             vtkSmartPointer<vtkPoints>::New();
@@ -191,14 +191,14 @@ void ResultGrid::WriteToVTP(const std::string &quanname, const std::string &file
 
 }
 
-void ResultGrid::WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale) const
+void ResultGrid::WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale, int start_id) const
 {
     for (unsigned k=0; k<operator[](0).size(); k++)
     {
         cout<<"snapshot: "<<k<<endl;
-        std::string name = aquiutils::split(filename,'.')[0]+"_"+aquiutils::numbertostring(k+1,4)+".vtp";
+        std::string name = aquiutils::split(filename,'.')[0]+"_"+aquiutils::numbertostring(k+1+start_id,4)+".vtp";
         cout<<name<<endl;
-        WriteToVTP(quanname, name, k, scale);
+        WriteToVTPSnapShot(quanname, name, k, scale);
     }
 }
 

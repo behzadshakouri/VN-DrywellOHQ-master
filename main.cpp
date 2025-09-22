@@ -56,6 +56,7 @@ int main(int argc, char *argv[])
     cout<<"Creating model ..." <<endl;
     //ModCreate.Create(mp,system, &gen);
     ModCreate.Create(mp,system);
+    //system->LoadfromJson();
     cout<<"Creating model done..." <<endl;
 
 #ifdef PowerEdge
@@ -76,19 +77,19 @@ int main(int argc, char *argv[])
 
     // Soil params VTP
     ResultGrid resgrid_Ksat("K_sat_original",system);
-    resgrid_Ksat.WriteToVTP("Ksat",path + "Ksat.vtp",0);
+    resgrid_Ksat.WriteToVTPSnapShot("Ksat",path + "Ksat.vtp",0,0);
 
     ResultGrid resgrid_alpha("alpha",system);
-    resgrid_alpha.WriteToVTP("alpha",path + "alpha.vtp",0);
+    resgrid_alpha.WriteToVTPSnapShot("alpha",path + "alpha.vtp",0,0);
 
     ResultGrid resgrid_n("n",system);
-    resgrid_n.WriteToVTP("n",path + "n.vtp",0);
+    resgrid_n.WriteToVTPSnapShot("n",path + "n.vtp",0,0);
 
     ResultGrid resgrid_theta_s("theta_sat",system);
-    resgrid_theta_s.WriteToVTP("theta_s",path + "theta_s.vtp",0);
+    resgrid_theta_s.WriteToVTPSnapShot("theta_s",path + "theta_s.vtp",0,0);
 
     ResultGrid resgrid_theta_r("theta_res",system);
-    resgrid_theta_r.WriteToVTP("theta_r",path + "theta_r.vtp",0);
+    resgrid_theta_r.WriteToVTPSnapShot("theta_r",path + "theta_r.vtp",0,0);
 
     vector<string> quantities = {"K_sat_original","alpha", "n","theta_sat", "theta_res"};
     double dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
@@ -111,14 +112,16 @@ int main(int argc, char *argv[])
     uniformoutput_HR.write(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
 
+    int start_counter = 0;
+
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
-    resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp",0);
+    resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp",0,start_counter);
 
 
     ResultGrid resgrid_age(uniformoutput_LR,"meanagetracer:concentration",system);
     cout<<"Writing age VTPs"<<endl;
-    resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp",0);
+    resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp",0,start_counter);
 
 
     vector<string> well_block_c; well_block_c.push_back("Well_c");
