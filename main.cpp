@@ -20,15 +20,30 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-    bool Model_Creator = 1; // 1 or using modelcreator, and 0 for loading saved json file
+    bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file
 
-    int Simulation_days_passed = 0;
+    double Simulation_start_time_0=44864; // Simulation Start Date for Model_Creator
+    double Simulation_end_time_0=44866; // Simulation Start Date for Model_Creator
+
+    double Simulation_start_time; // Simulation Start Date
+    double Simulation_end_time; // Simulation End Date
+
+    // For Json file
+    double Simulation_days = 2;
 
     if (Model_Creator)
-    Simulation_days_passed = 0;
+    {
+        Simulation_start_time=Simulation_start_time_0; // Simulation Start Date
+        Simulation_end_time=Simulation_end_time_0; // Simulation End Date
+     }
+    else
+    {
+        Simulation_start_time=Simulation_start_time_0+Simulation_days; // Simulation Start Date
+        Simulation_end_time=Simulation_start_time+Simulation_days; // Simulation End Date
+    }
 
-    omp_set_nested(0);          // Disable nested parallelism
-    omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
+    //omp_set_nested(0);          // Disable nested parallelism
+    //omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
 
 #ifdef PowerEdge
     string path = "/mnt/3rd900/Projects/VN Drywell_Models/";
@@ -80,7 +95,12 @@ int main(int argc, char *argv[])
     else
     {
     system->LoadfromJson(QString::fromStdString(path + "Model.json"));
+    system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
     cout<<"Model loaded..." <<endl;
+    // Solve properties
+    system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
+    system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
+    system->SetSystemSettings();
     }
 
     system->SetWorkingFolder(path); // Should be modified according to the users directory
@@ -128,7 +148,7 @@ int main(int argc, char *argv[])
     uniformoutput_HR.write(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
 
-    int start_counter = 0;
+    double start_counter = Simulation_end_time-Simulation_start_time;
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
