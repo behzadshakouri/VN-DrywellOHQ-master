@@ -20,10 +20,10 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-    bool Model_Creator = 1; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
+    bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
-    double Simulation_num = 1; // Simulation Number; Set it for every simulation
-    double Simulation_days = 2; // Simulation Days
+    double Simulation_num = 2; // Simulation Number; Set it for every simulation
+    double Simulation_days = 5; // Simulation Days
 
     double Simulation_start_time_0 = 44864; // Simulation Start Date for Model_Creator
     double Simulation_end_time_0 = Simulation_start_time_0 + Simulation_days; // Simulation Start Date for Model_Creator
@@ -151,7 +151,9 @@ int main(int argc, char *argv[])
     cout<<"Getting results into grid"<<endl;
 
     double start_counter;
-
+    if (Model_Creator)
+        start_counter = 0;
+    else
     start_counter = Simulation_start_time - Simulation_start_time_0;
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
