@@ -51,7 +51,7 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     system->SetNumThreads(16);
 #endif
 
-    int rain_data=1; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new
+    int rain_data=5; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, , 5: 2 year of 1 yr new
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
@@ -82,6 +82,12 @@ else if (rain_data==4)
 {
     Simulation_start_time=45230; // Simulation Start Date
     Simulation_end_time=45320; // Simulation End Date
+}
+// --------------------2022-2024----------------------------------
+else if (rain_data==5)
+{
+    Simulation_start_time=44864; // Simulation Start Date
+    Simulation_end_time=45595; // Simulation End Date
 }
 
     double dr;
@@ -500,19 +506,23 @@ else if (rain_data==4)
 
     if (rain_data==1)
     {
-    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr).csv");
+        rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr).csv");
     }
     else if (rain_data==2)
     {
-    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
+        rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
     }
     else if (rain_data==3)
     {
-    rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
+        rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
     }
     else if (rain_data==4)
     {
-    rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
+        rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
+    }
+    else if (rain_data==5)
+    {
+        rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
     }
 
     system->AddSource(rain, false);

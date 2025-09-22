@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
     std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
 
 
-    system->SavetoJson(path + "/Model.json",system->addedtemplates, true, true );
+    system->SavetoJson(path + "/Model.json",system->addedtemplates, false, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
 
     TimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
@@ -146,9 +146,11 @@ int main(int argc, char *argv[])
         {
             sumprod += age_tracer_res[i].getValue(j)*flow_to_gw_res[i].getValue(j);
             sumflow += flow_to_gw_res[i].getValue(j);
-            mean_age.append(age_tracer_res[i].getTime(j),sumprod/sumflow);
-            groundwater_recharge.append(age_tracer_res[i].getTime(j),sumflow);
+
+
         }
+        mean_age.append(age_tracer_res[0].getTime(j),sumprod/sumflow);
+        groundwater_recharge.append(age_tracer_res[0].getTime(j),sumflow);
     }
 
     mean_age.writefile(system->GetWorkingFolder()+"mean_age_at_gw.csv");
