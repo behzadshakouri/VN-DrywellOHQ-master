@@ -20,8 +20,24 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
+    bool Model_Creator = 1; // 1 or using modelcreator, and 0 for loading saved json file
+
+    int Simulation_days_passed = 0;
+
+    if (Model_Creator)
+    Simulation_days_passed = 0;
+
     omp_set_nested(0);          // Disable nested parallelism
     omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
+
+#ifdef PowerEdge
+    string path = "/mnt/3rd900/Projects/VN Drywell_Models/";
+#elif Arash
+    string path = "/home/arash/Projects/VN Drywell_Models/";
+#elif SligoCreek
+    string path = "/media/arash/E/Projects/VN Drywell_Models/";
+#endif
+
     // === Field Generator Test ===
 
     FieldGenerator gen(200, 42); // Grid number and seed
@@ -48,24 +64,24 @@ int main(int argc, char *argv[])
         generateAndAnalyzeField(gen, csvFile, param, 1, testDistances, outPrefix); // enter correlation length
     }
 
-
     model_parameters mp;
 
     System *system=new System();
+
     ModelCreator ModCreate;
+
+    if (Model_Creator)
+    {
     cout<<"Creating model ..." <<endl;
     //ModCreate.Create(mp,system, &gen);
     ModCreate.Create(mp,system);
-    //system->LoadfromJson();
     cout<<"Creating model done..." <<endl;
-
-#ifdef PowerEdge
-    string path = "/mnt/3rd900/Projects/VN Drywell_Models/";
-#elif Arash
-    string path = "/home/arash/Projects/VN Drywell_Models/";
-#elif SligoCreek
-    string path = "/media/arash/E/Projects/VN Drywell_Models/";
-#endif
+    }
+    else
+    {
+    system->LoadfromJson(QString::fromStdString(path + "Model.json"));
+    cout<<"Model loaded..." <<endl;
+    }
 
     system->SetWorkingFolder(path); // Should be modified according to the users directory
     system->SetSilent(false);
@@ -104,7 +120,7 @@ int main(int argc, char *argv[])
     std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
 
 
-    system->SavetoJson(path + "/Model.json",system->addedtemplates, false, true );
+    system->SavetoJson(path + "Model.json",system->addedtemplates, false, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
 
     TimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
@@ -149,7 +165,6 @@ int main(int argc, char *argv[])
         {
             sumprod += age_tracer_res[i].getValue(j)*flow_to_gw_res[i].getValue(j);
             sumflow += flow_to_gw_res[i].getValue(j);
-
 
         }
         mean_age.append(age_tracer_res[0].getTime(j),sumprod/sumflow);

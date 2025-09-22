@@ -51,7 +51,7 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     system->SetNumThreads(16);
 #endif
 
-    int rain_data=5; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, , 5: 2 year of 1 yr new
+    int rain_data=6; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, 5: 2 year of 1 yr new, 6: 2 days in 2022 for test
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
@@ -88,6 +88,12 @@ else if (rain_data==5)
 {
     Simulation_start_time=44864; // Simulation Start Date
     Simulation_end_time=45595; // Simulation End Date
+}
+// --------------------2 days in 2022 for test----------------------------------
+else if (rain_data==6)
+{
+    Simulation_start_time=44864; // Simulation Start Date
+    Simulation_end_time=44866; // Simulation End Date
 }
 
     double dr;
@@ -436,7 +442,6 @@ else if (rain_data==5)
     system->AddLink(junction_to_well,"Junction_elastic","Well_g",false);
 
     // Well to gravel links
-
     cout<<"Horizontal links for well to gravel part soils"<<endl;
 
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
@@ -469,7 +474,7 @@ else if (rain_data==5)
 
         system->AddLink(L1, "Well_g", ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(), false);
 
-    // Graoundwater links
+    // Graoundwater fixed head
     cout<<"Groundwater"<<endl;
     Block gw;
     gw.SetQuantities(system->GetMetaModel(), "fixed_head");
@@ -480,9 +485,10 @@ else if (rain_data==5)
     gw.SetVal("head",-mp.DepthtoGroundWater);
     gw.SetVal("Storage",100000);
     gw.SetVal("x",-mp.nr_uw*1000);
-    gw.SetVal("y",(mp.nz_c+mp.nz_g+mp.nz_uw)*4000);
+    gw.SetVal("y",37000+(mp.DepthtoGroundWater)*2000);
     system->AddBlock(gw,false);
 
+    // Groundwater links
     cout<<"Soil to Groundwater"<<endl;
     for (int i=0; i<mp.nr_uw+1; i++)
     {
@@ -521,6 +527,10 @@ else if (rain_data==5)
         rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
     }
     else if (rain_data==5)
+    {
+        rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
+    }
+    else if (rain_data==6)
     {
         rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
     }
