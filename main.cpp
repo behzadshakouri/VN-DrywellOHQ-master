@@ -22,8 +22,8 @@ int main(int argc, char *argv[])
 
     bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
-    double Simulation_num = 1; // Simulation Number; Set it for every simulation
-    double Simulation_days = 180; // Simulation Days for Json file
+    double Simulation_num = 2; // Simulation Number; Set it for every simulation
+    double Simulation_days = 180; // Simulation Days for Json file [Constant]
 
     double Simulation_start_time_0 = 43750; // Simulation Start Date for Model_Creator
     double Simulation_end_time_0 = 43930; // Simulation Start Date for Model_Creator
@@ -88,6 +88,8 @@ int main(int argc, char *argv[])
 
     ModelCreator ModCreate;
 
+    system->SetWorkingFolder(path); // Should be modified according to the users directory
+
     if (Model_Creator)
     {
     cout<<"Creating model ..." <<endl;
@@ -97,8 +99,9 @@ int main(int argc, char *argv[])
     }
     else
     {
-    system->LoadfromJson(QString::fromStdString(path + "Model.json"));
-    system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
+        system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
+        system->LoadfromJson(QString::fromStdString(path + "Model.json"));
+
     cout<<"Model loaded..." <<endl;
     // Solve properties
     system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
@@ -106,7 +109,6 @@ int main(int argc, char *argv[])
     system->SetSystemSettings();
     }
 
-    system->SetWorkingFolder(path); // Should be modified according to the users directory
     system->SetSilent(false);
     cout<<"Saving"<<endl;
     system->SavetoScriptFile(path + "/CreatedModel.ohq"); // Should be modified according to the users directory
