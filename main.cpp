@@ -51,12 +51,18 @@ int main(int argc, char *argv[])
     //omp_set_nested(0);          // Disable nested parallelism
     //omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
 
-#ifdef PowerEdge
-    string path = "/mnt/3rd900/Projects/VN Drywell_Models/";
+#ifdef Behzad
+    string path="/home/behzad/Projects/VN Drywell_Models/";
+    string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
+#elif PowerEdge
+    string path="/mnt/3rd900/Projects/VN Drywell_Models/";
+    string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
 #elif Arash
-    string path = "/home/arash/Projects/VN Drywell_Models/";
+    string path="/home/arash/Projects/VN Drywell_Models/";
+    string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
 #elif SligoCreek
-    string path = "/media/arash/E/Projects/VN Drywell_Models/";
+    string path="/media/arash/E/Projects/VN Drywell_Models/";
+    string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
 #endif
 
     // === Field Generator Test ===
@@ -102,7 +108,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        system->ReadSystemSettingsTemplate("../../OpenHydroQual/resources/settings.json");
+        system->ReadSystemSettingsTemplate(ohq_r+"settings.json");
         system->LoadfromJson(QString::fromStdString(path + "Model.json"));
 
         system->AddSolveVariableOrder("Storage"); // Flow solve

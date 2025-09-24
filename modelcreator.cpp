@@ -27,7 +27,6 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
 #elif SligoCreek
     string path="/media/arash/E/Projects/VN Drywell_Models/";
     string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
-
 #endif
 
     SoilData.read(path+"Soil retention params vs depth.csv");
