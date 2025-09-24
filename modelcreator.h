@@ -28,6 +28,7 @@ struct model_parameters
     int nz_g = 15; // Depth discretization number (around gravel part), 15
     int nz_uw = 30; // Depth discretization number (under well part), 30
 
+
 /*
     // smaller for testing
     int nr_c = 4; // Radius discretization number (around concrete part), 4
@@ -37,6 +38,16 @@ struct model_parameters
     int nz_c = 5; // Depth discretization number (around concrete part), 5
     int nz_g = 5; // Depth discretization number (around gravel part), 15
     int nz_uw = 8; // Depth discretization number (under well part), 30
+
+
+    // simple model for test
+    int nr_c = 1; // Radius discretization number (around concrete part), 4
+    int nr_g = 1; // Radius discretization number (around gravel part), 12
+    int nr_uw = 1; // Radius discretization number (under well part), 12
+
+    int nz_c = 1; // Depth discretization number (around concrete part), 5
+    int nz_g = 1; // Depth discretization number (around gravel part), 15
+    int nz_uw = 1; // Depth discretization number (under well part), 30
 */
 
     // Soil properties

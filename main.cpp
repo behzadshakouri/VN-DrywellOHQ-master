@@ -102,6 +102,8 @@ int main(int argc, char *argv[])
         system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
         system->LoadfromJson(QString::fromStdString(path + "Model.json"));
 
+        system->AddSolveVariableOrder("Storage"); // Flow solve
+
     cout<<"Model loaded..." <<endl;
     // Solve properties
     system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
@@ -146,10 +148,12 @@ int main(int argc, char *argv[])
 
 
     system->SavetoJson(path + "Model.json",system->addedtemplates, false, true );
+    system->SavetoJson(path + "Model_check.json",system->addedtemplates, true, true );
     cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
 
     TimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
     TimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.1);
+    uniformoutput_LR.write(system->GetWorkingFolder() + "Output_LR.txt");
     uniformoutput_HR.write(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
 
@@ -157,17 +161,17 @@ int main(int argc, char *argv[])
     if (Model_Creator)
         start_counter = 0;
     else
-    start_counter = Simulation_start_time - Simulation_start_time_0;
+        start_counter = Simulation_start_time - Simulation_start_time_0;
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
     resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp",0,start_counter);
-
+    resgrid.write(system->GetWorkingFolder()+"theta_results.csv");
 
     ResultGrid resgrid_age(uniformoutput_LR,"meanagetracer:concentration",system);
     cout<<"Writing age VTPs"<<endl;
     resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp",0,start_counter);
-
+    resgrid_age.write(system->GetWorkingFolder()+"age_results.csv");
 
     vector<string> well_block_c; well_block_c.push_back("Well_c");
     ResultGrid well_depth_c = ResultGrid(uniformoutput_HR,well_block_c,"depth");
