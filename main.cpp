@@ -20,13 +20,16 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-    bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
+    bool Model_Creator = 1; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
     double Simulation_num = 2; // Simulation Number; Set it for every simulation
-    double Simulation_days = 180; // Simulation Days for Json file [Constant]
+    double Simulation_days = 2; // Simulation Days for Json file [Constant]
 
-    double Simulation_start_time_0 = 43750; // Simulation Start Date for Model_Creator
-    double Simulation_end_time_0 = 43930; // Simulation Start Date for Model_Creator
+    //double Simulation_start_time_0 = 43750; // Simulation Start Date for Model_Creator
+    //double Simulation_end_time_0 = 43930; // Simulation Start Date for Model_Creator
+    double Simulation_start_time_0 = 44864; // Simulation Start Date for Model_Creator [Test]
+    double Simulation_end_time_0 = 44866; // Simulation End Date for Model_Creator [Test]
+
     double Simulation_days_0 = Simulation_end_time_0 - Simulation_start_time_0; // Simulation Days for Model_Creator
 
     double Simulation_start_time; // Simulation Start Date
@@ -41,7 +44,7 @@ int main(int argc, char *argv[])
      }
     else
     {
-        Simulation_start_time = Simulation_end_time_0 + Simulation_days * (Simulation_num - 2); // Simulation Start Date
+        Simulation_start_time = Simulation_start_time_0 + Simulation_days * (Simulation_num - 2); // Simulation Start Date
         Simulation_end_time = Simulation_start_time + Simulation_days; // Simulation End Date
     }
 
@@ -92,10 +95,10 @@ int main(int argc, char *argv[])
 
     if (Model_Creator)
     {
-    cout<<"Creating model ..." <<endl;
-    //ModCreate.Create(mp,system, &gen);
-    ModCreate.Create(mp,system);
-    cout<<"Creating model done..." <<endl;
+        cout<<"Creating model ..." <<endl;
+        //ModCreate.Create(mp,system, &gen);
+        ModCreate.Create(mp,system);
+        cout<<"Creating model done..." <<endl;
     }
     else
     {
@@ -106,9 +109,9 @@ int main(int argc, char *argv[])
 
     cout<<"Model loaded..." <<endl;
     // Solve properties
-    system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
-    system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
-    system->SetSystemSettings();
+        system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
+        system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
+        system->SetSystemSettings();
     }
 
     system->SetSilent(false);

@@ -17,12 +17,17 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
 
 #ifdef Behzad
     string path="/home/behzad/Projects/VN Drywell_Models/";
+    string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
 #elif PowerEdge
     string path="/mnt/3rd900/Projects/VN Drywell_Models/";
+    string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
 #elif Arash
     string path="/home/arash/Projects/VN Drywell_Models/";
+    string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
 #elif SligoCreek
     string path="/media/arash/E/Projects/VN Drywell_Models/";
+    string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
+
 #endif
 
     SoilData.read(path+"Soil retention params vs depth.csv");
@@ -30,28 +35,18 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
     SoilDataCDF.write(path+"CDF.csv"); //Check CDF
 
+    system->GetQuanTemplate(ohq_r+"main_components.json");
+    system->AppendQuanTemplate(ohq_r+"unsaturated_soil_revised_model.json"); //revised version
+    system->AppendQuanTemplate(ohq_r+"Well.json");
+    system->AppendQuanTemplate(ohq_r+"Sewer_system.json");
+    system->AppendQuanTemplate(ohq_r+"pipe_pump_tank.json");
+    system->AppendQuanTemplate(ohq_r+"Pond_Plugin.json");
+    system->ReadSystemSettingsTemplate(ohq_r+"settings.json");
 
-#ifdef Arash
-    system->GetQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/main_components.json");
-    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
-    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/Well.json");
-    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/Sewer_system.json");
-    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/pipe_pump_tank.json");
-    system->AppendQuanTemplate("/home/arash/Projects/OpenHydroQual/resources/Pond_Plugin.json");
-    system->ReadSystemSettingsTemplate("/home/arash/Projects/OpenHydroQual/resources/settings.json");
     system->SetNumThreads(16);
-#else
-    system->GetQuanTemplate("../OpenHydroQual/resources/main_components.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/unsaturated_soil_revised_model.json"); //revised version
-    system->AppendQuanTemplate("../OpenHydroQual/resources/Well.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/Sewer_system.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/pipe_pump_tank.json");
-    system->AppendQuanTemplate("../OpenHydroQual/resources/Pond_Plugin.json");
-    system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
-    system->SetNumThreads(16);
-#endif
 
-    int rain_data=7; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, 5: 2 year of 1 yr new, 6: 2 days in 2022 for test
+
+    int rain_data=6; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, 5: 2 year of 1 yr new, 6: 2 days in 2022 for test
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
@@ -95,7 +90,7 @@ else if (rain_data==6)
     Simulation_start_time=44864; // Simulation Start Date
     Simulation_end_time=44866; // Simulation End Date
 }
-// --------------------2019 (180 days)----------------------------------
+// --------------------2019 (1 days to 5 years)----------------------------------
 else if (rain_data==7)
 {
     Simulation_start_time=43750; // Simulation Start Date
