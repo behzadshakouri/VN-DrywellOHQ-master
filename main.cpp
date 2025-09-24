@@ -20,7 +20,7 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-    bool Model_Creator = 1; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
+    bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
     double Simulation_num = 2; // Simulation Number; Set it for every simulation
     double Simulation_days = 2; // Simulation Days for Json file [Constant]
@@ -44,8 +44,8 @@ int main(int argc, char *argv[])
      }
     else
     {
-        Simulation_start_time = Simulation_start_time_0 + Simulation_days * (Simulation_num - 2); // Simulation Start Date
-        Simulation_end_time = Simulation_start_time + Simulation_days; // Simulation End Date
+        Simulation_start_time = Simulation_start_time_0 + Simulation_days * (Simulation_num - 1); // Simulation Start Date
+        Simulation_end_time = Simulation_end_time_0 + Simulation_days * (Simulation_num - 1); // Simulation End Date
     }
 
     //omp_set_nested(0);          // Disable nested parallelism
@@ -102,7 +102,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        system->ReadSystemSettingsTemplate("../OpenHydroQual/resources/settings.json");
+        system->ReadSystemSettingsTemplate("../../OpenHydroQual/resources/settings.json");
         system->LoadfromJson(QString::fromStdString(path + "Model.json"));
 
         system->AddSolveVariableOrder("Storage"); // Flow solve
