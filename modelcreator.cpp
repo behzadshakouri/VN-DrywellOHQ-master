@@ -45,7 +45,7 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     system->SetNumThreads(16);
 
 
-    int rain_data=6; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, 5: 2 year of 1 yr new, 6: 2 days in 2022 for test
+    int rain_data=7; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, 5: 2 year of 1 yr new, 6: 2 days in 2022 for test
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
