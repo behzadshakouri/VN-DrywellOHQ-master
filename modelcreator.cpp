@@ -89,7 +89,7 @@ else if (rain_data==6)
     Simulation_start_time=44864; // Simulation Start Date
     Simulation_end_time=44866; // Simulation End Date
 }
-// --------------------2019 (1 days to 5 years)----------------------------------
+// --------------------2019 (1 days to 5 years [First run days])----------------------------------
 else if (rain_data==7)
 {
     Simulation_start_time=43750; // Simulation Start Date

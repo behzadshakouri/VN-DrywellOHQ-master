@@ -8,10 +8,18 @@
 #include "fieldgenerator.h"
 #include "FieldGenHelper.h"
 
-#ifdef PowerEdge
-#define PATH "/mnt/3rd900/Projects/VN Drywell_Models/"
+#ifdef Behzad
+    string path="/home/behzad/Projects/VN Drywell_Models/";
+    string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
+#elif PowerEdge
+    string path="/mnt/3rd900/Projects/VN Drywell_Models/";
+    string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
 #elif Arash
-#define PATH "/home/arash/Projects/VN Drywell_Models/"
+    string path="/home/arash/Projects/VN Drywell_Models/";
+    string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
+#elif SligoCreek
+    string path="/media/arash/E/Projects/VN Drywell_Models/";
+    string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
 #endif
 
 using namespace std;
@@ -22,7 +30,7 @@ int main(int argc, char *argv[])
 
     bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
-    double Simulation_num = 2; // Simulation Number; Set it for every simulation
+    double Simulation_num = 8; // Simulation Number; Set it for every simulation
     double Simulation_days = 180; // Simulation Days for Json file [Constant]
 
     double Simulation_start_time_0 = 43750; // Simulation Start Date for Model_Creator
@@ -51,20 +59,6 @@ int main(int argc, char *argv[])
     //omp_set_nested(0);          // Disable nested parallelism
     //omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
 
-#ifdef Behzad
-    string path="/home/behzad/Projects/VN Drywell_Models/";
-    string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
-#elif PowerEdge
-    string path="/mnt/3rd900/Projects/VN Drywell_Models/";
-    string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
-#elif Arash
-    string path="/home/arash/Projects/VN Drywell_Models/";
-    string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
-#elif SligoCreek
-    string path="/media/arash/E/Projects/VN Drywell_Models/";
-    string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
-#endif
-
     // === Field Generator Test ===
 
     FieldGenerator gen(200, 42); // Grid number and seed
@@ -77,8 +71,8 @@ int main(int argc, char *argv[])
     std::cout << "Grid spacing: " << currentDx << " m\n";
 
     // Input CSV and output folder
-    std::string csvFile   = std::string(PATH) + "Soil retention params vs depth.csv";
-    std::string outPrefix = std::string(PATH);
+    std::string csvFile   = std::string(path) + "Soil retention params vs depth.csv";
+    std::string outPrefix = std::string(path);
 
     // Distances to check auto-correlation
     //std::vector<double> testDistances = {0.0, 0.2, 0.5, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 20.0, 50.0, 100.0};
