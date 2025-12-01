@@ -9,17 +9,17 @@
 #include "FieldGenHelper.h"
 
 #ifdef Behzad
-    string path="/home/behzad/Projects/VN Drywell_Models/";
-    string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
+    const string path="/home/behzad/Projects/VN Drywell_Models/";
+    const string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
 #elif PowerEdge
-    string path="/mnt/3rd900/Projects/VN Drywell_Models/";
-    string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
+    const string path="/mnt/3rd900/Projects/VN Drywell_Models/";
+    const string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
 #elif Arash
-    string path="/home/arash/Projects/VN Drywell_Models/";
-    string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
+    const string path="/home/arash/Projects/VN Drywell_Models/";
+    const string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
 #elif SligoCreek
-    string path="/media/arash/E/Projects/VN Drywell_Models/";
-    string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
+    const string path="/media/arash/E/Projects/VN Drywell_Models/";
+    const string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
 #endif
 
 using namespace std;
@@ -28,7 +28,7 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
-    bool Model_Creator = 0; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
+    bool Model_Creator = 1; // 1 or using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
     double Simulation_num = 8; // Simulation Number; Set it for every simulation
     double Simulation_days = 180; // Simulation Days for Json file [Constant]

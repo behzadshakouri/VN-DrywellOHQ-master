@@ -16,17 +16,17 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     TimeSeriesSet<double> SoilData;
 
 #ifdef Behzad
-    string path="/home/behzad/Projects/VN Drywell_Models/";
-    string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
+    const string path="/home/behzad/Projects/VN Drywell_Models/";
+    const string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
 #elif PowerEdge
-    string path="/mnt/3rd900/Projects/VN Drywell_Models/";
-    string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
+    const string path="/mnt/3rd900/Projects/VN Drywell_Models/";
+    const string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
 #elif Arash
-    string path="/home/arash/Projects/VN Drywell_Models/";
-    string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
+    const string path="/home/arash/Projects/VN Drywell_Models/";
+    const string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
 #elif SligoCreek
-    string path="/media/arash/E/Projects/VN Drywell_Models/";
-    string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
+    const string path="/media/arash/E/Projects/VN Drywell_Models/";
+    const string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
 #endif
 
     SoilData.read(path+"Soil retention params vs depth.csv");
