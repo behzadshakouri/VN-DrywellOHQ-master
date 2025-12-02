@@ -720,6 +720,41 @@ void FieldGenerator::normalToCDF(const std::string& sourceField, const std::stri
     }
 }
 
+void FieldGenerator::normalToCDF(const std::string& sourceField, const std::string& targetField, const double &mean_log, const double &std_log)
+{
+    // Check if source field exists
+    auto sourceIt = parameters.find(sourceField);
+    if (sourceIt == parameters.end()) {
+        throw std::invalid_argument("Source field '" + sourceField + "' does not exist");
+    }
+
+    const std::vector<double>& sourceData = sourceIt->second;
+    if (sourceData.empty()) {
+        throw std::runtime_error("Source field '" + sourceField + "' is empty");
+    }
+
+    // Create or resize target field
+    if (parameters.find(targetField) == parameters.end()) {
+        parameters[targetField] = std::vector<double>(sourceData.size());
+    } else if (parameters[targetField].size() != sourceData.size()) {
+        parameters[targetField].resize(sourceData.size());
+    }
+
+    std::vector<double>& targetData = parameters[targetField];
+
+    // Transform each normal score to uniform using standard normal CDF
+    for (size_t i = 0; i < sourceData.size(); ++i) {
+        // map to lognormal distribution
+        targetData[i] = exp(sourceData[i]*std_log + mean_log);
+    }
+
+    // Mark all points as determined for the target field
+    for (size_t i = 0; i < points.size(); ++i) {
+        points[i].setDetermined(targetField, true);
+    }
+}
+
+
 // Transform field using exponential function: target = exp(a*source + b)
 void FieldGenerator::exponentialTransform(const std::string& sourceField, const std::string& targetField,
                                           double a, double b) {
@@ -1063,8 +1098,20 @@ bool FieldGenerator::generateFieldFromMeasurementData(const std::string& dataFil
         }
 
         // Step 3: Generate cumulative distribution functions and store them
-        measured_CDFs_ = measured_data.GetCummulativeDistribution();
-        has_measured_CDFs_ = true;
+        CVector mean_log_values;
+        CVector std_log_values;
+        if (pdfmod_ == pdfmode::nonparameteric)
+        {   measured_CDFs_ = measured_data.GetCummulativeDistribution();
+            has_measured_CDFs_ = true;
+        }
+        else
+        {
+            mean_log_values = measured_data.Log().mean();
+            std_log_values = measured_data.Log().standardDeviation();
+            measured_CDFs_ = TimeSeriesSet<double>::LogNormalCDF(mean_log_values, std_log_values,100);
+            measured_CDFs_.setSeriesNames(measured_data.getSeriesNames());
+            has_measured_CDFs_ = true;
+        }
 
         // Step 4: Convert to normal scores
         TimeSeriesSet<double> normal_scores = measured_data.ConverttoNormalScore();

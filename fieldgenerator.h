@@ -80,6 +80,7 @@ public:
     // Distribution transformations
     void normalToUniform(const std::string& sourceField, const std::string& targetField);
     void normalToCDF(const std::string& sourceField, const std::string& targetField, const TimeSeries<double> &CDF);
+    void normalToCDF(const std::string& sourceField, const std::string& targetField, const double &mean_log, const double &std_log);
     void exponentialTransform(const std::string& sourceField, const std::string& targetField, double a, double b);
 
     // Interpolate field value at any x position using linear interpolation
@@ -123,6 +124,9 @@ public:
 
     // Clear stored CDFs
     void clearMeasuredCDFs();
+
+    enum class pdfmode {nonparameteric, parametric};
+    pdfmode PDFMode() { return pdfmod_;}
 
 private:
     // Field properties
@@ -173,6 +177,7 @@ private:
     // Member variable to store measured CDFs
     TimeSeriesSet<double> measured_CDFs_;
     bool has_measured_CDFs_ = false;
+    pdfmode pdfmod_ = pdfmode::parametric;
 };
 
 #endif // FIELDGENERATOR_H
