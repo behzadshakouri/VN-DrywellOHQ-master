@@ -45,7 +45,7 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
     system->SetNumThreads(16);
 
 
-    int rain_data=7; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 month of 1 yr new, 5: 2 year of 1 yr new, 6: 2 days in 2022 for test
+    int rain_data=8; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 months of 1 yr new, 5: 2 years of 5 yr new, 6: 2 days in 2022 for test, 7: 1 day to 5 years [First run days], 8: Pacoima station
 
         double Simulation_start_time; // Simulation Start Date
         double Simulation_end_time; // Simulation End Date
@@ -89,13 +89,18 @@ else if (rain_data==6)
     Simulation_start_time=44864; // Simulation Start Date
     Simulation_end_time=44866; // Simulation End Date
 }
-// --------------------2019 (1 days to 5 years [First run days])----------------------------------
+// --------------------2019 (1 days to 5 years [First run days])---------------------------
 else if (rain_data==7)
 {
     Simulation_start_time=43750; // Simulation Start Date
     Simulation_end_time=43930; // Simulation End Date
 }
-
+// -------------------2019 to 2023 [Pacoima station]---------------------------------------
+else if (rain_data==8)
+{
+    Simulation_start_time=43466; // Simulation Start Date
+    Simulation_end_time=45292; // Simulation End Date
+}
 
     double dr;
     double dz;
@@ -538,6 +543,10 @@ else if (rain_data==7)
     else if (rain_data==7)
     {
         rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
+    }
+    else if (rain_data==8)
+    {
+        rain.SetProperty("timeseries",path+"Pacoima Spreading Grounds_rainfall data.csv");
     }
 
     system->AddSource(rain, false);
