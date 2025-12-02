@@ -178,7 +178,7 @@ private:
     // Member variable to store measured CDFs
     TimeSeriesSet<double> measured_CDFs_;
     bool has_measured_CDFs_ = false;
-    pdfmode pdfmod_ = pdfmode::parametric; // parameteric vs non-parameteric (default = parametric)
+    pdfmode pdfmod_ = pdfmode::parametric; // parametric vs non-parametric (default = parametric)
 };
 
 #endif // FIELDGENERATOR_H
