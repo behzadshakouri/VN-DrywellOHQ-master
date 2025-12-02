@@ -125,8 +125,9 @@ public:
     // Clear stored CDFs
     void clearMeasuredCDFs();
 
-    enum class pdfmode {nonparameteric, parametric};
+    enum class pdfmode {nonparametric, parametric};
     pdfmode PDFMode() { return pdfmod_;}
+    void setPDFMode(pdfmode _mode) {pdfmod_ = _mode;}
 
 private:
     // Field properties
@@ -177,7 +178,7 @@ private:
     // Member variable to store measured CDFs
     TimeSeriesSet<double> measured_CDFs_;
     bool has_measured_CDFs_ = false;
-    pdfmode pdfmod_ = pdfmode::parametric;
+    pdfmode pdfmod_ = pdfmode::parametric; // parameteric vs non-parameteric (default = parametric)
 };
 
 #endif // FIELDGENERATOR_H

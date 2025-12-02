@@ -16,12 +16,12 @@ DEFINES += GSL
 #DEFINES += Behzad
 
 
-#CONFIG += PowerEdge
-#DEFINES += PowerEdge
+CONFIG += PowerEdge
+DEFINES += PowerEdge
 
 
-CONFIG += Arash
-DEFINES += Arash
+#CONFIG += Arash
+#DEFINES += Arash
 
 
 #CONFIG += SligoCreek

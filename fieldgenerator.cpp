@@ -1100,7 +1100,7 @@ bool FieldGenerator::generateFieldFromMeasurementData(const std::string& dataFil
         // Step 3: Generate cumulative distribution functions and store them
         CVector mean_log_values;
         CVector std_log_values;
-        if (pdfmod_ == pdfmode::nonparameteric)
+        if (pdfmod_ == pdfmode::nonparametric)
         {   measured_CDFs_ = measured_data.GetCummulativeDistribution();
             has_measured_CDFs_ = true;
         }

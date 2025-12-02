@@ -62,6 +62,7 @@ int main(int argc, char *argv[])
     // === Field Generator Test ===
 
     FieldGenerator gen(200, 42); // Grid number and seed
+    gen.setPDFMode(FieldGenerator::pdfmode::parametric);
 
     // Set grid spacing to 0.5 meters
     gen.setDx(0.5);
@@ -145,6 +146,7 @@ int main(int argc, char *argv[])
     // Solve
     auto start = std::chrono::high_resolution_clock::now();
     system->Solve(false, false);
+
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
@@ -214,6 +216,9 @@ int main(int argc, char *argv[])
     vector<string> well_block_g; well_block_g.push_back("Well_g");
     ResultGrid well_depth_g = ResultGrid(uniformoutput_HR,well_block_g,"depth");
     well_depth_g.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_g.csv");
+
+    system->SaveStateVariableToJson("meanagetracer:concentration",path + "Age.json");
+    system->SaveStateVariableToJson("theta",path + "theta.json");
 
     return 0;
 
