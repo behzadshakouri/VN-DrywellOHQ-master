@@ -12,7 +12,7 @@ struct model_parameters
 {
     double ft = 0.3048; //ft to m
     double in = 0.0254; //in to m
-    double DepthtoGroundWater = 43; // Should be estimated, 25 to 85 m, according to new log ~ 43 m
+    double DepthtoGroundWater = 142*ft; // Should be estimated, 25 to 85 m, according to new log = 142 ft ~ 43 m
     double DepthofWell_c = 16*ft; // 16'
     double DepthofWell_g = 24*ft; // 24'
     double DepthofWell_t = DepthofWell_c + DepthofWell_g; // 40'
@@ -48,27 +48,27 @@ struct model_parameters
     double K_sat = 1.05196; // will be calculated, 0.3, Rosetta Sandy Loam Non-log 1.05196
     double K_o = 0.24322; // will be calculated, 0.24322, Rosetta Sandy Loam Non-log 0.24322
     double L = -0.5; // will be calculated, -0.874, Rosetta Sandy Loam Non-log -0.874, for new approach -0.5 (default)
-    double rw_c = 4*ft; //4'
-    double rw_c_t = 6*ft; //6'
-    double rw_g = 4*ft; //4'
-    double rw_uw = 4*ft; //4'
+    double rw_c = 4*ft; // 4'
+    double rw_c_t = 6*ft; // 6'
+    double rw_g = 4*ft; // 4'
+    double rw_uw = 4*ft; // 4'
     double initial_theta = 0.2;
     double porosity_c = 1;
     double porosity_g = 0.5;
-    double ManningCoeff_of = 0.01; //overflow
-    double diameter_of = 8*in;
-    double length_of = 10;
-    double start_elevation_of = -2;
-    double end_elevation_of = -10;
-    double ManningCoeff_cm = 0.03; //catchment
+    double ManningCoeff_of = 0.01; // overflow pipe Manning coefficient
+    double diameter_of = 8*in; // overflow pipe diameter
+    double length_of = 10; // overflow pipe length
+    double start_elevation_of = -6*ft; // overflow pipe start elevation
+    double end_elevation_of = -28*ft; // overflow pipe end elevation
+    double ManningCoeff_cm = 0.03; // catchment
     double Slope_cm = 0.01;
     double area_cm = 2700;
     double Width_cm = 15;
-    double ManningCoeff_cmw = 0.05; //catchment to well link
+    double ManningCoeff_cmw = 0.05; // catchment to well link
     double length_cmw = 50;
     double elevation_j = -1*DepthofWell_c;
-    double depth_w_c=0; //depth of water in well
-    double depth_w_g=0.01; //depth of water in well
+    double depth_w_c=0; // depth of water in well
+    double depth_w_g=0.01; // depth of water in well
     double Maximum_time_allowed=10*86400; // 10 days
     double Maximum_number_of_matrix_inverstions=10*200000; // 10x
 
