@@ -9,8 +9,11 @@ ModelCreator::ModelCreator()
 
 }
 
-
-bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *fieldgen)
+bool ModelCreator::Create(model_parameters mp,
+                          System* system,
+                          FieldGenerator* fieldgen,
+                          const RainConfig& raincfg,
+                          const SimulationConfig& simcfg)
 {
     modelparameters = mp;
     TimeSeriesSet<double> SoilData;
@@ -44,63 +47,45 @@ bool ModelCreator::Create(model_parameters mp, System *system, FieldGenerator *f
 
     system->SetNumThreads(16);
 
+    // ==================================================================
+    //   RAINFALL DATABASE
+    // ==================================================================
 
-    int rain_data=8; // rain data: 1: 1 yr old, 2: 1 yr new, 3: 5 yr new, 4: 3 months of 1 yr new, 5: 2 years of 5 yr new, 6: 2 days in 2022 for test, 7: 1 day to 5 years [First run days], 8: Pacoima station
+    struct RainDataset {
+        std::string file;
+        double start;
+        double end;
+    };
 
-        double Simulation_start_time; // Simulation Start Date
-        double Simulation_end_time; // Simulation End Date
+    // Updated table including new cases 8 and 9
+    std::map<int, RainDataset> rainDB = {
+        {1, { "LA_Precipitaion (1 yr).csv",                     41973, 42342 }},
+        {2, { "LA_Precipitaion (1 yr new).csv",                 45230, 45600 }},
+        {3, { "LA_Precipitaion (5 yr new).csv",                 44864, 45595 }},
 
-        double Maximum_time_allowed=10*86400; // 10 Days
-        double Maximum_number_of_matrix_inverstions=10*200000; // 10x
+        // Pacoima variants
+        {4, { "Pacoima Spreading Grounds_rainfall data.csv",     43466, 45292 }},
+    };
 
-// --------------------2014-2015----------------------------------
-if (rain_data==1)
-    {
-    Simulation_start_time=41973; // Simulation Start Date
-    Simulation_end_time=42342; // Simulation End Date
+    if (!rainDB.count(raincfg.rain_data)) {
+        std::cerr << "Invalid rain_data=" << raincfg.rain_data << "\n";
+        return false;
     }
-// --------------------2023-2024----------------------------------
-else if (rain_data==2)
-{
-    Simulation_start_time=45230; // Simulation Start Date
-    Simulation_end_time=45600; // Simulation End Date
-}
-// --------------------2019-2024----------------------------------
-else if (rain_data==3)
-{
-    Simulation_start_time=43750; // Simulation Start Date
-    Simulation_end_time=45600; // Simulation End Date
-}
-// --------------------2023-2024----------------------------------
-else if (rain_data==4)
-{
-    Simulation_start_time=45230; // Simulation Start Date
-    Simulation_end_time=45320; // Simulation End Date
-}
-// --------------------2022-2024----------------------------------
-else if (rain_data==5)
-{
-    Simulation_start_time=44864; // Simulation Start Date
-    Simulation_end_time=45595; // Simulation End Date
-}
-// --------------------2 days in 2022 for test----------------------------------
-else if (rain_data==6)
-{
-    Simulation_start_time=44864; // Simulation Start Date
-    Simulation_end_time=44866; // Simulation End Date
-}
-// --------------------2019 (1 days to 5 years [First run days])---------------------------
-else if (rain_data==7)
-{
-    Simulation_start_time=43750; // Simulation Start Date
-    Simulation_end_time=43930; // Simulation End Date
-}
-// -------------------2019 to 2023 [Pacoima station]---------------------------------------
-else if (rain_data==8)
-{
-    Simulation_start_time=43466; // Simulation Start Date
-    Simulation_end_time=45292; // Simulation End Date
-}
+
+    auto RC = rainDB[raincfg.rain_data];
+
+    // Simulation window from main(), else fallback
+    double Simulation_start_time =
+        (simcfg.start_time > 0 ? simcfg.start_time : RC.start);
+
+    double Simulation_end_time =
+        (simcfg.end_time > 0 ? simcfg.end_time : RC.end);
+
+    std::string rain_file = path + RC.file;
+
+    // ==================================================================
+    //   Model blocks, links, ...
+    // ==================================================================
 
     double dr;
     double dz;
@@ -516,38 +501,7 @@ else if (rain_data==8)
     rain.SetVal("x",-5000);
     rain.SetVal("y",-500);
 
-    if (rain_data==1)
-    {
-        rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr).csv");
-    }
-    else if (rain_data==2)
-    {
-        rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
-    }
-    else if (rain_data==3)
-    {
-        rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
-    }
-    else if (rain_data==4)
-    {
-        rain.SetProperty("timeseries",path+"LA_Precipitaion (1 yr new).csv");
-    }
-    else if (rain_data==5)
-    {
-        rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
-    }
-    else if (rain_data==6)
-    {
-        rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
-    }
-    else if (rain_data==7)
-    {
-        rain.SetProperty("timeseries",path+"LA_Precipitaion (5 yr new).csv");
-    }
-    else if (rain_data==8)
-    {
-        rain.SetProperty("timeseries",path+"Pacoima Spreading Grounds_rainfall data.csv");
-    }
+    rain.SetProperty("timeseries", rain_file);
 
     system->AddSource(rain, false);
 
@@ -597,9 +551,9 @@ else if (rain_data==8)
     system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
     system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
 
-    system->SetSettingsParameter("maximum_time_allowed",Maximum_time_allowed);
-    system->SetSettingsParameter("maximum_number_of_matrix_inverstions",Maximum_number_of_matrix_inverstions);
+    system->SetSettingsParameter("maximum_time_allowed",simcfg.maximum_time_allowed);
 
+    system->SetSettingsParameter("maximum_number_of_matrix_inverstions",simcfg.maximum_matrix_inversions);
 
     system->SetSystemSettings();
 

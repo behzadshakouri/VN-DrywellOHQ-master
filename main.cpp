@@ -28,43 +28,65 @@ using namespace std;
 int main(int argc, char *argv[])
 {
 
+    // ============================================================
+    //   SIMULATION CONFIGURATION
+    // ============================================================
+
     bool Model_Creator = 1; // 1 for using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
-    double Simulation_num = 1; // Simulation Number; Set it for every simulation
-    double Simulation_days = 365; // Simulation Days for Json file [Constant]
+    SimulationConfig simcfg;
+    RainConfig raincfg;
 
-    double Simulation_start_time_0 = 43466; // Simulation Start Date for Model_Creator [Pacoima station]
-    double Simulation_end_time_0 = Simulation_start_time_0 + Simulation_days; // Simulation End Date for Model_Creator [Pacoima station]
-    //double Simulation_start_time_0 = 43750; // Simulation Start Date for Model_Creator
-    //double Simulation_end_time_0 = 43930; // Simulation Start Date for Model_Creator
-    //double Simulation_start_time_0 = 44864; // Simulation Start Date for Model_Creator [Test]
-    //double Simulation_end_time_0 = 44866; // Simulation End Date for Model_Creator [Test]
+    // (1) Which rainfall dataset?
+    // 1–3 = LA datasets, 4 = Pacoima
+    raincfg.rain_data = 4;
 
-    double Simulation_days_0 = Simulation_end_time_0 - Simulation_start_time_0; // Simulation Days for Model_Creator
+    // (2) Simulation batch index
+    int Simulation_num = 1;
+    double Simulation_days = 365;    // Each run window
 
-    double Simulation_start_time; // Simulation Start Date
-    double Simulation_end_time; // Simulation End Date
+    // (3) Base time
+    double Base_start;
+    if (raincfg.rain_data < 4)
+    Base_start = 43750;      // LA base
+    else if (raincfg.rain_data == 4)
+    Base_start = 43466;       // Pacoima base
 
-    // For Json file
+    double Base_end   = Base_start + Simulation_days;
 
-    if (Model_Creator)
-    {
-        Simulation_start_time = Simulation_start_time_0; // Simulation Start Date
-        Simulation_end_time = Simulation_end_time_0; // Simulation End Date
-     }
-    else
-    {
-        Simulation_start_time = Simulation_start_time_0 + Simulation_days * (Simulation_num - 1); // Simulation Start Date
-        Simulation_end_time = Simulation_end_time_0 + Simulation_days * (Simulation_num - 1); // Simulation End Date
+    Model_Creator = (Simulation_num == 1);
+
+    simcfg.Base_start = Base_start;
+    simcfg.Base_end = Base_end;
+
+    if (Model_Creator) {
+        simcfg.start_time = simcfg.Base_start;
+        simcfg.end_time   = simcfg.Base_end;
+    } else {
+        double shift = Simulation_days * (Simulation_num - 1);
+        simcfg.start_time = simcfg.Base_start + shift;
+        simcfg.end_time   = simcfg.Base_end   + shift;
     }
+
+    // Solver limits (can override from main)
+    simcfg.maximum_time_allowed = 10 * 86400;              // 10 days
+    simcfg.maximum_matrix_inversions = 10 * 200000;        // 10× default
+
+    cout << "=== Simulation Window ===\n";
+    cout << "Start = " << simcfg.start_time << "\n";
+    cout << "End   = " << simcfg.end_time << "\n";
+    cout << "Model_Creator = " << Model_Creator << "\n\n";
 
     //omp_set_nested(0);          // Disable nested parallelism
     //omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
 
-    // === Field Generator Test ===
+
+    // ============================================================
+    //   FIELD GENERATOR (soil stochasticity)
+    // ============================================================
 
     FieldGenerator gen(200, 42); // Grid number and seed
-    gen.setPDFMode(FieldGenerator::pdfmode::parametric);
+    gen.setPDFMode(FieldGenerator::pdfmode::parametric); // parametric is new pdfmode
 
     // Set grid spacing to 0.5 meters
     gen.setDx(0.5);
@@ -88,34 +110,40 @@ int main(int argc, char *argv[])
         generateAndAnalyzeField(gen, csvFile, param, 1, testDistances, outPrefix); // enter correlation length
     }
 
+    // ============================================================
+    //   BUILD OR LOAD MODEL
+    // ============================================================
+
     model_parameters mp;
 
-    System *system=new System();
+    System *system = new System();
+    system->SetWorkingFolder(path);
 
     ModelCreator ModCreate;
 
-    system->SetWorkingFolder(path); // Should be modified according to the users directory
-
     if (Model_Creator)
     {
-        cout<<"Creating model ..." <<endl;
-        //ModCreate.Create(mp,system, &gen);
-        ModCreate.Create(mp,system);
-        cout<<"Creating model done..." <<endl;
+        cout << "Creating model...\n";
+        ModCreate.Create(mp, system, &gen, raincfg, simcfg);
+        cout << "Model build complete.\n\n";
     }
     else
     {
-        system->ReadSystemSettingsTemplate(ohq_r+"settings.json");
+        cout << "Loading model...\n";
+        system->ReadSystemSettingsTemplate(ohq_r + "settings.json");
         system->LoadfromJson(QString::fromStdString(path + "Model.json"));
+        system->AddSolveVariableOrder("Storage");
 
-        system->AddSolveVariableOrder("Storage"); // Flow solve
-
-    cout<<"Model loaded..." <<endl;
-    // Solve properties
-        system->SetSettingsParameter("simulation_start_time",Simulation_start_time);
-        system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
+        system->SetSettingsParameter("simulation_start_time", simcfg.start_time);
+        system->SetSettingsParameter("simulation_end_time", simcfg.end_time);
         system->SetSystemSettings();
+
+        cout << "Model loaded.\n\n";
     }
+
+    // ============================================================
+    //   SAVE SCRIPT + INITIALIZE
+    // ============================================================
 
     system->SetSilent(false);
     cout<<"Saving"<<endl;
@@ -124,7 +152,11 @@ int main(int argc, char *argv[])
     cout<<"Solving ..."<<endl;
     system->CalcAllInitialValues();
 
-    // Soil params VTP
+
+    // ============================================================
+    //   SOIL PARAMETER SNAPSHOTS (VTP)
+    // ============================================================
+
     ResultGrid resgrid_Ksat("K_sat_original",system);
     resgrid_Ksat.WriteToVTPSnapShot("Ksat",path + "Ksat.vtp",0,0);
 
@@ -144,8 +176,10 @@ int main(int argc, char *argv[])
     double dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
     ResultGrid::Make3DVTK(quantities,dr,system,path + "3D_model.vtm");
 
+    // ============================================================
+    //   SOLVE
+    // ============================================================
 
-    // Solve
     auto start = std::chrono::high_resolution_clock::now();
     system->Solve(false, false);
 
@@ -153,6 +187,9 @@ int main(int argc, char *argv[])
     std::chrono::duration<double> elapsed = end - start;
     std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
 
+    // ============================================================
+    //   SAVE MODEL + OUTPUTS
+    // ============================================================
 
     system->SavetoJson(path + "Model.json",system->addedtemplates, false, true );
     system->SavetoJson(path + "Model_check.json",system->addedtemplates, true, true );
@@ -164,11 +201,15 @@ int main(int argc, char *argv[])
     uniformoutput_HR.write(system->GetWorkingFolder() + system->OutputFileName());
     cout<<"Getting results into grid"<<endl;
 
+    // ============================================================
+    //   RESULT GRIDS (Moisture + Age)
+    // ============================================================
+
     double start_counter;
     if (Model_Creator)
         start_counter = 0;
     else
-        start_counter = Simulation_start_time - Simulation_start_time_0;
+        start_counter = simcfg.start_time - simcfg.Base_end;
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
@@ -180,9 +221,17 @@ int main(int argc, char *argv[])
     resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp",0,start_counter);
     resgrid_age.write(system->GetWorkingFolder()+"age_results.csv");
 
+    // ============================================================
+    //   WELL DEPTHS
+    // ============================================================
+
     vector<string> well_block_c; well_block_c.push_back("Well_c");
     ResultGrid well_depth_c = ResultGrid(uniformoutput_HR,well_block_c,"depth");
     well_depth_c.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_c.csv");
+
+    // ============================================================
+    //   MEAN AGE AT GROUNDWATER + RECHARGE
+    // ============================================================
 
     vector<string> age_tracer_locations;
     vector<string> gw_rechage_locations;
@@ -218,6 +267,10 @@ int main(int argc, char *argv[])
     vector<string> well_block_g; well_block_g.push_back("Well_g");
     ResultGrid well_depth_g = ResultGrid(uniformoutput_HR,well_block_g,"depth");
     well_depth_g.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_g.csv");
+
+    // ============================================================
+    //   SAVE STATE VARIABLES
+    // ============================================================
 
     system->SaveStateVariableToJson("meanagetracer:concentration",path + "Age.json");
     system->SaveStateVariableToJson("theta",path + "theta.json");
