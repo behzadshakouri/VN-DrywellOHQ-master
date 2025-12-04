@@ -30,11 +30,11 @@ int main(int argc, char *argv[])
 
     bool Model_Creator = 1; // 1 for using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
-    double Simulation_num = 8; // Simulation Number; Set it for every simulation
-    double Simulation_days = 180; // Simulation Days for Json file [Constant]
+    double Simulation_num = 1; // Simulation Number; Set it for every simulation
+    double Simulation_days = 365; // Simulation Days for Json file [Constant]
 
-    double Simulation_start_time_0=43466; // Simulation Start Date for Model_Creator [Pacoima station]
-    double Simulation_end_time_0=45292; // Simulation End Date for Model_Creator [Pacoima station]
+    double Simulation_start_time_0 = 43466; // Simulation Start Date for Model_Creator [Pacoima station]
+    double Simulation_end_time_0 = Simulation_start_time_0 + Simulation_days; // Simulation End Date for Model_Creator [Pacoima station]
     //double Simulation_start_time_0 = 43750; // Simulation Start Date for Model_Creator
     //double Simulation_end_time_0 = 43930; // Simulation Start Date for Model_Creator
     //double Simulation_start_time_0 = 44864; // Simulation Start Date for Model_Creator [Test]
