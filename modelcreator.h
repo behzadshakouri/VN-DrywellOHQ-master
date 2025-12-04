@@ -15,7 +15,7 @@ enum class _realization_mode {deterministic, stochastic};
 
 struct RainConfig
 {
-    int rain_data = 8;      // Default Pacoima; main() will set
+    int rain_data = 4;      // Default Pacoima; main() will set
 };
 
 struct SimulationConfig
