@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     raincfg.rain_data = 4;
 
     // (2) Simulation batch index
-    int Simulation_num = 2;          // Set for each run
+    int Simulation_num = 4;          // Set for each run
     double Simulation_days = 365;    // Each run window
 
     // (3) Base time

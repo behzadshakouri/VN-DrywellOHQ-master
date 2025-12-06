@@ -57,7 +57,7 @@ bool ModelCreator::Create(model_parameters mp,
         double end;
     };
 
-    // Updated table including new cases 8 and 9
+    // Updated table including new case 4
     std::map<int, RainDataset> rainDB = {
         {1, { "LA_Precipitaion (1 yr).csv",                     41973, 42342 }},
         {2, { "LA_Precipitaion (1 yr new).csv",                 45230, 45600 }},
