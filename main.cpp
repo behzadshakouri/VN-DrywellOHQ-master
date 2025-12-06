@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     //   SIMULATION CONFIGURATION
     // ============================================================
 
-    bool Model_Creator = 1; // 1 for using modelcreator, and 0 for loading saved Json file; Set it for every simulation
+    bool Model_Creator = 0; // 1 for using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
     SimulationConfig simcfg;
     RainConfig raincfg;
@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     raincfg.rain_data = 4;
 
     // (2) Simulation batch index
-    int Simulation_num = 1;
+    int Simulation_num = 2;          // Set for each run
     double Simulation_days = 365;    // Each run window
 
     // (3) Base time
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
     if (Model_Creator)
         start_counter = 0;
     else
-        start_counter = simcfg.start_time - simcfg.Base_end;
+        start_counter = simcfg.start_time - simcfg.Base_start;
 
     ResultGrid resgrid(uniformoutput_LR,"theta",system);
     cout<<"Writing VTPs"<<endl;
