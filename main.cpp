@@ -39,10 +39,10 @@ int main(int argc, char *argv[])
 
     // (1) Which rainfall dataset?
     // 1–3 = LA datasets, 4 = Pacoima
-    raincfg.rain_data = 4;
+    raincfg.rain_data = 4; // Set to Pacoima
 
     // (2) Simulation batch index
-    int Simulation_num = 4;          // Set for each run
+    int Simulation_num = 1;          // Set for each run
     double Simulation_days = 365;    // Each run window
 
     // (3) Base time
@@ -53,8 +53,6 @@ int main(int argc, char *argv[])
     Base_start = 43466;       // Pacoima base
 
     double Base_end   = Base_start + Simulation_days;
-
-    Model_Creator = (Simulation_num == 1);
 
     simcfg.Base_start = Base_start;
     simcfg.Base_end = Base_end;
@@ -149,9 +147,10 @@ int main(int argc, char *argv[])
     cout<<"Saving"<<endl;
     system->SavetoScriptFile(path + "/CreatedModel.ohq"); // Should be modified according to the users directory
 
+    system->SavetoJson(path + "Model_test.json",system->addedtemplates, false, true );
+
     cout<<"Solving ..."<<endl;
     system->CalcAllInitialValues();
-
 
     // ============================================================
     //   SOIL PARAMETER SNAPSHOTS (VTP)
