@@ -32,18 +32,18 @@ int main(int argc, char *argv[])
     //   SIMULATION CONFIGURATION
     // ============================================================
 
-    bool Model_Creator = 0; // 1 for using modelcreator, and 0 for loading saved Json file; Set it for every simulation
+    bool Model_Creator = 1; // 1 for using modelcreator, and 0 for loading saved Json file; Set it for every simulation
 
     SimulationConfig simcfg;
     RainConfig raincfg;
 
     // (1) Which rainfall dataset?
-    // 1–3 = LA datasets, 4 = Pacoima
-    raincfg.rain_data = 4; // Set to Pacoima
+    // 1–3 = LA datasets, 4 = Pacoima, 5 = Synthetic
+    raincfg.rain_data = 5; // Set to Pacoima
 
     // (2) Simulation batch index
     int Simulation_num = 1;          // Set for each run
-    double Simulation_days = 365;    // Each run window
+    double Simulation_days = 2;    // Each run window
 
     // (3) Base time
     double Base_start;
@@ -51,6 +51,8 @@ int main(int argc, char *argv[])
     Base_start = 43750;      // LA base
     else if (raincfg.rain_data == 4)
     Base_start = 43466;       // Pacoima base
+    else if (raincfg.rain_data == 5)
+    Base_start = 45763;       // Synthetic base
 
     double Base_end   = Base_start + Simulation_days;
 

@@ -53,7 +53,7 @@ struct model_parameters
 
     int nz_c = 5;
     int nz_g = 15;
-    int nz_uw = 30;
+    int nz_uw = 30; // Use 1 for Synthetic rain
 
     // Soil parameters
     double theta_r = 0.049;

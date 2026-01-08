@@ -57,7 +57,7 @@ bool ModelCreator::Create(model_parameters mp,
         double end;
     };
 
-    // Updated table including new case 4
+    // Updated table including new case 5
     std::map<int, RainDataset> rainDB = {
         {1, { "LA_Precipitaion (1 yr).csv",                     41973, 42342 }},
         {2, { "LA_Precipitaion (1 yr new).csv",                 45230, 45600 }},
@@ -65,6 +65,9 @@ bool ModelCreator::Create(model_parameters mp,
 
         // Pacoima variants
         {4, { "Pacoima Spreading Grounds_rainfall data.csv",     43466, 45292 }},
+
+        {5, { "Synthetic_rain.csv",     45763, 45764 }},
+
     };
 
     if (!rainDB.count(raincfg.rain_data)) {
@@ -89,6 +92,8 @@ bool ModelCreator::Create(model_parameters mp,
 
     double dr;
     double dz;
+
+    int nz_uw_n = (raincfg.rain_data == 5) ? 1 : mp.nz_uw; // Makes nz_uw = 1 for Synthetic rain
 
     // Soil Blocks around gravel part
 
@@ -169,13 +174,12 @@ bool ModelCreator::Create(model_parameters mp,
     }
 
     // Soil Blocks under well
-
     dr = (mp.RadiousOfInfluence-mp.rw_uw)/mp.nr_uw;
     dz = (mp.DepthtoGroundWater-mp.DepthofWell_t)/mp.nz_uw;
 
     cout<<"Soil Blocks under well"<<endl;
-    for (int j=0; j<mp.nz_uw; j++)
-    {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
+    for (int j = 0; j < nz_uw_n; j++)
+        {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
         //calculate Ksat, n, etc.
         double Ksat = 0;
         double alpha = 0;
@@ -242,9 +246,10 @@ bool ModelCreator::Create(model_parameters mp,
             B.SetVal("act_X",(i+0.5)*dr+mp.rw_uw);
             B.SetVal("act_Y",-actual_depth);
             system->AddBlock(B,false);
-    }
+        }
 
-    cout<<"Soil Blocks directly under well"<<endl;
+        // Soil Blocks directly under well
+        cout<<"Soil Blocks directly under well"<<endl;
 
         if (j*dz<mp.DepthtoGroundWater)
         {
@@ -289,6 +294,8 @@ bool ModelCreator::Create(model_parameters mp,
             system->AddBlock(B,false);
         }
     }
+
+    // Horizontal links for soils of gravel part
     cout<<"Horizontal links for soils of gravel part"<<endl;
     for (int i=0; i<mp.nr_g; i++)
         for (int j=0; j<mp.nz_g; j++)
@@ -305,6 +312,7 @@ bool ModelCreator::Create(model_parameters mp,
             system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil-g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
         }
 
+    // Vertical links for soils of gravel part
     cout<<"Vertical links for soils of gravel part"<<endl;
     for (int i=0; i<mp.nr_g; i++)
         for (int j=0; j<mp.nz_g-1; j++)
@@ -318,9 +326,10 @@ bool ModelCreator::Create(model_parameters mp,
             system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
         }
 
+    // Horizontal links for soils under well
     cout<<"Horizontal links for soils under well"<<endl;
     for (int i=0; i<mp.nr_uw; i++)
-        for (int j=0; j<mp.nz_uw; j++)
+        for (int j = 0; j < nz_uw_n; j++)
             if (j*dz<mp.DepthtoGroundWater)
             {
                 Link L;
@@ -335,6 +344,7 @@ bool ModelCreator::Create(model_parameters mp,
                 system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(), ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), false);
             }
 
+    // Vertical links for soils under well (first one)
     cout<<"Vertical links for soils under well (first one)"<<endl;
     for (int i=0; i<mp.nr_uw; i++)
     {
@@ -349,9 +359,10 @@ bool ModelCreator::Create(model_parameters mp,
         system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ")").toStdString(), ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw) + ")").toStdString(), false);
     }
 
+    // Vertical links for soils under well
     cout<<"Vertical links for soils under well"<<endl;
     for (int i=0; i<mp.nr_uw+1; i++)
-        for (int j=0; j<mp.nz_uw; j++)
+       for (int j = 0; j < nz_uw_n; j++)
             if (j*dz<mp.DepthtoGroundWater)
             {
             Link L;
@@ -363,7 +374,7 @@ bool ModelCreator::Create(model_parameters mp,
             system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(), ("Soil-uw (" + QString::number(i) + "$" + QString::number(j+1) + ")").toStdString(), false);
     }
 
-
+    // Well_c
     cout<<"Well_c"<<endl;
     Block well_c;
     well_c.SetQuantities(system->GetMetaModel(), "Well_aggregate");
@@ -379,6 +390,7 @@ bool ModelCreator::Create(model_parameters mp,
     well_c.SetVal("y",mp.DepthofWell_c*200);
     system->AddBlock(well_c,false);
 
+    // Well_g
     cout<<"Well_g"<<endl;
     Block well_g;
     well_g.SetQuantities(system->GetMetaModel(), "Well_aggregate");
@@ -394,6 +406,7 @@ bool ModelCreator::Create(model_parameters mp,
     well_g.SetVal("y",(mp.DepthofWell_c+mp.DepthofWell_g)*1000);
     system->AddBlock(well_g,false);
 
+    // Well to well overflow
     cout<<"Well to well overflow"<<endl;
     Link well_to_well_overflow;
     well_to_well_overflow.SetQuantities(system->GetMetaModel(), "Sewer_pipe");
@@ -406,6 +419,7 @@ bool ModelCreator::Create(model_parameters mp,
     well_to_well_overflow.SetVal("end_elevation",mp.end_elevation_of);
     system->AddLink(well_to_well_overflow,"Well_c","Well_g",false);
 
+    // Junction
     cout<<"Junction"<<endl;
     Block junction;
     junction.SetQuantities(system->GetMetaModel(), "junction_elastic");
@@ -418,6 +432,7 @@ bool ModelCreator::Create(model_parameters mp,
     junction.SetVal("elevation",mp.elevation_j); // Should be calculated
     system->AddBlock(junction,false);
 
+    // Well to junction
     cout<<"Well to junction"<<endl;
     Link well_to_junction;
     well_to_junction.SetQuantities(system->GetMetaModel(), "darcy_connector");
@@ -425,6 +440,7 @@ bool ModelCreator::Create(model_parameters mp,
     well_to_junction.SetType("darcy_connector");
     system->AddLink(well_to_junction,"Well_c","Junction_elastic",false);
 
+    // Junction to well
     cout<<"Junction to well"<<endl;
     Link junction_to_well;
     junction_to_well.SetQuantities(system->GetMetaModel(), "darcy_connector");
@@ -453,8 +469,8 @@ bool ModelCreator::Create(model_parameters mp,
                 system->AddLink(L, "Well_g", ("Soil-g (" + QString::number(i_g) + "$" + QString::number(j) + ")").toStdString(), false);
         }
 
+    // Vertical links for well to under well soils
     cout<<"Vertical links for well to under well soils"<<endl;
-
         Link L1;
         L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");
 
@@ -476,7 +492,7 @@ bool ModelCreator::Create(model_parameters mp,
     gw.SetVal("head",-mp.DepthtoGroundWater);
     gw.SetVal("Storage",100000);
     gw.SetVal("x",-mp.nr_uw*1000);
-    gw.SetVal("y",37000+(mp.DepthtoGroundWater)*2000);
+    gw.SetVal("y",37000+(mp.nz_c+mp.nz_g+mp.nz_uw)*2000);
     system->AddBlock(gw,false);
 
     // Groundwater links
@@ -488,9 +504,10 @@ bool ModelCreator::Create(model_parameters mp,
         L2.SetName(("Soil to Groundwater (" + QString::number(i) + ")").toStdString());
         L2.SetType("soil_to_fixedhead_link");
 
-        system->AddLink(L2, ("Soil-uw (" + QString::number(i) + "$" + QString::number(mp.nz_uw-1) + ")").toStdString(), "Ground Water", false);
+        system->AddLink(L2, ("Soil-uw (" + QString::number(i) + "$" + QString::number(nz_uw_n-1) + ")").toStdString(), "Ground Water", false);
     }
 
+    // Rain
     cout<<"Rain"<<endl;
     Source rain;
     rain.SetQuantities(system->GetMetaModel(), "Precipitation");
@@ -505,6 +522,7 @@ bool ModelCreator::Create(model_parameters mp,
 
     system->AddSource(rain, false);
 
+    // Catchment
     cout<<"Catchment"<<endl;
     Block catchment;
     catchment.SetQuantities(system->GetMetaModel(), "Catchment");
@@ -523,6 +541,8 @@ bool ModelCreator::Create(model_parameters mp,
     system->block("Catchment")->SetProperty("Precipitation","Rain");
     cout<<"Catchment to well link"<<endl;
 
+    // Catchment to well
+    cout<<"Catchment to well"<<endl;
     Link L3;
     L3.SetQuantities(system->GetMetaModel(), "Surface water to well");
     L3.SetName("Catchment to well");
@@ -531,6 +551,7 @@ bool ModelCreator::Create(model_parameters mp,
     L3.SetVal("length",mp.length_cmw);
     system->AddLink(L3, "Catchment", "Well_c", false);
 
+    // Tracer (mean age)
     cout<<"Tracer"<<endl;
     Constituent mean_age_tracer;
     mean_age_tracer.SetQuantities(system->GetMetaModel(), "Constituent");
@@ -538,6 +559,7 @@ bool ModelCreator::Create(model_parameters mp,
     mean_age_tracer.SetType("Constituent");
     system->AddConstituent(mean_age_tracer,false);
 
+    // Reaction (aging)
     cout<<"Reaction"<<endl;
     Reaction aging;
     aging.SetQuantities(system->GetMetaModel(), "Reaction");
