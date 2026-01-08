@@ -35,7 +35,7 @@ bool ModelCreator::Create(model_parameters mp,
     SoilData.read(path+"Soil retention params vs depth.csv");
 
     TimeSeriesSet<double> SoilDataCDF = SoilData.GetCummulativeDistribution();
-    SoilDataCDF.write(path+"CDF.csv"); //Check CDF
+    SoilDataCDF.write(path+"CDF.csv"); // Check CDF
 
     system->GetQuanTemplate(ohq_r+"main_components.json");
     system->AppendQuanTemplate(ohq_r+"unsaturated_soil_revised_model.json"); //revised version
@@ -66,7 +66,8 @@ bool ModelCreator::Create(model_parameters mp,
         // Pacoima variants
         {4, { "Pacoima Spreading Grounds_rainfall data.csv",     43466, 45292 }},
 
-        {5, { "Synthetic_rain.csv",     45763, 45764 }},
+        // Synthetic rain
+        {5, { "Synthetic_rain_flow.csv",     45763, 45764 }},
 
     };
 
@@ -93,7 +94,7 @@ bool ModelCreator::Create(model_parameters mp,
     double dr;
     double dz;
 
-    int nz_uw_n = (raincfg.rain_data == 5) ? 1 : mp.nz_uw; // Makes nz_uw = 1 for Synthetic rain
+    int nz_uw_n = (raincfg.rain_data == 5) ? 1 : mp.nz_uw; // Makes nz_uw = 1 for Synthetic rain (nz_uw_n)
 
     // Soil Blocks around gravel part
 
@@ -388,6 +389,8 @@ bool ModelCreator::Create(model_parameters mp,
     well_c.SetVal("porosity",mp.porosity_c);
     well_c.SetVal("x",-mp.rw_c*1000+2000);
     well_c.SetVal("y",mp.DepthofWell_c*200);
+    if (raincfg.rain_data ==5)
+        well_c.SetProperty("inflow", rain_file);
     system->AddBlock(well_c,false);
 
     // Well_g
@@ -492,7 +495,7 @@ bool ModelCreator::Create(model_parameters mp,
     gw.SetVal("head",-mp.DepthtoGroundWater);
     gw.SetVal("Storage",100000);
     gw.SetVal("x",-mp.nr_uw*1000);
-    gw.SetVal("y",37000+(mp.nz_c+mp.nz_g+mp.nz_uw)*2000);
+    gw.SetVal("y",37000+(mp.nz_c+mp.nz_g+nz_uw_n)*2000);
     system->AddBlock(gw,false);
 
     // Groundwater links
@@ -507,6 +510,8 @@ bool ModelCreator::Create(model_parameters mp,
         system->AddLink(L2, ("Soil-uw (" + QString::number(i) + "$" + QString::number(nz_uw_n-1) + ")").toStdString(), "Ground Water", false);
     }
 
+    if (raincfg.rain_data != 5)
+    {
     // Rain
     cout<<"Rain"<<endl;
     Source rain;
@@ -550,6 +555,7 @@ bool ModelCreator::Create(model_parameters mp,
     L3.SetVal("ManningCoeff",mp.ManningCoeff_cmw);
     L3.SetVal("length",mp.length_cmw);
     system->AddLink(L3, "Catchment", "Well_c", false);
+    }
 
     // Tracer (mean age)
     cout<<"Tracer"<<endl;
