@@ -94,7 +94,7 @@ bool ModelCreator::Create(model_parameters mp,
     double dr;
     double dz;
 
-    int nz_uw_n = (raincfg.rain_data == 5) ? 1 : mp.nz_uw; // Makes nz_uw = 1 for Synthetic rain (nz_uw_n)
+    int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw; // Makes nz_uw = 1 for Synthetic rain (nz_uw_n)
 
     // Soil Blocks around gravel part
 
