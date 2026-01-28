@@ -231,10 +231,10 @@ int main(int argc, char *argv[])
 
     std::vector<BoreholeSpec> boreholes = {
         // name, r_m, obs_csv_path (optional), obs_depth_offset_m (optional)
-        {"ERT-2",  0.8000,  system->GetWorkingFolder() + "obs/ERT-2_obs.csv", 0.0},
-        {"ERT-4",  1.7116,  system->GetWorkingFolder() + "obs/ERT-4_obs.csv", 0.0},
-        {"ERT-5",  4.2680,  system->GetWorkingFolder() + "obs/ERT-5_obs.csv", 0.0},
-        {"ERT-3",  6.6720,  system->GetWorkingFolder() + "obs/ERT-3_obs.csv", 0.0},
+        {"ERT-2",  0.9381,  system->GetWorkingFolder() + "obs/ERT-2_obs.csv", 0.0},
+        {"ERT-4",  4.1679,  system->GetWorkingFolder() + "obs/ERT-4_obs.csv", 0.0},
+        {"ERT-5",  4.3974,  system->GetWorkingFolder() + "obs/ERT-5_obs.csv", 0.0},
+        {"ERT-3",  6.7979,  system->GetWorkingFolder() + "obs/ERT-3_obs.csv", 0.0},
 
         {"ERT-1", 10.0,  "", 0.0}, // no obs, still export model profile
     };
