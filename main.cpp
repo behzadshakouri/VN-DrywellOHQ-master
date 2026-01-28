@@ -7,6 +7,7 @@
 #include "ostream"
 #include "fieldgenerator.h"
 #include "FieldGenHelper.h"
+#include "ERT_comparison.h"
 
 #ifdef Behzad
     const string path="/home/behzad/Projects/VN Drywell_Models/";
@@ -221,6 +222,35 @@ int main(int argc, char *argv[])
     cout<<"Writing age VTPs"<<endl;
     resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp",0,start_counter);
     resgrid_age.write(system->GetWorkingFolder()+"age_results.csv");
+
+    //  =========================================================
+    //  ERT plots
+    //  =========================================================
+
+    int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw;
+
+    std::vector<BoreholeSpec> boreholes = {
+        // name, r_m, obs_csv_path (optional), obs_depth_offset_m (optional)
+        {"ERT-2",  0.8000,  system->GetWorkingFolder() + "obs/ERT-2_obs.csv", 0.0},
+        {"ERT-4",  1.7116,  system->GetWorkingFolder() + "obs/ERT-4_obs.csv", 0.0},
+        {"ERT-5",  4.2680,  system->GetWorkingFolder() + "obs/ERT-5_obs.csv", 0.0},
+        {"ERT-3",  6.6720,  system->GetWorkingFolder() + "obs/ERT-3_obs.csv", 0.0},
+
+        {"ERT-1", 10.0,  "", 0.0}, // no obs, still export model profile
+    };
+
+    BoreholeExportOptions opt;
+    opt.nz_uw_n = nz_uw_n;
+    opt.time_index = (unsigned int)1e9;              // clamps to last
+    opt.out_dir = system->GetWorkingFolder();
+    opt.model_theta_var = "theta";
+    opt.allow_missing_obs = true;
+
+    export_borehole_theta_comparison_csvs(
+        uniformoutput_LR, mp, system,
+        boreholes, opt
+    );
+
 
     // ============================================================
     //   WELL DEPTHS
