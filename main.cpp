@@ -214,33 +214,94 @@ int main(int argc, char *argv[])
     resgrid_age.write(system->GetWorkingFolder()+"age_results.csv");
 
     //  =========================================================
-    //  ERT plots
+    //  ERT plots / snapshots @ measurement times
     //  =========================================================
 
-    bool Use_ResultGrid_ERT = true; // <-- switch added (keeps the other pipeline inside ERT_comparison)
+    bool Use_ResultGrid_ERT = true;
 
     int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw;
 
+    // Only ERT-3 and ERT-5 for now (others commented out)
     std::vector<BoreholeSpec> boreholes = {
-        {"ERT-2",  0.9381,  system->GetWorkingFolder() + "obs/ERT-2_obs.csv", 0.0},
-        {"ERT-4",  4.1679,  system->GetWorkingFolder() + "obs/ERT-4_obs.csv", 0.0},
-        {"ERT-5",  4.3974,  system->GetWorkingFolder() + "obs/ERT-5_obs.csv", 0.0},
         {"ERT-3",  6.7979,  system->GetWorkingFolder() + "obs/ERT-3_obs.csv", 0.0},
-        {"ERT-1", 10.0,  "", 0.0},
+        {"ERT-5",  4.3974,  system->GetWorkingFolder() + "obs/ERT-5_obs.csv", 0.0},
+
+        // {"ERT-2",  0.9381,  system->GetWorkingFolder() + "obs/ERT-2_obs.csv", 0.0},
+        // {"ERT-4",  4.1679,  system->GetWorkingFolder() + "obs/ERT-4_obs.csv", 0.0},
+        // {"ERT-1", 10.0,     system->GetWorkingFolder() + "obs/ERT-1_obs.csv", 0.0},
     };
 
     BoreholeExportOptions opt;
-    opt.nz_uw_n = nz_uw_n;
-    opt.time_index = (unsigned int)1e9; // clamps to last internally
-    opt.out_dir = system->GetWorkingFolder();
-    opt.model_theta_var = "theta";
+    opt.nz_uw_n          = nz_uw_n;
+    opt.out_dir          = system->GetWorkingFolder();
+    opt.model_theta_var  = "theta";
     opt.allow_missing_obs = true;
-    opt.use_resultgrid = Use_ResultGrid_ERT;
+    opt.use_resultgrid   = Use_ResultGrid_ERT;
 
-    export_borehole_theta_comparison_csvs(
-        uniformoutput_LR, mp, system,
-        boreholes, opt
-    );
+    // Your ERT measurement times (Excel serial days; Base_start=45763 => 2025-04-16 00:00)
+    const std::vector<double> ert_times = {
+        45763.588194444, // 4/16/2025 14:07
+        45763.682638889, // 4/16/2025 16:23
+        45763.770833333, // 4/16/2025 18:30
+        45764.673611111, // 4/17/2025 16:10
+        45764.729166667  // 4/17/2025 17:30
+    };
+
+    // File-friendly token (replace '.' with 'p')
+    auto time_token = [&](double t) -> std::string
+    {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(6) << t;   // stable filenames
+        std::string s = oss.str();
+        std::replace(s.begin(), s.end(), '.', 'p');
+        return s;
+    };
+
+    // Find nearest time index in uniformoutput_LR to a target serial-day time
+    auto nearest_time_index = [&](double target_t) -> unsigned int
+    {
+        if (uniformoutput_LR.size() == 0) return 0;
+
+        // Use first series as reference time axis
+        const auto &ts0 = uniformoutput_LR[0];
+        unsigned int n = (unsigned int)ts0.size();
+        if (n == 0) return 0;
+
+        unsigned int best_i = 0;
+        double best_dt = std::numeric_limits<double>::infinity();
+
+        for (unsigned int i = 0; i < n; ++i)
+        {
+            double t = ts0.getTime(i);
+            double dt = std::abs(t - target_t);
+            if (dt < best_dt) { best_dt = dt; best_i = i; }
+        }
+        return best_i;
+    };
+
+    // Export snapshots/CSVs for each ERT measurement time
+    for (double t_ert : ert_times)
+    {
+        unsigned int idx = nearest_time_index(t_ert);
+
+        // IMPORTANT: prevent overwriting outputs by changing prefix per time
+        // (ERT_comparison writes: out_dir + file_prefix + bh.name + file_suffix)
+        std::string tag = "t" + time_token(t_ert);
+        opt.file_prefix = "ERTsnap_" + tag + "_";   // e.g., ERTsnap_t45763p588194_...
+        opt.file_suffix = ".csv";                  // keep default format
+        opt.time_index  = idx;
+
+        std::cout << "\n=== ERT snapshot export ===\n";
+        std::cout << "Target ERT time = " << std::setprecision(12) << t_ert << "\n";
+        std::cout << "Nearest model index = " << idx << "\n";
+        std::cout << "Output prefix = " << opt.file_prefix << "\n";
+
+        export_borehole_theta_comparison_csvs(
+            uniformoutput_LR, mp, system,
+            boreholes, opt
+        );
+    }
+
 
     // ============================================================
     //   WELL DEPTHS
