@@ -127,9 +127,9 @@ do for [ib=1:words(BHs)] {
 
 # ============================================================
 # (B) Per borehole: 5 timesteps overlaid (model lines + obs points)
+#   FIX: move legend OUTSIDE so it doesn't cover curves
 # ============================================================
-set terminal pngcairo enhanced font "Arial,28" size 1200,800
-set key right top
+set terminal pngcairo enhanced font "Arial,28" size 1400,800
 set xlabel "Soil Moisture" font "Arial,32"
 
 do for [ib=1:words(BHs)] {
@@ -137,6 +137,12 @@ do for [ib=1:words(BHs)] {
 
   set output sprintf("ERT_profile_%s_all5_overlaid.png", bh)
   set title sprintf("%s | 5 ERT times (Model lines, Obs points)", bh) font "Arial,32"
+
+  # ---- legend: outside + smaller so it never overlaps data
+  set key outside right top
+  set key font "Arial,22"
+  set key samplen 2 spacing 1.15
+  set key opaque box
 
   plotcmd = ""
   sep = ""
@@ -168,12 +174,48 @@ do for [ib=1:words(BHs)] {
 
 # ============================================================
 # (C) Per borehole: 5 subplots side-by-side (1x5)
+#   FIXES:
+#     - consistent x-range across all 5 panels (per borehole)
+#     - sane tick formatting to avoid crowded numbers
 # ============================================================
-set terminal pngcairo enhanced font "Arial,22" size 2600,650
+set terminal pngcairo enhanced font "Arial,22" size 3000,650
 unset key
 
 do for [ib=1:words(BHs)] {
   bh = word(BHs, ib)
+
+  # ---- compute a consistent x-range for this borehole (model only)
+  xmin =  1e100
+  xmax = -1e100
+  have_any = 0
+
+  do for [it=1:words(TTOK)] {
+    ttok = word(TTOK, it)
+    f = find_file(bh, ttok)
+    if (strlen(f) > 0) {
+      stats f every ::1 using (($2)*MODEL_SCALE) nooutput
+      if (STATS_valid > 0) {
+        if (STATS_min < xmin) { xmin = STATS_min }
+        if (STATS_max > xmax) { xmax = STATS_max }
+        have_any = 1
+      }
+    }
+  }
+
+  # pad a bit so lines don't touch the frame
+  if (have_any) {
+    pad = 0.05*(xmax - xmin)
+    if (pad <= 0) { pad = 1.0 }
+    set xrange [xmin-pad : xmax+pad]
+  } else {
+    set xrange [*:*]
+  }
+
+  # tick formatting (prevents the ugly "16 16.5 17 17.5..." overlap)
+  set format x "%.1f"
+  set xtics autofreq
+  # if your early panels are still too crowded, uncomment next line:
+  # set xtics 1
 
   set output sprintf("ERT_profile_%s_5panels.png", bh)
   set multiplot layout 1,5 rowsfirst
