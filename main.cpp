@@ -287,8 +287,12 @@ int main(int argc, char *argv[])
         // IMPORTANT: prevent overwriting outputs by changing prefix per time
         // (ERT_comparison writes: out_dir + file_prefix + bh.name + file_suffix)
         std::string tag = "t" + time_token(t_ert);
-        opt.file_prefix = "ERTsnap_" + tag + "_";   // e.g., ERTsnap_t45763p588194_...
-        opt.file_suffix = ".csv";                  // keep default format
+
+        // No underscores in filename:
+        // -> ERTsnap-t45763p588194-ERT-3.csv
+        opt.file_prefix = "ERTsnap-" + tag + "-";
+        opt.file_suffix = ".csv";
+
         opt.time_index  = idx;
 
         std::cout << "\n=== ERT snapshot export ===\n";
