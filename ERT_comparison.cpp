@@ -1,4 +1,4 @@
-#include "ERT_comparison.h""
+#include "ERT_comparison.h"
 
 #include <fstream>
 #include <sstream>
@@ -7,13 +7,8 @@
 #include <cmath>
 #include <limits>
 
-// Your project includes (adjust paths if needed)
 #include "System.h"
 #include "resultgrid.h"
-
-// -----------------------------
-// Helpers
-// -----------------------------
 
 static inline bool file_exists(const std::string& p)
 {
@@ -23,14 +18,11 @@ static inline bool file_exists(const std::string& p)
 
 int mapRadiusToSoilUwIndex(double r_m, const model_parameters& mp)
 {
-    // Valid indices in your model: i = 0..nr_uw (inclusive)
-    // i=0 is the center column ("Soil-uw (0$j)")
     if (r_m <= 0.0) return 0;
-
     if (mp.nr_uw <= 0) return 0;
+
     const double dr = (mp.RadiousOfInfluence - mp.rw_uw) / double(mp.nr_uw);
 
-    // For r <= rw_uw, closest ring is i=1 (first annulus outside the well)
     if (r_m <= mp.rw_uw) return 1;
 
     int i = 1 + (int)std::floor((r_m - mp.rw_uw) / dr);
@@ -56,10 +48,8 @@ bool read_observed_profile_csv(
     while (std::getline(f, line)) {
         if (line.empty()) continue;
 
-        // skip header if present
         if (first) {
             first = false;
-            // If header contains any alpha, treat as header line
             bool has_alpha = std::any_of(line.begin(), line.end(), [](unsigned char c){
                 return std::isalpha(c);
             });
@@ -77,29 +67,29 @@ bool read_observed_profile_csv(
             depth_m.push_back(d);
             theta_obs.push_back(th);
         } catch (...) {
-            // ignore bad lines
+            // skip bad lines
         }
     }
 
-    if (depth_m.size() < 2) return true; // still ok, but interp may be limited
+    if (depth_m.size() >= 2) {
+        std::vector<size_t> idx(depth_m.size());
+        for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
 
-    // sort by depth
-    std::vector<size_t> idx(depth_m.size());
-    for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
-    std::sort(idx.begin(), idx.end(), [&](size_t i, size_t j){
-        return depth_m[i] < depth_m[j];
-    });
+        std::sort(idx.begin(), idx.end(), [&](size_t i, size_t j){
+            return depth_m[i] < depth_m[j];
+        });
 
-    std::vector<double> d2, t2;
-    d2.reserve(depth_m.size());
-    t2.reserve(theta_obs.size());
+        std::vector<double> d2, t2;
+        d2.reserve(depth_m.size());
+        t2.reserve(theta_obs.size());
 
-    for (size_t k = 0; k < idx.size(); ++k) {
-        d2.push_back(depth_m[idx[k]]);
-        t2.push_back(theta_obs[idx[k]]);
+        for (size_t k = 0; k < idx.size(); ++k) {
+            d2.push_back(depth_m[idx[k]]);
+            t2.push_back(theta_obs[idx[k]]);
+        }
+        depth_m.swap(d2);
+        theta_obs.swap(t2);
     }
-    depth_m.swap(d2);
-    theta_obs.swap(t2);
 
     return true;
 }
@@ -130,9 +120,162 @@ double linear_interp_or_nan(
     return y0 + w * (y1 - y0);
 }
 
-// -----------------------------
-// Core export
-// -----------------------------
+// Legacy pipeline (kept inside this file; no change in outputs format)
+static void export_one_borehole_legacy(
+    const TimeSeriesSet<double>& uniformoutput,
+    const model_parameters& mp,
+    System* system,
+    const BoreholeSpec& bh,
+    const BoreholeExportOptions& opt)
+{
+    if (!system) throw std::runtime_error("System is null");
+
+    const int i_uw = mapRadiusToSoilUwIndex(bh.r_m, mp);
+
+    const double dz = (mp.DepthtoGroundWater - mp.DepthofWell_t) / double(mp.nz_uw);
+
+    // Read observed profile if provided
+    std::vector<double> d_obs, th_obs;
+    bool have_obs = false;
+    if (!bh.obs_csv_path.empty()) {
+        have_obs = read_observed_profile_csv(bh.obs_csv_path, d_obs, th_obs, bh.obs_depth_offset_m);
+        if (!have_obs && !opt.allow_missing_obs) {
+            throw std::runtime_error("Observed CSV missing/unreadable: " + bh.obs_csv_path);
+        }
+    }
+
+    // Clamp time index using any series that exists
+    unsigned int jt = opt.time_index;
+    if (uniformoutput.size() > 0) {
+        // find first matching series for time support (best effort)
+        for (unsigned int k = 0; k < uniformoutput.size(); ++k) {
+            if (uniformoutput[k].size() > 0) {
+                if (jt >= uniformoutput[k].size()) jt = (unsigned int)(uniformoutput[k].size() - 1);
+                break;
+            }
+        }
+    }
+
+    // Attempt to get time value from the first matching theta series if possible
+    double t = 0.0;
+    {
+        std::string probeName = "Soil-uw (" + std::to_string(i_uw) + "$0)_" + opt.model_theta_var;
+        for (unsigned int k = 0; k < uniformoutput.size(); ++k) {
+            if (uniformoutput.getSeriesName(k) == probeName && uniformoutput[k].size() > 0) {
+                if (jt >= uniformoutput[k].size()) jt = (unsigned int)(uniformoutput[k].size() - 1);
+                t = uniformoutput[k].getTime(jt);
+                break;
+            }
+        }
+    }
+
+    std::string outPath = opt.out_dir;
+    if (!outPath.empty() && outPath.back() != '/' && outPath.back() != '\\') outPath += "/";
+    outPath += opt.file_prefix + bh.name + opt.file_suffix;
+
+    std::ofstream f(outPath);
+    if (!f) throw std::runtime_error("Cannot open output: " + outPath);
+
+    f << "depth_m,theta_model,theta_obs,time\n";
+    f << std::setprecision(15);
+
+    for (int j = 0; j < opt.nz_uw_n; ++j)
+    {
+        const double depth = (j + 0.5) * dz + mp.DepthofWell_t;
+
+        // Find the matching series by name
+        std::string seriesName = "Soil-uw (" + std::to_string(i_uw) + "$" + std::to_string(j) + ")_" + opt.model_theta_var;
+
+        double th_m = std::numeric_limits<double>::quiet_NaN();
+        for (unsigned int k = 0; k < uniformoutput.size(); ++k) {
+            if (uniformoutput.getSeriesName(k) == seriesName) {
+                if (uniformoutput[k].size() > 0) {
+                    unsigned int jtc = jt;
+                    if (jtc >= uniformoutput[k].size()) jtc = (unsigned int)(uniformoutput[k].size() - 1);
+                    th_m = uniformoutput[k].getValue(jtc);
+                    t = uniformoutput[k].getTime(jtc);
+                }
+                break;
+            }
+        }
+
+        double th_o = std::numeric_limits<double>::quiet_NaN();
+        if (have_obs && d_obs.size() >= 2) th_o = linear_interp_or_nan(d_obs, th_obs, depth);
+        else if (have_obs && d_obs.size() == 1 && std::abs(d_obs[0] - depth) < 1e-6) th_o = th_obs[0];
+
+        f << depth << "," << th_m << ",";
+        if (std::isfinite(th_o)) f << th_o;
+        f << "," << t << "\n";
+    }
+}
+
+// ResultGrid pipeline
+static void export_one_borehole_resultgrid(
+    const TimeSeriesSet<double>& uniformoutput,
+    const model_parameters& mp,
+    System* system,
+    const BoreholeSpec& bh,
+    const BoreholeExportOptions& opt)
+{
+    if (!system) throw std::runtime_error("System is null");
+    if (opt.nz_uw_n <= 0) throw std::runtime_error("nz_uw_n <= 0");
+
+    const double dz = (mp.DepthtoGroundWater - mp.DepthofWell_t) / double(mp.nz_uw);
+
+    const int i_uw = mapRadiusToSoilUwIndex(bh.r_m, mp);
+
+    std::vector<std::string> locs;
+    locs.reserve((size_t)opt.nz_uw_n);
+    for (int j = 0; j < opt.nz_uw_n; ++j) {
+        locs.push_back("Soil-uw (" + std::to_string(i_uw) + "$" + std::to_string(j) + ")");
+    }
+
+    // Build a ResultGrid that contains theta time series for each depth location
+    ResultGrid thetaRG(uniformoutput, locs, opt.model_theta_var);
+
+    if (thetaRG.size() == 0) throw std::runtime_error("thetaRG empty for borehole " + bh.name);
+    if (thetaRG[0].size() == 0) throw std::runtime_error("thetaRG time series empty for borehole " + bh.name);
+
+    unsigned int jt = opt.time_index;
+    if (jt >= thetaRG[0].size()) jt = (unsigned int)(thetaRG[0].size() - 1);
+
+    const double t = thetaRG[0].getTime(jt);
+
+    // Read observed profile if provided
+    std::vector<double> d_obs, th_obs;
+    bool have_obs = false;
+    if (!bh.obs_csv_path.empty()) {
+        have_obs = read_observed_profile_csv(bh.obs_csv_path, d_obs, th_obs, bh.obs_depth_offset_m);
+        if (!have_obs && !opt.allow_missing_obs) {
+            throw std::runtime_error("Observed CSV missing/unreadable: " + bh.obs_csv_path);
+        }
+    }
+
+    std::string outPath = opt.out_dir;
+    if (!outPath.empty() && outPath.back() != '/' && outPath.back() != '\\') outPath += "/";
+    outPath += opt.file_prefix + bh.name + opt.file_suffix;
+
+    std::ofstream f(outPath);
+    if (!f) throw std::runtime_error("Cannot open output: " + outPath);
+
+    f << "depth_m,theta_model,theta_obs,time\n";
+    f << std::setprecision(15);
+
+    for (int j = 0; j < opt.nz_uw_n; ++j)
+    {
+        const double depth = (j + 0.5) * dz + mp.DepthofWell_t;
+
+        double th_m = thetaRG[j].getValue(jt);
+
+        double th_o = std::numeric_limits<double>::quiet_NaN();
+        if (have_obs && d_obs.size() >= 2) th_o = linear_interp_or_nan(d_obs, th_obs, depth);
+        else if (have_obs && d_obs.size() == 1 && std::abs(d_obs[0] - depth) < 1e-6) th_o = th_obs[0];
+
+        f << depth << "," << th_m << ",";
+        if (std::isfinite(th_o)) f << th_o;
+        f << "," << t << "\n";
+    }
+}
 
 void export_borehole_theta_comparison_csvs(
     const TimeSeriesSet<double>& uniformoutput,
@@ -141,81 +284,16 @@ void export_borehole_theta_comparison_csvs(
     const std::vector<BoreholeSpec>& boreholes,
     const BoreholeExportOptions& opt)
 {
-    if (!system) throw std::runtime_error("export_borehole_theta_comparison_csvs: system is null");
-    if (opt.nz_uw_n <= 0) throw std::runtime_error("export_borehole_theta_comparison_csvs: opt.nz_uw_n <= 0");
-    if (opt.out_dir.empty()) throw std::runtime_error("export_borehole_theta_comparison_csvs: opt.out_dir empty");
-
-    // ModelCreator::Create under-well dz (same formula)
-    const double dz = (mp.DepthtoGroundWater - mp.DepthofWell_t) / double(mp.nz_uw);
+    if (!system) throw std::runtime_error("System is null");
+    if (opt.nz_uw_n <= 0) throw std::runtime_error("nz_uw_n <= 0");
+    if (opt.out_dir.empty()) throw std::runtime_error("out_dir empty");
 
     for (const auto& bh : boreholes)
     {
-        // Map radial distance to i index used in Soil-uw naming
-        const int i_uw = mapRadiusToSoilUwIndex(bh.r_m, mp);
-
-        // Build location list Soil-uw (i$j) for j=0..nz_uw_n-1
-        std::vector<std::string> locs;
-        locs.reserve((size_t)opt.nz_uw_n);
-        for (int j = 0; j < opt.nz_uw_n; ++j) {
-            locs.push_back("Soil-uw (" + std::to_string(i_uw) + "$" + std::to_string(j) + ")");
-        }
-
-        ResultGrid thetaRG(uniformoutput, locs, opt.model_theta_var);
-
-        if (thetaRG.size() == 0)
-            throw std::runtime_error("thetaRG empty for borehole " + bh.name +
-                                     " (check naming or variable '" + opt.model_theta_var + "')");
-        if (thetaRG[0].size() == 0)
-            throw std::runtime_error("thetaRG time series empty for borehole " + bh.name);
-
-        unsigned int jt = opt.time_index;
-        if (jt >= thetaRG[0].size()) jt = (unsigned int)(thetaRG[0].size() - 1);
-        const double t = thetaRG[0].getTime(jt);
-
-        // Read observed profile if provided
-        std::vector<double> d_obs, th_obs;
-        bool have_obs = false;
-
-        if (!bh.obs_csv_path.empty()) {
-            have_obs = read_observed_profile_csv(bh.obs_csv_path, d_obs, th_obs, bh.obs_depth_offset_m);
-            if (!have_obs && !opt.allow_missing_obs) {
-                throw std::runtime_error("Observed CSV missing/unreadable: " + bh.obs_csv_path);
-            }
-        }
-
-        // Output CSV path
-        std::string outPath = opt.out_dir;
-        // Ensure separator
-        if (!outPath.empty() && outPath.back() != '/' && outPath.back() != '\\')
-            outPath += "/";
-
-        outPath += opt.file_prefix + bh.name + opt.file_suffix;
-
-        std::ofstream f(outPath);
-        if (!f) throw std::runtime_error("Cannot open output: " + outPath);
-
-        f << "depth_m,theta_model,theta_obs,time\n";
-        f << std::setprecision(15);
-
-        for (int j = 0; j < opt.nz_uw_n; ++j)
-        {
-            // depth used for those blocks:
-            // actual_depth = (j+0.5)*dz + mp.DepthofWell_t
-            const double depth = (j + 0.5) * dz + mp.DepthofWell_t;
-            const double th_m = thetaRG[j].getValue(jt);
-
-            // interpolate obs to model depths (common for comparison)
-            double th_o = std::numeric_limits<double>::quiet_NaN();
-            if (have_obs && d_obs.size() >= 2) {
-                th_o = linear_interp_or_nan(d_obs, th_obs, depth);
-            } else if (have_obs && d_obs.size() == 1) {
-                // single-point obs: only match if very close
-                if (std::abs(d_obs[0] - depth) < 1e-6) th_o = th_obs[0];
-            }
-
-            f << depth << "," << th_m << ",";
-            if (std::isfinite(th_o)) f << th_o;
-            f << "," << t << "\n";
+        if (opt.use_resultgrid) {
+            export_one_borehole_resultgrid(uniformoutput, mp, system, bh, opt);
+        } else {
+            export_one_borehole_legacy(uniformoutput, mp, system, bh, opt);
         }
     }
 }

@@ -25,10 +25,8 @@
 
 using namespace std;
 
-
 int main(int argc, char *argv[])
 {
-
     // ============================================================
     //   SIMULATION CONFIGURATION
     // ============================================================
@@ -78,10 +76,6 @@ int main(int argc, char *argv[])
     cout << "End   = " << simcfg.end_time << "\n";
     cout << "Model_Creator = " << Model_Creator << "\n\n";
 
-    //omp_set_nested(0);          // Disable nested parallelism
-    //omp_set_dynamic(0);         // Optional: disable dynamic thread adjustment
-
-
     // ============================================================
     //   FIELD GENERATOR (soil stochasticity)
     // ============================================================
@@ -100,15 +94,11 @@ int main(int argc, char *argv[])
     std::string csvFile   = std::string(path) + "Soil retention params vs depth.csv";
     std::string outPrefix = std::string(path);
 
-    // Distances to check auto-correlation
-    //std::vector<double> testDistances = {0.0, 0.2, 0.5, 1.0, 2.0, 2.5, 5.0, 7.5, 10.0, 20.0, 50.0, 100.0};
     std::vector<double> testDistances = {};
-    // Parameters to generate
     std::vector<std::string> parameters = {"alpha", "n", "theta_s", "theta_r", "Ksat"};
 
-    // Loop through parameters
     for (const auto &param : parameters) {
-        generateAndAnalyzeField(gen, csvFile, param, 1, testDistances, outPrefix); // enter correlation length
+        generateAndAnalyzeField(gen, csvFile, param, 1, testDistances, outPrefix);
     }
 
     // ============================================================
@@ -148,7 +138,7 @@ int main(int argc, char *argv[])
 
     system->SetSilent(false);
     cout<<"Saving"<<endl;
-    system->SavetoScriptFile(path + "/CreatedModel.ohq"); // Should be modified according to the users directory
+    system->SavetoScriptFile(path + "/CreatedModel.ohq");
 
     system->SavetoJson(path + "Model_test.json",system->addedtemplates, false, true );
 
@@ -195,7 +185,7 @@ int main(int argc, char *argv[])
 
     system->SavetoJson(path + "Model.json",system->addedtemplates, false, true );
     system->SavetoJson(path + "Model_check.json",system->addedtemplates, true, true );
-    cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() +"'"<<endl;
+    cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() <<"'"<<endl;
 
     TimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
     TimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.1);
@@ -227,30 +217,30 @@ int main(int argc, char *argv[])
     //  ERT plots
     //  =========================================================
 
+    bool Use_ResultGrid_ERT = true; // <-- switch added (keeps the other pipeline inside ERT_comparison)
+
     int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw;
 
     std::vector<BoreholeSpec> boreholes = {
-        // name, r_m, obs_csv_path (optional), obs_depth_offset_m (optional)
         {"ERT-2",  0.9381,  system->GetWorkingFolder() + "obs/ERT-2_obs.csv", 0.0},
         {"ERT-4",  4.1679,  system->GetWorkingFolder() + "obs/ERT-4_obs.csv", 0.0},
         {"ERT-5",  4.3974,  system->GetWorkingFolder() + "obs/ERT-5_obs.csv", 0.0},
         {"ERT-3",  6.7979,  system->GetWorkingFolder() + "obs/ERT-3_obs.csv", 0.0},
-
-        {"ERT-1", 10.0,  "", 0.0}, // no obs, still export model profile
+        {"ERT-1", 10.0,  "", 0.0},
     };
 
     BoreholeExportOptions opt;
     opt.nz_uw_n = nz_uw_n;
-    opt.time_index = (unsigned int)1e9;              // clamps to last
+    opt.time_index = (unsigned int)1e9; // clamps to last internally
     opt.out_dir = system->GetWorkingFolder();
     opt.model_theta_var = "theta";
     opt.allow_missing_obs = true;
+    opt.use_resultgrid = Use_ResultGrid_ERT;
 
     export_borehole_theta_comparison_csvs(
         uniformoutput_LR, mp, system,
         boreholes, opt
     );
-
 
     // ============================================================
     //   WELL DEPTHS
@@ -267,13 +257,12 @@ int main(int argc, char *argv[])
     vector<string> age_tracer_locations;
     vector<string> gw_rechage_locations;
     for (unsigned int i = 0; i<=ModCreate.ModelParameters().nr_uw; i++)
-    {   age_tracer_locations.push_back("Soil-uw ("+ aquiutils::numbertostring(i) +"$"+ aquiutils::numbertostring(ModCreate.ModelParameters().nz_uw-1)+")");
+    {
+        age_tracer_locations.push_back("Soil-uw ("+ aquiutils::numbertostring(i) +"$"+ aquiutils::numbertostring(ModCreate.ModelParameters().nz_uw-1)+")");
         gw_rechage_locations.push_back("Soil to Groundwater (" + aquiutils::numbertostring(i) + ")");
-
     }
     ResultGrid age_tracer_res = ResultGrid(uniformoutput_HR,age_tracer_locations, "meanagetracer:concentration");
     ResultGrid flow_to_gw_res = ResultGrid(uniformoutput_HR,gw_rechage_locations, "flow");
-
 
     TimeSeries<double> mean_age;
     TimeSeries<double> groundwater_recharge;
@@ -285,7 +274,6 @@ int main(int argc, char *argv[])
         {
             sumprod += age_tracer_res[i].getValue(j)*flow_to_gw_res[i].getValue(j);
             sumflow += flow_to_gw_res[i].getValue(j);
-
         }
         mean_age.append(age_tracer_res[0].getTime(j),sumprod/sumflow);
         groundwater_recharge.append(age_tracer_res[0].getTime(j),sumflow);
@@ -293,7 +281,6 @@ int main(int argc, char *argv[])
 
     mean_age.writefile(system->GetWorkingFolder()+"mean_age_at_gw.csv");
     groundwater_recharge.writefile(system->GetWorkingFolder()+"gw_recharge.csv");
-
 
     vector<string> well_block_g; well_block_g.push_back("Well_g");
     ResultGrid well_depth_g = ResultGrid(uniformoutput_HR,well_block_g,"depth");
@@ -307,5 +294,4 @@ int main(int argc, char *argv[])
     system->SaveStateVariableToJson("theta",path + "theta.json");
 
     return 0;
-
 }

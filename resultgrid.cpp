@@ -1,24 +1,31 @@
 #include "resultgrid.h"
+
 #include <QString>
 #include <QStringList>
-#include <string>
+
 #include <System.h>
+
+#include <string>
+#include <vector>
+#include <map>
+#include <fstream>
+#include <limits>
+#include <cmath>
+#include <iostream>
 
 using namespace std;
 
-ResultGrid::ResultGrid():TimeSeriesSet<double>()
+ResultGrid::ResultGrid() : TimeSeriesSet<double>()
 {
-
 }
 
-ResultGrid::ResultGrid(const ResultGrid& rhs):TimeSeriesSet<double>(rhs)
+ResultGrid::ResultGrid(const ResultGrid& rhs) : TimeSeriesSet<double>(rhs)
 {
     Positions = rhs.Positions;
 }
 
 ResultGrid::~ResultGrid()
 {
-
 }
 
 ResultGrid& ResultGrid::operator=(const ResultGrid &rhs)
@@ -28,23 +35,27 @@ ResultGrid& ResultGrid::operator=(const ResultGrid &rhs)
     return *this;
 }
 
-ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts, const vector<string> &components, const string &quantity)
+ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts,
+                       const vector<string> &components,
+                       const string &quantity)
 {
-    for (unsigned int i=0; i<components.size(); i++)
+    for (unsigned int i = 0; i < components.size(); i++)
     {
-        for (unsigned int j=0; j<cts.size(); j++)
-            if (cts.getSeriesName(j)==components[i] + "_" + quantity)
-                append(cts[j],components[i]);
+        for (unsigned int j = 0; j < cts.size(); j++)
+            if (cts.getSeriesName(j) == components[i] + "_" + quantity)
+                append(cts[j], components[i]);
     }
 }
 
 TimeSeries<double> ResultGrid::Sum()
 {
     TimeSeries<double> out;
-    out = operator[](0);
-    for (unsigned int i = 1; i<size(); i++)
+    if (size() == 0) return out;
+
+    out = (*this)[0];
+    for (unsigned int i = 1; i < size(); i++)
     {
-        out %= operator[](i);
+        out %= (*this)[i];
     }
     return out;
 }
@@ -54,30 +65,33 @@ TimeSeries<double> ResultGrid::SumIntegrate()
     return Sum().integrate();
 }
 
-ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts, const string &quantity, System *system)
+ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts,
+                       const string &quantity,
+                       System *system)
 {
-    for (int i=0; i<cts.size(); i++)
+    for (int i = 0; i < cts.size(); i++)
     {
         string block_name = QString::fromStdString(cts.getSeriesName(i)).split("_")[0].toStdString();
-        string quan = QString::fromStdString(cts.getSeriesName(i)).split("_")[1].toStdString();
-        if (quan==quantity)
+        string quan       = QString::fromStdString(cts.getSeriesName(i)).split("_")[1].toStdString();
+        if (quan == quantity)
         {
             point pt;
-            if (system->block(block_name))
+            if (system && system->block(block_name))
             {
                 pt.x = system->block(block_name)->GetVal("act_X");
                 pt.y = system->block(block_name)->GetVal("act_Y");
                 Positions.push_back(pt);
-                append(cts[i],block_name);
+                append(cts[i], block_name);
             }
-
         }
     }
 }
 
 ResultGrid::ResultGrid(const string &quantity, System *system)
 {
-    for (int i=0; i<system->BlockCount(); i++)
+    if (!system) return;
+
+    for (int i = 0; i < system->BlockCount(); i++)
     {
         string block_name = system->block(i)->GetName();
 
@@ -87,15 +101,87 @@ ResultGrid::ResultGrid(const string &quantity, System *system)
             if (system->block(block_name))
             {
                 TimeSeries<double> value;
-                value.append(0,system->block(block_name)->GetVal(quantity,Expression::timing::past));
+                value.append(0, system->block(block_name)->GetVal(quantity, Expression::timing::past));
                 pt.x = system->block(block_name)->GetVal("act_X");
                 pt.y = system->block(block_name)->GetVal("act_Y");
                 Positions.push_back(pt);
-                append(value,block_name);
+                append(value, block_name);
             }
-
         }
     }
+}
+
+// -----------------------------------------------------------------------------
+// NEW: Snapshot helpers (ERT)
+// -----------------------------------------------------------------------------
+
+ResultGrid ResultGrid::Snapshot(const double &t) const
+{
+    ResultGrid out;
+    out.Positions = Positions;
+
+    for (unsigned int i = 0; i < size(); ++i)
+    {
+        TimeSeries<double> ts;
+        ts.setName(getSeriesName(i));
+        ts.append(t, (*this)[i].interpol(t));
+        out.append(ts, getSeriesName(i));
+    }
+    return out;
+}
+
+ResultGrid ResultGrid::Snapshot(const std::vector<double> &t) const
+{
+    ResultGrid out;
+    out.Positions = Positions;
+
+    for (unsigned int i = 0; i < size(); ++i)
+    {
+        TimeSeries<double> ts;
+        ts.setName(getSeriesName(i));
+        for (size_t k = 0; k < t.size(); ++k)
+            ts.append(t[k], (*this)[i].interpol(t[k]));
+        out.append(ts, getSeriesName(i));
+    }
+    return out;
+}
+
+bool ResultGrid::WriteSnapshotCSV(const std::string& filename,
+                                 unsigned int time_index,
+                                 const std::string& value_col) const
+{
+    if (size() == 0) return false;
+
+    // clamp time_index to available range (use series 0 as reference)
+    unsigned int nT = static_cast<unsigned int>((*this)[0].size());
+    if (nT == 0) return false;
+    if (time_index >= nT) time_index = nT - 1;
+
+    // note: assumes all series share same time vector length/order (typical in your grids)
+    double t = (*this)[0].getTime(time_index);
+
+    std::ofstream f(filename);
+    if (!f.good()) return false;
+
+    f << "name,x,y," << value_col << ",time\n";
+
+    for (unsigned int i = 0; i < size(); ++i)
+    {
+        double x = (i < Positions.size()) ? Positions[i].x : std::numeric_limits<double>::quiet_NaN();
+        double y = (i < Positions.size()) ? Positions[i].y : std::numeric_limits<double>::quiet_NaN();
+
+        // if series length mismatch, fall back to interpolation
+        double v = std::numeric_limits<double>::quiet_NaN();
+        if ((*this)[i].size() > time_index)
+            v = (*this)[i].getValue(time_index);
+        else
+            v = (*this)[i].interpol(t);
+
+        f << getSeriesName(i) << "," << x << "," << y << "," << v << "," << t << "\n";
+    }
+
+    f.close();
+    return true;
 }
 
 #ifdef use_VTK
