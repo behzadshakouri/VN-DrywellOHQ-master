@@ -6,89 +6,216 @@
 
 // ----------------------------------------------------------------------------
 // ResultGrid
-// - Lightweight spatial wrapper over TimeSeriesSet<double>
-// - Keeps a parallel Positions[] vector aligned with series indices
-// - Supports VTK export when compiled with use_VTK
+//
+// Lightweight spatial wrapper over TimeSeriesSet<double>.
+//
+// Concept:
+//   - Each TimeSeries<double> represents a variable at one spatial location.
+//   - ResultGrid adds spatial awareness by maintaining a parallel
+//     Positions[] vector aligned with the internal TimeSeriesSet indices.
+//
+// Important:
+//   Positions[i] corresponds to the spatial location of
+//   (*this)[i]  (i.e., the i-th TimeSeries).
+//
+// Supports optional VTK export when compiled with use_VTK.
 // ----------------------------------------------------------------------------
 
-// Keep this include as you had it (your project likely routes VTK includes here)
+// Project VTK include (your build system likely redirects this)
 #include <vtk.h>
 
 #include <string>
 #include <vector>
 #include <map>
 
+// ----------------------------------------------------------------------------
+// Simple 2D spatial point
+// ----------------------------------------------------------------------------
 struct point
 {
-    double x = 0.0;
-    double y = 0.0;
+    double x = 0.0;   // X coordinate
+    double y = 0.0;   // Y coordinate
 };
 
 class System;
 
+// ----------------------------------------------------------------------------
+// ResultGrid
+// ----------------------------------------------------------------------------
+// Inherits from TimeSeriesSet<double> and augments it with spatial metadata.
+// Used for:
+//   - Storing distributed model outputs
+//   - Snapshot extraction at specific times
+//   - CSV export (ERT / Borehole comparisons)
+//   - Optional 3D VTK visualization
+// ----------------------------------------------------------------------------
 class ResultGrid : public TimeSeriesSet<double>
 {
 public:
-    ResultGrid();
-    ResultGrid(const ResultGrid&);
-    virtual ~ResultGrid();
-    ResultGrid& operator=(const ResultGrid&);
 
-    ResultGrid(const TimeSeriesSet<double> &cts, const std::string &quantity, System *system);
-    ResultGrid(const std::string &quantity, System *system);
-    ResultGrid(const TimeSeriesSet<double> &cts, const std::vector<std::string> &components, const std::string &quantity);
+    // ------------------------------------------------------------------------
+    // Constructors / Rule of Three
+    // ------------------------------------------------------------------------
 
+    ResultGrid();                              // Default constructor
+    ResultGrid(const ResultGrid&);              // Copy constructor
+    virtual ~ResultGrid();                      // Destructor
+    ResultGrid& operator=(const ResultGrid&);   // Copy assignment
+
+    // Construct from an existing TimeSeriesSet and attach quantity name + system
+    ResultGrid(const TimeSeriesSet<double> &cts,
+               const std::string &quantity,
+               System *system);
+
+    // Construct empty grid with quantity label
+    ResultGrid(const std::string &quantity,
+               System *system);
+
+    // Construct with spatial filtering (x-range)
+    ResultGrid(const TimeSeriesSet<double> &cts,
+               const string &quantity,
+               const double &x_min,
+               const double &x_max,
+               System *system);
+
+    // Construct multi-component quantity (e.g., vector fields)
+    ResultGrid(const TimeSeriesSet<double> &cts,
+               const std::vector<std::string> &components,
+               const std::string &quantity);
+
+    // ------------------------------------------------------------------------
     // Aggregate utilities
+    // ------------------------------------------------------------------------
+
+    // Sum across all spatial series (pointwise in time)
+    // Returns one aggregated TimeSeries
     TimeSeries<double> Sum();
+
+    // Time-integrated sum across all spatial series
+    // Typically used for cumulative mass/energy quantities
     TimeSeries<double> SumIntegrate();
 
-    // Spatial positions (must stay aligned with series indices)
+    // ------------------------------------------------------------------------
+    // Spatial metadata
+    // ------------------------------------------------------------------------
+
+    // Spatial coordinates aligned with TimeSeries indices.
+    // Must always remain synchronized with inherited container.
     std::vector<point> Positions;
 
     // ------------------------------------------------------------------------
-    // NEW: Snapshots and simple CSV export (ERT helpers)
+    // Snapshots & CSV export (ERT / Borehole helpers)
     // ------------------------------------------------------------------------
 
-    // Returns a ResultGrid with 1-point TimeSeries per cell at time t (interpolated).
+    // Snapshot at a single time t (interpolated).
+    //
+    // Returns:
+    //   A new ResultGrid where each spatial cell contains
+    //   a single-point TimeSeries evaluated at time t.
     ResultGrid Snapshot(const double &t) const;
 
-    // Returns a ResultGrid where each series is sampled at given times (interpolated).
+    // Snapshot at multiple times (interpolated).
+    //
+    // Returns:
+    //   A new ResultGrid where each series is sampled at the
+    //   provided time vector.
     ResultGrid Snapshot(const std::vector<double> &t) const;
 
-    // Writes one CSV of a snapshot at a specific index (per-series value at that time index).
-    // CSV columns: name,x,y,<value_col>,time
+    // Write snapshot values to CSV using a given time index.
+    //
+    // CSV columns:
+    //   name, x, y, <value_col>, time
+    //
+    // time_index:
+    //   Index into the internal time vector of each series.
+    //
+    // value_col:
+    //   Column name for exported quantity (default = "value").
     bool WriteSnapshotCSV(const std::string& filename,
                           unsigned int time_index,
                           const std::string& value_col = "value") const;
 
 #ifdef use_VTK
-    // VTK exports
-    void WriteToVTPSnapShot(const std::string &quanname, const std::string &filename, int i, const double &scale) const;
-    void WriteToVTP(const std::string &quanname, const std::string &filename, const double &scale, int starting_counter) const;
 
-    // Geometry builders
-    static vtkSmartPointer<vtkPolyData> MakeCylinder(double radius, double height, double centerZ);
+    // ------------------------------------------------------------------------
+    // VTK EXPORT FUNCTIONS
+    // ------------------------------------------------------------------------
 
-    // NOTE: This is declared in your old header. Keep it if used elsewhere.
-    // If not implemented in .cpp, either implement or remove (but you said no deletions).
-    static vtkSmartPointer<vtkPolyData> MakeHollowCylinder(double zCenter, double height,
-                                                           double outerRadius, double innerRadius,
-                                                           std::map<std::string, float> values);
+    // Write a single snapshot to VTP file.
+    //
+    // i      : time index
+    // scale  : scaling factor applied to geometry (visual scaling)
+    void WriteToVTPSnapShot(const std::string &quanname,
+                            const std::string &filename,
+                            int i,
+                            const double &scale) const;
 
-    static void Make3DVTK(std::vector<std::string> quantity, double dr, System *system, std::string filename);
+    // Write full time sequence to VTP files (animation-ready)
+    //
+    // starting_counter:
+    //   Offset for file numbering
+    void WriteToVTP(const std::string &quanname,
+                    const std::string &filename,
+                    const double &scale,
+                    int starting_counter) const;
 
-    static vtkSmartPointer<vtkPolyData> MakeTube(double radius, double height, double zCenter,
-                                                 std::map<std::string, float> values);
+    // ------------------------------------------------------------------------
+    // Geometry Builders (Static Helpers)
+    // ------------------------------------------------------------------------
 
-    static vtkSmartPointer<vtkPolyData> MakeTube(double outerRadius, double innerRadius, double height, double zCenter,
-                                                 std::map<std::string, float> values);
+    // Create a solid cylinder
+    static vtkSmartPointer<vtkPolyData>
+    MakeCylinder(double radius,
+                 double height,
+                 double centerZ);
 
-    static vtkSmartPointer<vtkPolyData> MakeHollowTubeManual(double outerRadius, double innerRadius, double height, double zCenter,
-                                                             std::map<std::string, float> values);
+    // Create hollow cylinder (outer/inner radii)
+    // values: map of scalar attributes attached to geometry
+    static vtkSmartPointer<vtkPolyData>
+    MakeHollowCylinder(double zCenter,
+                       double height,
+                       double outerRadius,
+                       double innerRadius,
+                       std::map<std::string, float> values);
 
-    static vtkSmartPointer<vtkPolyData> MakeHollowTube(double outerRadius, double innerRadius, double height, double zCenter,
-                                                       std::map<std::string, float> values);
-#endif
+    // Build full 3D VTK dataset from multiple quantities
+    static void Make3DVTK(std::vector<std::string> quantity,
+                          double dr,
+                          System *system,
+                          std::string filename);
+
+    // Solid tube
+    static vtkSmartPointer<vtkPolyData>
+    MakeTube(double radius,
+             double height,
+             double zCenter,
+             std::map<std::string, float> values);
+
+    // Hollow tube (outer & inner radii)
+    static vtkSmartPointer<vtkPolyData>
+    MakeTube(double outerRadius,
+             double innerRadius,
+             double height,
+             double zCenter,
+             std::map<std::string, float> values);
+
+    // Manual hollow tube builder (custom implementation)
+    static vtkSmartPointer<vtkPolyData>
+    MakeHollowTubeManual(double outerRadius,
+                         double innerRadius,
+                         double height,
+                         double zCenter,
+                         std::map<std::string, float> values);
+
+    // Alternative hollow tube builder
+    static vtkSmartPointer<vtkPolyData>
+    MakeHollowTube(double outerRadius,
+                   double innerRadius,
+                   double height,
+                   double zCenter,
+                   std::map<std::string, float> values);
+
+#endif // use_VTK
 };
 
 #endif // RESULTGRID_H

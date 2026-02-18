@@ -87,6 +87,30 @@ ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts,
     }
 }
 
+ResultGrid::ResultGrid(const TimeSeriesSet<double> &cts,
+                       const string &quantity,
+                       const double &x_min,
+                       const double &x_max,
+                       System *system)
+{
+    for (int i = 0; i < cts.size(); i++)
+    {
+        string block_name = QString::fromStdString(cts.getSeriesName(i)).split("_")[0].toStdString();
+        string quan       = QString::fromStdString(cts.getSeriesName(i)).split("_")[1].toStdString();
+        if (quan == quantity && system->block(block_name)->GetVal("act_X")<x_max && system->block(block_name)->GetVal("act_X")>x_min)
+        {
+            point pt;
+            if (system && system->block(block_name) )
+            {
+                pt.x = system->block(block_name)->GetVal("act_X");
+                pt.y = system->block(block_name)->GetVal("act_Y");
+                Positions.push_back(pt);
+                append(cts[i], block_name);
+            }
+        }
+    }
+}
+
 ResultGrid::ResultGrid(const string &quantity, System *system)
 {
     if (!system) return;
