@@ -279,7 +279,8 @@ do for [ib=1:words(BHs)] {
   }
 
   set format x "%.1f"
-  set xtics autofreq
+  set xtics 5
+  set mxtics 5
 
   set output sprintf("ERT_profile_%s_5panels.png", bh)
   set multiplot layout 1,5 rowsfirst
