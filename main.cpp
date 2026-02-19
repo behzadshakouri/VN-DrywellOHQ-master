@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     //   SIMULATION CONFIGURATION
     // ============================================================
 
-    bool Model_Creator = 0; // 1 = build model and solve; 0 = load model and re-use saved outputs
+    bool Model_Creator = 1; // 1 = build model and solve; 0 = load model and re-use saved outputs
 
     // NEW: don't solve when loading
     bool Run_Solve = Model_Creator;
@@ -126,6 +126,9 @@ int main(int argc, char *argv[])
     system->SetWorkingFolder(path);
 
     ModelCreator ModCreate;
+
+    ModCreate.UseERTInitialTheta = true;   // ON
+    // ModCreate.UseERTInitialTheta = false; // OFF
 
     if (Model_Creator)
     {

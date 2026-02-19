@@ -4,9 +4,193 @@
 #include "fieldgenerator.h"
 #include <gsl/gsl_rng.h>
 
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <iostream>
+#include <map>
+#include <vector>
+#include <string>
+
+// -----------------------------
+// Local helpers (no header changes elsewhere)
+// -----------------------------
+static inline bool file_exists_mc(const std::string& p)
+{
+    std::ifstream f(p);
+    return (bool)f;
+}
+
+// Reads FIRST time-slice profile from a tidy CSV like:
+// borehole,time_str,time_excel,depth_m,soil_moisture_pct
+// Returns depth_m (meters) and theta (fraction 0..1)
+static bool read_ert_tidy_first_profile_mc(
+    const std::string& path,
+    std::vector<double>& depth_m,
+    std::vector<double>& theta_frac,
+    double depth_offset_m = 0.0,
+    double time_tol = 1e-9)
+{
+    depth_m.clear();
+    theta_frac.clear();
+
+    std::ifstream f(path);
+    if (!f) return false;
+
+    struct Row { double t; double d; double th; };
+    std::vector<Row> rows;
+    rows.reserve(256);
+
+    std::string line;
+    bool first = true;
+
+    while (std::getline(f, line)) {
+        if (line.empty()) continue;
+
+        if (first) {
+            first = false;
+            bool has_alpha = std::any_of(line.begin(), line.end(), [](unsigned char c){
+                return std::isalpha(c);
+            });
+            if (has_alpha) continue; // skip header
+        }
+
+        // borehole,time_str,time_excel,depth_m,soil_moisture_pct
+        std::stringstream ss(line);
+        std::string c0, c1, c2, c3, c4;
+        if (!std::getline(ss, c0, ',')) continue;
+        if (!std::getline(ss, c1, ',')) continue;
+        if (!std::getline(ss, c2, ',')) continue;
+        if (!std::getline(ss, c3, ',')) continue;
+        if (!std::getline(ss, c4, ',')) continue;
+
+        try {
+            double t_excel = std::stod(c2);
+            double d       = std::stod(c3) + depth_offset_m;
+
+            // tidy has theta in percent (0..100) -> model needs 0..1
+            double sm_pct  = std::stod(c4);
+            double th      = sm_pct;
+            if (th > 1.5) th /= 100.0;   // keep your “check” behavior
+            if (th < 0.0) th = 0.0;
+            if (th > 1.0) th = 1.0;
+
+            rows.push_back({t_excel, d, th});
+        } catch (...) {
+            // skip bad lines
+        }
+    }
+
+    if (rows.empty()) return false;
+
+    // Find earliest time
+    double t0 = rows.front().t;
+    for (const auto& r : rows) t0 = std::min(t0, r.t);
+
+    // Keep only rows at earliest time slice
+    for (const auto& r : rows) {
+        if (std::abs(r.t - t0) <= time_tol) {
+            depth_m.push_back(r.d);
+            theta_frac.push_back(r.th);
+        }
+    }
+
+    if (depth_m.empty()) return false;
+
+    // Sort by depth
+    if (depth_m.size() >= 2) {
+        std::vector<size_t> idx(depth_m.size());
+        for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
+
+        std::sort(idx.begin(), idx.end(), [&](size_t i, size_t j){
+            return depth_m[i] < depth_m[j];
+        });
+
+        std::vector<double> d2, t2;
+        d2.reserve(depth_m.size());
+        t2.reserve(theta_frac.size());
+        for (size_t k = 0; k < idx.size(); ++k) {
+            d2.push_back(depth_m[idx[k]]);
+            t2.push_back(theta_frac[idx[k]]);
+        }
+        depth_m.swap(d2);
+        theta_frac.swap(t2);
+    }
+
+    return true;
+}
+
+static double linear_interp_or_nan_mc(
+    const std::vector<double>& x,
+    const std::vector<double>& y,
+    double xq)
+{
+    const double NaN = std::numeric_limits<double>::quiet_NaN();
+    if (x.size() < 2 || x.size() != y.size()) return NaN;
+    if (xq < x.front() || xq > x.back()) return NaN;
+
+    auto it = std::lower_bound(x.begin(), x.end(), xq);
+    if (it == x.begin()) return y.front();
+    if (it == x.end()) return y.back();
+
+    size_t hi = (size_t)std::distance(x.begin(), it);
+    size_t lo = hi - 1;
+
+    const double x0 = x[lo], x1 = x[hi];
+    const double y0 = y[lo], y1 = y[hi];
+
+    const double dx = x1 - x0;
+    if (std::abs(dx) < 1e-30) return y0;
+
+    const double w = (xq - x0) / dx;
+    return y0 + w * (y1 - y0);
+}
+
+struct ObsBH_MC {
+    std::string name;
+    double r_m = 0.0;
+    std::vector<double> depth;
+    std::vector<double> theta;
+    double depth_offset_m = 0.0;
+};
+
+static double theta_from_ert_mc(
+    const std::vector<ObsBH_MC>& bhs,
+    double r_m,
+    double depth_m,
+    double fallback_theta)
+{
+    // IDW in radius
+    const double eps = 0.05;  // m
+    const double p   = 2.0;
+
+    double num = 0.0, den = 0.0;
+
+    for (const auto& bh : bhs) {
+        double th = std::numeric_limits<double>::quiet_NaN();
+
+        if (bh.depth.size() >= 2) th = linear_interp_or_nan_mc(bh.depth, bh.theta, depth_m);
+        else if (bh.depth.size() == 1 && std::abs(bh.depth[0] - depth_m) < 1e-6) th = bh.theta[0];
+
+        if (!std::isfinite(th)) continue;
+
+        double w = 1.0 / std::pow(std::abs(r_m - bh.r_m) + eps, p);
+        num += w * th;
+        den += w;
+    }
+
+    if (den > 0.0) return num / den;
+    return fallback_theta;
+}
+
+// -----------------------------
+// ModelCreator
+// -----------------------------
 ModelCreator::ModelCreator()
 {
-
 }
 
 bool ModelCreator::Create(model_parameters mp,
@@ -19,17 +203,17 @@ bool ModelCreator::Create(model_parameters mp,
     TimeSeriesSet<double> SoilData;
 
 #ifdef Behzad
-    const string path="/home/behzad/Projects/VN Drywell_Models/";
-    const string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
+    const std::string path="/home/behzad/Projects/VN Drywell_Models/";
+    const std::string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
 #elif PowerEdge
-    const string path="/mnt/3rd900/Projects/VN Drywell_Models/";
-    const string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
+    const std::string path="/mnt/3rd900/Projects/VN Drywell_Models/";
+    const std::string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
 #elif Arash
-    const string path="/home/arash/Projects/VN Drywell_Models/";
-    const string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
+    const std::string path="/home/arash/Projects/VN Drywell_Models/";
+    const std::string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
 #elif SligoCreek
-    const string path="/media/arash/E/Projects/VN Drywell_Models/";
-    const string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
+    const std::string path="/media/arash/E/Projects/VN Drywell_Models/";
+    const std::string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
 #endif
 
     SoilData.read(path+"Soil retention params vs depth.csv");
@@ -48,6 +232,45 @@ bool ModelCreator::Create(model_parameters mp,
     system->SetNumThreads(16);
 
     // ==================================================================
+    //   OPTIONAL: Assign initial theta from ERT tidy observed profiles
+    //   Uses FIRST time-slice in each tidy file and maps pct->fraction
+    // ==================================================================
+    std::vector<ObsBH_MC> initBHs;
+
+    if (UseERTInitialTheta)
+    {
+        auto addBH = [&](const std::string& name, double r_m, const std::string& csv, double depth_offset_m)
+        {
+            ObsBH_MC bh;
+            bh.name = name;
+            bh.r_m  = r_m;
+            bh.depth_offset_m = depth_offset_m;
+
+            std::vector<double> d, t;
+            if (read_ert_tidy_first_profile_mc(csv, d, t, depth_offset_m))
+            {
+                bh.depth = std::move(d);
+                bh.theta = std::move(t);
+                initBHs.push_back(std::move(bh));
+                std::cout << "ERT-IC: loaded FIRST time-slice " << name
+                          << " (" << csv << ") n=" << initBHs.back().depth.size() << "\n";
+            }
+            else
+            {
+                std::cout << "ERT-IC: WARNING could not read " << csv << " for " << name << "\n";
+            }
+        };
+
+        // Use same borehole radii you are using in main
+        // main typically sets working folder to `path`, so this becomes: <path>/obs/ERT-*_tidy.csv
+        addBH("ERT-3", 6.7979, system->GetWorkingFolder() + "ERT-3_tidy.csv", 0.0);
+        addBH("ERT-5", 4.3974, system->GetWorkingFolder() + "ERT-5_tidy.csv", 0.0);
+
+        if (initBHs.size() == 0)
+            std::cout << "ERT-IC: No valid borehole tidy loaded -> will fallback to mp.initial_theta\n";
+    }
+
+    // ==================================================================
     //   RAINFALL DATABASE
     // ==================================================================
 
@@ -57,18 +280,12 @@ bool ModelCreator::Create(model_parameters mp,
         double end;
     };
 
-    // Updated table including new case 5
     std::map<int, RainDataset> rainDB = {
         {1, { "LA_Precipitaion (1 yr).csv",                     41973, 42342 }},
         {2, { "LA_Precipitaion (1 yr new).csv",                 45230, 45600 }},
         {3, { "LA_Precipitaion (5 yr new).csv",                 44864, 45595 }},
-
-        // Pacoima variants
         {4, { "Pacoima Spreading Grounds_rainfall data.csv",     43466, 45292 }},
-
-        // Synthetic rain
-        {5, { "Synthetic_rain_flow.csv",     45763, 45764 }},
-
+        {5, { "Synthetic_rain_flow.csv",                        45763, 45764 }},
     };
 
     if (!rainDB.count(raincfg.rain_data)) {
@@ -78,7 +295,6 @@ bool ModelCreator::Create(model_parameters mp,
 
     auto RC = rainDB[raincfg.rain_data];
 
-    // Simulation window from main(), else fallback
     double Simulation_start_time =
         (simcfg.start_time > 0 ? simcfg.start_time : RC.start);
 
@@ -94,17 +310,17 @@ bool ModelCreator::Create(model_parameters mp,
     double dr;
     double dz;
 
-    int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw; // Makes nz_uw = 1 for Synthetic rain (nz_uw_n)
+    int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw;
 
     // Soil Blocks around gravel part
-
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
     dz = mp.DepthofWell_g/mp.nz_g;
 
-    cout<<"Soil Blocks around gravel part"<<endl;
+    std::cout<<"Soil Blocks around gravel part"<<std::endl;
     for (int j=0; j<mp.nz_g; j++)
-    {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
-        //calculate Ksat, n, etc.
+    {
+        double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
+
         double Ksat = 0;
         double alpha = 0;
         double n = 0;
@@ -112,7 +328,8 @@ bool ModelCreator::Create(model_parameters mp,
         double theta_r = 0;
 
         if (!fieldgen)
-        {   Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
+        {
+            Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
             alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
             n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
             theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
@@ -135,7 +352,6 @@ bool ModelCreator::Create(model_parameters mp,
             double r2 = mp.rw_g + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
 
-
             B.SetName(("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
             B.SetType("Soil");
 
@@ -147,7 +363,6 @@ bool ModelCreator::Create(model_parameters mp,
                 B.SetVal("theta_sat",theta_s);
                 B.SetVal("theta_res",theta_r);
             }
-
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
@@ -157,19 +372,31 @@ bool ModelCreator::Create(model_parameters mp,
                 B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             }
 
-            //B.SetVal("K_sat_original",mp.K_sat);
-            //B.SetVal("K_sat_scale_factor",mp.K_o);
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_c);
             B.SetVal("depth",dz);
-            B.SetVal("theta",mp.initial_theta);
-            B.SetVal("L",mp.L);
+
+            // Geometry
+            double actX = (i+0.5)*dr + mp.rw_g;  // radius (m)
+            double actY = -actual_depth;         // depth stored negative
+
             B.SetVal("x",-(i*dr+mp.rw_g)*2000);
             B.SetVal("y",j*dz*3000+mp.DepthofWell_c*2800);
-            B.SetVal("act_X",(i+0.5)*dr+mp.rw_g);
-            B.SetVal("act_Y",-actual_depth);
+            B.SetVal("act_X",actX);
+            B.SetVal("act_Y",actY);
+
+            // INITIAL THETA (switchable)
+            double theta_init = mp.initial_theta;
+            if (UseERTInitialTheta && initBHs.size() > 0)
+            {
+                theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
+            }
+            B.SetVal("theta",theta_init);
+
+            B.SetVal("L",mp.L);
+
             system->AddBlock(B,false);
         }
     }
@@ -178,10 +405,11 @@ bool ModelCreator::Create(model_parameters mp,
     dr = (mp.RadiousOfInfluence-mp.rw_uw)/mp.nr_uw;
     dz = (mp.DepthtoGroundWater-mp.DepthofWell_t)/mp.nz_uw;
 
-    cout<<"Soil Blocks under well"<<endl;
+    std::cout<<"Soil Blocks under well"<<std::endl;
     for (int j = 0; j < nz_uw_n; j++)
-        {   double actual_depth = (j+0.5)*dz+mp.DepthofWell_c;
-        //calculate Ksat, n, etc.
+    {
+        double actual_depth_outer = (j+0.5)*dz+mp.DepthofWell_c;
+
         double Ksat = 0;
         double alpha = 0;
         double n = 0;
@@ -189,19 +417,20 @@ bool ModelCreator::Create(model_parameters mp,
         double theta_r = 0;
 
         if (!fieldgen)
-        {   Ksat = SoilData["Ksat"].interpol(actual_depth,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
-            alpha = SoilData["alpha"].interpol(actual_depth,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
-            n = SoilData["n"].interpol(actual_depth,SoilDataCDF["n"],mp.correlation_length_scale,false);
-            theta_s = SoilData["theta_s"].interpol(actual_depth,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
-            theta_r = SoilData["theta_r"].interpol(actual_depth,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
+        {
+            Ksat = SoilData["Ksat"].interpol(actual_depth_outer,SoilDataCDF["Ksat"],mp.correlation_length_scale,false);
+            alpha = SoilData["alpha"].interpol(actual_depth_outer,SoilDataCDF["alpha"],mp.correlation_length_scale,false);
+            n = SoilData["n"].interpol(actual_depth_outer,SoilDataCDF["n"],mp.correlation_length_scale,false);
+            theta_s = SoilData["theta_s"].interpol(actual_depth_outer,SoilDataCDF["theta_s"],mp.correlation_length_scale,false);
+            theta_r = SoilData["theta_r"].interpol(actual_depth_outer,SoilDataCDF["theta_r"],mp.correlation_length_scale,false);
         }
         else
         {
-            Ksat = fieldgen->interpolate("Ksat", actual_depth);
-            alpha = fieldgen->interpolate("alpha", actual_depth);
-            n = fieldgen->interpolate("n", actual_depth);
-            theta_s = fieldgen->interpolate("theta_s", actual_depth);
-            theta_r = fieldgen->interpolate("theta_r", actual_depth);
+            Ksat = fieldgen->interpolate("Ksat", actual_depth_outer);
+            alpha = fieldgen->interpolate("alpha", actual_depth_outer);
+            n = fieldgen->interpolate("n", actual_depth_outer);
+            theta_s = fieldgen->interpolate("theta_s", actual_depth_outer);
+            theta_r = fieldgen->interpolate("theta_r", actual_depth_outer);
         }
 
         for (int i=0; i<mp.nr_uw; i++)
@@ -212,6 +441,7 @@ bool ModelCreator::Create(model_parameters mp,
             double r1 = mp.rw_uw + i*dr;
             double r2 = mp.rw_uw + (i+1)*dr;
             double area = pi*(r2*r2-r1*r1);
+
             double actual_depth = (j+0.5)*dz+mp.DepthofWell_t;
 
             B.SetName(("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString());
@@ -225,7 +455,6 @@ bool ModelCreator::Create(model_parameters mp,
                 B.SetVal("theta_sat",theta_s);
                 B.SetVal("theta_res",theta_r);
             }
-
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
@@ -240,17 +469,29 @@ bool ModelCreator::Create(model_parameters mp,
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_t);
             B.SetVal("depth",dz);
-            B.SetVal("theta",mp.initial_theta);
-            B.SetVal("L",mp.L);
+
+            // Geometry
+            double actX = (i+0.5)*dr + mp.rw_uw;
+            double actY = -actual_depth;
+
             B.SetVal("x",-(i*dr+mp.rw_uw)*2000);
             B.SetVal("y",37000+(j*dz)*2000);
-            B.SetVal("act_X",(i+0.5)*dr+mp.rw_uw);
-            B.SetVal("act_Y",-actual_depth);
+            B.SetVal("act_X",actX);
+            B.SetVal("act_Y",actY);
+
+            // INITIAL THETA (switchable)
+            double theta_init = mp.initial_theta;
+            if (UseERTInitialTheta && initBHs.size() > 0)
+                theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
+            B.SetVal("theta",theta_init);
+
+            B.SetVal("L",mp.L);
+
             system->AddBlock(B,false);
         }
 
         // Soil Blocks directly under well
-        cout<<"Soil Blocks directly under well"<<endl;
+        std::cout<<"Soil Blocks directly under well"<<std::endl;
 
         if (j*dz<mp.DepthtoGroundWater)
         {
@@ -271,7 +512,6 @@ bool ModelCreator::Create(model_parameters mp,
                 B.SetVal("theta_sat",theta_s);
                 B.SetVal("theta_res",theta_r);
             }
-
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
@@ -286,18 +526,35 @@ bool ModelCreator::Create(model_parameters mp,
             B.SetVal("_height",dr*500);
             B.SetVal("bottom_elevation",-(j+1)*dz-mp.DepthofWell_t);
             B.SetVal("depth",dz);
-            B.SetVal("theta",mp.initial_theta);
-            B.SetVal("L",mp.L);
+
+            // Geometry
+            double actX = 0.0;
+            double actY = -actual_depth;
+
             B.SetVal("x",-mp.rw_uw*1000+2000);
             B.SetVal("y",37000+(j*dz)*2000);
-            B.SetVal("act_X",0);
-            B.SetVal("act_Y",-actual_depth);
+            B.SetVal("act_X",actX);
+            B.SetVal("act_Y",actY);
+
+            // INITIAL THETA (switchable)
+            double theta_init = mp.initial_theta;
+            if (UseERTInitialTheta && initBHs.size() > 0)
+                theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
+            B.SetVal("theta",theta_init);
+
+            B.SetVal("L",mp.L);
+
             system->AddBlock(B,false);
         }
     }
 
+    // -----------------------------
+    // The remainder of your file (links, wells, rain, solver setup)
+    // is unchanged from what you pasted.
+    // -----------------------------
+
     // Horizontal links for soils of gravel part
-    cout<<"Horizontal links for soils of gravel part"<<endl;
+    std::cout<<"Horizontal links for soils of gravel part"<<std::endl;
     for (int i=0; i<mp.nr_g; i++)
         for (int j=0; j<mp.nz_g; j++)
         {
@@ -314,7 +571,7 @@ bool ModelCreator::Create(model_parameters mp,
         }
 
     // Vertical links for soils of gravel part
-    cout<<"Vertical links for soils of gravel part"<<endl;
+    std::cout<<"Vertical links for soils of gravel part"<<std::endl;
     for (int i=0; i<mp.nr_g; i++)
         for (int j=0; j<mp.nz_g-1; j++)
         {
@@ -328,7 +585,7 @@ bool ModelCreator::Create(model_parameters mp,
         }
 
     // Horizontal links for soils under well
-    cout<<"Horizontal links for soils under well"<<endl;
+    std::cout<<"Horizontal links for soils under well"<<std::endl;
     for (int i=0; i<mp.nr_uw; i++)
         for (int j = 0; j < nz_uw_n; j++)
             if (j*dz<mp.DepthtoGroundWater)
@@ -346,7 +603,7 @@ bool ModelCreator::Create(model_parameters mp,
             }
 
     // Vertical links for soils under well (first one)
-    cout<<"Vertical links for soils under well (first one)"<<endl;
+    std::cout<<"Vertical links for soils under well (first one)"<<std::endl;
     for (int i=0; i<mp.nr_uw; i++)
     {
         Link L;
@@ -361,7 +618,7 @@ bool ModelCreator::Create(model_parameters mp,
     }
 
     // Vertical links for soils under well
-    cout<<"Vertical links for soils under well"<<endl;
+    std::cout<<"Vertical links for soils under well"<<std::endl;
     for (int i=0; i<mp.nr_uw+1; i++)
        for (int j = 0; j < nz_uw_n; j++)
             if (j*dz<mp.DepthtoGroundWater)
@@ -376,7 +633,7 @@ bool ModelCreator::Create(model_parameters mp,
     }
 
     // Well_c
-    cout<<"Well_c"<<endl;
+    std::cout<<"Well_c"<<std::endl;
     Block well_c;
     well_c.SetQuantities(system->GetMetaModel(), "Well_aggregate");
     well_c.SetName("Well_c");
@@ -394,7 +651,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddBlock(well_c,false);
 
     // Well_g
-    cout<<"Well_g"<<endl;
+    std::cout<<"Well_g"<<std::endl;
     Block well_g;
     well_g.SetQuantities(system->GetMetaModel(), "Well_aggregate");
     well_g.SetName("Well_g");
@@ -410,7 +667,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddBlock(well_g,false);
 
     // Well to well overflow
-    cout<<"Well to well overflow"<<endl;
+    std::cout<<"Well to well overflow"<<std::endl;
     Link well_to_well_overflow;
     well_to_well_overflow.SetQuantities(system->GetMetaModel(), "Sewer_pipe");
     well_to_well_overflow.SetName("Well_to_well_overflow");
@@ -423,7 +680,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddLink(well_to_well_overflow,"Well_c","Well_g",false);
 
     // Junction
-    cout<<"Junction"<<endl;
+    std::cout<<"Junction"<<std::endl;
     Block junction;
     junction.SetQuantities(system->GetMetaModel(), "junction_elastic");
     junction.SetName("Junction_elastic");
@@ -436,7 +693,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddBlock(junction,false);
 
     // Well to junction
-    cout<<"Well to junction"<<endl;
+    std::cout<<"Well to junction"<<std::endl;
     Link well_to_junction;
     well_to_junction.SetQuantities(system->GetMetaModel(), "darcy_connector");
     well_to_junction.SetName("Well_to_junction");
@@ -444,7 +701,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddLink(well_to_junction,"Well_c","Junction_elastic",false);
 
     // Junction to well
-    cout<<"Junction to well"<<endl;
+    std::cout<<"Junction to well"<<std::endl;
     Link junction_to_well;
     junction_to_well.SetQuantities(system->GetMetaModel(), "darcy_connector");
     junction_to_well.SetName("Junction_to_well");
@@ -452,7 +709,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddLink(junction_to_well,"Junction_elastic","Well_g",false);
 
     // Well to gravel links
-    cout<<"Horizontal links for well to gravel part soils"<<endl;
+    std::cout<<"Horizontal links for well to gravel part soils"<<std::endl;
 
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
     dz = mp.DepthofWell_g/mp.nz_g;
@@ -473,7 +730,7 @@ bool ModelCreator::Create(model_parameters mp,
         }
 
     // Vertical links for well to under well soils
-    cout<<"Vertical links for well to under well soils"<<endl;
+    std::cout<<"Vertical links for well to under well soils"<<std::endl;
         Link L1;
         L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");
 
@@ -485,7 +742,7 @@ bool ModelCreator::Create(model_parameters mp,
         system->AddLink(L1, "Well_g", ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(), false);
 
     // Graoundwater fixed head
-    cout<<"Groundwater"<<endl;
+    std::cout<<"Groundwater"<<std::endl;
     Block gw;
     gw.SetQuantities(system->GetMetaModel(), "fixed_head");
     gw.SetName("Ground Water");
@@ -499,7 +756,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddBlock(gw,false);
 
     // Groundwater links
-    cout<<"Soil to Groundwater"<<endl;
+    std::cout<<"Soil to Groundwater"<<std::endl;
     for (int i=0; i<mp.nr_uw+1; i++)
     {
         Link L2;
@@ -513,7 +770,7 @@ bool ModelCreator::Create(model_parameters mp,
     if (raincfg.rain_data != 5)
     {
     // Rain
-    cout<<"Rain"<<endl;
+    std::cout<<"Rain"<<std::endl;
     Source rain;
     rain.SetQuantities(system->GetMetaModel(), "Precipitation");
     rain.SetType("Precipitation");
@@ -528,7 +785,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddSource(rain, false);
 
     // Catchment
-    cout<<"Catchment"<<endl;
+    std::cout<<"Catchment"<<std::endl;
     Block catchment;
     catchment.SetQuantities(system->GetMetaModel(), "Catchment");
     catchment.SetName("Catchment");
@@ -544,10 +801,10 @@ bool ModelCreator::Create(model_parameters mp,
     catchment.SetVal("y",0);
     system->AddBlock(catchment,false);
     system->block("Catchment")->SetProperty("Precipitation","Rain");
-    cout<<"Catchment to well link"<<endl;
+    std::cout<<"Catchment to well link"<<std::endl;
 
     // Catchment to well
-    cout<<"Catchment to well"<<endl;
+    std::cout<<"Catchment to well"<<std::endl;
     Link L3;
     L3.SetQuantities(system->GetMetaModel(), "Surface water to well");
     L3.SetName("Catchment to well");
@@ -558,7 +815,7 @@ bool ModelCreator::Create(model_parameters mp,
     }
 
     // Tracer (mean age)
-    cout<<"Tracer"<<endl;
+    std::cout<<"Tracer"<<std::endl;
     Constituent mean_age_tracer;
     mean_age_tracer.SetQuantities(system->GetMetaModel(), "Constituent");
     mean_age_tracer.SetName("meanagetracer");
@@ -566,7 +823,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddConstituent(mean_age_tracer,false);
 
     // Reaction (aging)
-    cout<<"Reaction"<<endl;
+    std::cout<<"Reaction"<<std::endl;
     Reaction aging;
     aging.SetQuantities(system->GetMetaModel(), "Reaction");
     aging.SetName("aging");
@@ -585,9 +842,9 @@ bool ModelCreator::Create(model_parameters mp,
 
     system->SetSystemSettings();
 
-    cout<<"Populate functions"<<endl;
+    std::cout<<"Populate functions"<<std::endl;
     system->PopulateOperatorsFunctions();
-    cout<<"Variable parents"<<endl;
+    std::cout<<"Variable parents"<<std::endl;
     system->SetVariableParents();
     return true;
 }

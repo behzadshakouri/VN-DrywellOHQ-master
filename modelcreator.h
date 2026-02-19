@@ -111,12 +111,18 @@ public:
 
     ModelCreator();
 
-    // Updated signature: NOW accepts RainConfig + SimulationConfig
     bool Create(model_parameters mp,
                 System* system,
                 FieldGenerator* fieldgen,
                 const RainConfig& raincfg,
                 const SimulationConfig& simcfg);
+
+    // ------------------------------------------------------------
+    // NEW: Optional initial-theta assignment from ERT tidy CSVs
+    // (ERT-3_tidy.csv, ERT-5_tidy.csv). Uses the FIRST time slice
+    // in each tidy file and maps theta [%] -> theta [0..1].
+    // ------------------------------------------------------------
+    bool UseERTInitialTheta = false;
 
     _realization_mode Mode = _realization_mode::stochastic;
 
