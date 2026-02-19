@@ -47,10 +47,12 @@ static bool read_ert_tidy_first_profile_mc(
     std::string line;
     bool first = true;
 
-    while (std::getline(f, line)) {
+    while (std::getline(f, line))
+    {
         if (line.empty()) continue;
 
-        if (first) {
+        if (first)
+        {
             first = false;
             bool has_alpha = std::any_of(line.begin(), line.end(), [](unsigned char c){
                 return std::isalpha(c);
@@ -74,7 +76,11 @@ static bool read_ert_tidy_first_profile_mc(
             // tidy has theta in percent (0..100) -> model needs 0..1
             double sm_pct  = std::stod(c4);
             double th      = sm_pct;
-            if (th > 1.5) th /= 100.0;   // keep your “check” behavior
+
+            // "check" behavior: if values look like percent, scale; otherwise keep
+            if (th > 1.5) th /= 100.0;
+
+            // hard clamp to [0,1]
             if (th < 0.0) th = 0.0;
             if (th > 1.0) th = 1.0;
 
@@ -91,8 +97,10 @@ static bool read_ert_tidy_first_profile_mc(
     for (const auto& r : rows) t0 = std::min(t0, r.t);
 
     // Keep only rows at earliest time slice
-    for (const auto& r : rows) {
-        if (std::abs(r.t - t0) <= time_tol) {
+    for (const auto& r : rows)
+    {
+        if (std::abs(r.t - t0) <= time_tol)
+        {
             depth_m.push_back(r.d);
             theta_frac.push_back(r.th);
         }
@@ -101,7 +109,8 @@ static bool read_ert_tidy_first_profile_mc(
     if (depth_m.empty()) return false;
 
     // Sort by depth
-    if (depth_m.size() >= 2) {
+    if (depth_m.size() >= 2)
+    {
         std::vector<size_t> idx(depth_m.size());
         for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
 
@@ -112,10 +121,12 @@ static bool read_ert_tidy_first_profile_mc(
         std::vector<double> d2, t2;
         d2.reserve(depth_m.size());
         t2.reserve(theta_frac.size());
+
         for (size_t k = 0; k < idx.size(); ++k) {
             d2.push_back(depth_m[idx[k]]);
             t2.push_back(theta_frac[idx[k]]);
         }
+
         depth_m.swap(d2);
         theta_frac.swap(t2);
     }
@@ -169,7 +180,8 @@ static double theta_from_ert_mc(
 
     double num = 0.0, den = 0.0;
 
-    for (const auto& bh : bhs) {
+    for (const auto& bh : bhs)
+    {
         double th = std::numeric_limits<double>::quiet_NaN();
 
         if (bh.depth.size() >= 2) th = linear_interp_or_nan_mc(bh.depth, bh.theta, depth_m);
@@ -261,8 +273,8 @@ bool ModelCreator::Create(model_parameters mp,
             }
         };
 
-        // Use same borehole radii you are using in main
-        // main typically sets working folder to `path`, so this becomes: <path>/obs/ERT-*_tidy.csv
+        // NOTE: main typically sets working folder to `path` (VN Drywell_Models)
+        // You said files are: ERT-3_tidy.csv and ERT-5_tidy.csv
         addBH("ERT-3", 6.7979, system->GetWorkingFolder() + "ERT-3_tidy.csv", 0.0);
         addBH("ERT-5", 4.3974, system->GetWorkingFolder() + "ERT-5_tidy.csv", 0.0);
 
@@ -389,10 +401,8 @@ bool ModelCreator::Create(model_parameters mp,
 
             // INITIAL THETA (switchable)
             double theta_init = mp.initial_theta;
-            if (UseERTInitialTheta && initBHs.size() > 0)
-            {
+            if (UseERTInitialTheta && !initBHs.empty())
                 theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
-            }
             B.SetVal("theta",theta_init);
 
             B.SetVal("L",mp.L);
@@ -481,7 +491,7 @@ bool ModelCreator::Create(model_parameters mp,
 
             // INITIAL THETA (switchable)
             double theta_init = mp.initial_theta;
-            if (UseERTInitialTheta && initBHs.size() > 0)
+            if (UseERTInitialTheta && !initBHs.empty())
                 theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
             B.SetVal("theta",theta_init);
 
@@ -538,7 +548,7 @@ bool ModelCreator::Create(model_parameters mp,
 
             // INITIAL THETA (switchable)
             double theta_init = mp.initial_theta;
-            if (UseERTInitialTheta && initBHs.size() > 0)
+            if (UseERTInitialTheta && !initBHs.empty())
                 theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
             B.SetVal("theta",theta_init);
 
@@ -548,10 +558,7 @@ bool ModelCreator::Create(model_parameters mp,
         }
     }
 
-    // -----------------------------
-    // The remainder of your file (links, wells, rain, solver setup)
-    // is unchanged from what you pasted.
-    // -----------------------------
+    // --- remainder unchanged (links, wells, rain, solver setup) ---
 
     // Horizontal links for soils of gravel part
     std::cout<<"Horizontal links for soils of gravel part"<<std::endl;
