@@ -9,6 +9,11 @@
 #include "FieldGenHelper.h"
 #include "ERT_comparison.h"
 
+#include <chrono>
+#include <limits>
+#include <algorithm>
+#include <iostream>
+
 #ifdef Behzad
     const string path="/home/behzad/Projects/VN Drywell_Models/";
     const string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
@@ -25,13 +30,22 @@
 
 using namespace std;
 
+static inline bool file_exists_cpp(const std::string& p)
+{
+    std::ifstream f(p);
+    return (bool)f;
+}
+
 int main(int argc, char *argv[])
 {
     // ============================================================
     //   SIMULATION CONFIGURATION
     // ============================================================
 
-    bool Model_Creator = 1; // 1 for using modelcreator, and 0 for loading saved Json file; Set it for every simulation
+    bool Model_Creator = 0; // 1 = build model and solve; 0 = load model and re-use saved outputs
+
+    // NEW: don't solve when loading
+    bool Run_Solve = Model_Creator;
 
     SimulationConfig simcfg;
     RainConfig raincfg;
@@ -42,21 +56,21 @@ int main(int argc, char *argv[])
 
     // (2) Simulation batch index
     int Simulation_num = 1;          // Set for each run
-    double Simulation_days = 2;    // Each run window
+    double Simulation_days = 0.05;    // Each run window
 
     // (3) Base time
     double Base_start;
     if (raincfg.rain_data < 4)
-    Base_start = 43750;      // LA base
+        Base_start = 43750;      // LA base
     else if (raincfg.rain_data == 4)
-    Base_start = 43466;       // Pacoima base
+        Base_start = 43466;       // Pacoima base
     else if (raincfg.rain_data == 5)
-    Base_start = 45763;       // Synthetic base
+        Base_start = 45763;       // Synthetic base
 
     double Base_end   = Base_start + Simulation_days;
 
     simcfg.Base_start = Base_start;
-    simcfg.Base_end = Base_end;
+    simcfg.Base_end   = Base_end;
 
     if (Model_Creator) {
         simcfg.start_time = simcfg.Base_start;
@@ -74,7 +88,8 @@ int main(int argc, char *argv[])
     cout << "=== Simulation Window ===\n";
     cout << "Start = " << simcfg.start_time << "\n";
     cout << "End   = " << simcfg.end_time << "\n";
-    cout << "Model_Creator = " << Model_Creator << "\n\n";
+    cout << "Model_Creator = " << Model_Creator << "\n";
+    cout << "Run_Solve     = " << Run_Solve << "\n\n";
 
     // ============================================================
     //   FIELD GENERATOR (soil stochasticity)
@@ -117,8 +132,7 @@ int main(int argc, char *argv[])
         cout << "Creating model...\n";
         ModCreate.Create(mp, system, &gen, raincfg, simcfg);
 
-        // >>> NEW (needed): pull the actual model parameters back out
-        // because Create(model_parameters mp, ...) takes mp by value.
+        // IMPORTANT: Create(mp,...) takes mp by value, so pull it back.
         mp = ModCreate.ModelParameters();
 
         cout << "Model build complete.\n\n";
@@ -134,6 +148,10 @@ int main(int argc, char *argv[])
         system->SetSettingsParameter("simulation_end_time", simcfg.end_time);
         system->SetSystemSettings();
 
+        // Make sure mp is valid even in load mode
+        mp = ModCreate.ModelParameters(); // if ModelCreator holds defaults
+        // If you prefer the mp from JSON, you should store mp in JSON and read it; for now keep as-is.
+
         cout << "Model loaded.\n\n";
     }
 
@@ -144,10 +162,9 @@ int main(int argc, char *argv[])
     system->SetSilent(false);
     cout<<"Saving"<<endl;
     system->SavetoScriptFile(path + "/CreatedModel.ohq");
-
     system->SavetoJson(path + "Model_test.json",system->addedtemplates, false, true );
 
-    cout<<"Solving ..."<<endl;
+    cout<<"CalcAllInitialValues ..."<<endl;
     system->CalcAllInitialValues();
 
     // ============================================================
@@ -174,32 +191,82 @@ int main(int argc, char *argv[])
     ResultGrid::Make3DVTK(quantities,dr,system,path + "3D_model.vtm");
 
     // ============================================================
-    //   SOLVE
+    //   SOLVE (optional)
     // ============================================================
 
-    auto start = std::chrono::high_resolution_clock::now();
-    system->Solve(false, false);
-
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end - start;
-    std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
-
-    // ============================================================
-    //   SAVE MODEL + OUTPUTS
-    // ============================================================
-
-    system->SavetoJson(path + "Model.json",system->addedtemplates, false, true );
-    system->SavetoJson(path + "Model_check.json",system->addedtemplates, true, true );
-    cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() <<"'"<<endl;
-
-    TimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
-    TimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.1);
-    uniformoutput_LR.write(system->GetWorkingFolder() + "Output_LR.txt");
-    uniformoutput_HR.write(system->GetWorkingFolder() + system->OutputFileName());
-    cout<<"Getting results into grid"<<endl;
+    if (Run_Solve)
+    {
+        auto start = std::chrono::high_resolution_clock::now();
+        system->Solve(false, false);
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
+    }
+    else
+    {
+        std::cout << "Run_Solve=0 -> skipping Solve(). Will read saved outputs from disk.\n";
+    }
 
     // ============================================================
-    //   RESULT GRIDS (Moisture + Age)
+    //   SAVE MODEL + OUTPUTS (only if solved)
+    // ============================================================
+
+    if (Run_Solve)
+    {
+        system->SavetoJson(path + "Model.json",system->addedtemplates, false, true );
+        system->SavetoJson(path + "Model_check.json",system->addedtemplates, true, true );
+        cout<<"Writing outputs in '"<< system->GetWorkingFolder() + system->OutputFileName() <<"'"<<endl;
+
+        TimeSeriesSet<double> uniformoutput_LR = system->GetOutputs().make_uniform(1);
+        TimeSeriesSet<double> uniformoutput_HR = system->GetOutputs().make_uniform(0.1);
+        uniformoutput_LR.write(system->GetWorkingFolder() + "Output_LR.txt");
+        uniformoutput_HR.write(system->GetWorkingFolder() + system->OutputFileName());
+    }
+
+    // ============================================================
+    //   LOAD OUTPUTS (if not solved) OR GET OUTPUTS (if solved)
+    // ============================================================
+
+    TimeSeriesSet<double> rawOutputs;
+
+    if (Run_Solve)
+    {
+        rawOutputs = system->GetOutputs();
+    }
+    else
+    {
+        // Prefer the high-res file you already write (OutputFileName)
+        std::string outFile = system->GetWorkingFolder() + system->OutputFileName();
+        std::string outLR   = system->GetWorkingFolder() + "Output_LR.txt";
+
+        if (file_exists_cpp(outFile))
+        {
+            std::cout << "Reading saved outputs: " << outFile << "\n";
+            rawOutputs.read(outFile);
+        }
+        else if (file_exists_cpp(outLR))
+        {
+            std::cout << "Reading saved outputs: " << outLR << "\n";
+            rawOutputs.read(outLR);
+        }
+        else
+        {
+            std::cerr << "ERROR: No saved output file found.\n";
+            std::cerr << "Looked for:\n  " << outFile << "\n  " << outLR << "\n";
+            return 1;
+        }
+    }
+
+    // Build uniform outputs (keep your original LR/HR, plus ERT minutes)
+    TimeSeriesSet<double> uniformoutput_LR = rawOutputs.make_uniform(1);
+    TimeSeriesSet<double> uniformoutput_HR = rawOutputs.make_uniform(0.1);
+
+    // NEW: ERT-specific uniform set (1-minute in Excel days)
+    double dt_ert_days = 1.0 / 1440.0; // 1 minute
+    TimeSeriesSet<double> uniformoutput_ERT = rawOutputs.make_uniform(dt_ert_days);
+
+    // ============================================================
+    //   RESULT GRIDS (Moisture + Age)  [uses uniformoutput_LR like before]
     // ============================================================
 
     double start_counter;
@@ -226,49 +293,41 @@ int main(int argc, char *argv[])
 
     int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw;
 
-    // Only ERT-3 and ERT-5 for now (others commented out)
     std::vector<BoreholeSpec> boreholes = {
         {"ERT-3",  6.7979,  system->GetWorkingFolder() + "obs/ERT-3_obs.csv", 0.0},
         {"ERT-5",  4.3974,  system->GetWorkingFolder() + "obs/ERT-5_obs.csv", 0.0},
-
-        // {"ERT-2",  0.9381,  system->GetWorkingFolder() + "obs/ERT-2_obs.csv", 0.0},
-        // {"ERT-4",  4.1679,  system->GetWorkingFolder() + "obs/ERT-4_obs.csv", 0.0},
-        // {"ERT-1", 10.0,     system->GetWorkingFolder() + "obs/ERT-1_obs.csv", 0.0},
     };
 
     BoreholeExportOptions opt;
-    opt.nz_uw_n          = nz_uw_n;
-    opt.out_dir          = system->GetWorkingFolder();
-    opt.model_theta_var  = "theta";
+    opt.nz_uw_n           = nz_uw_n;
+    opt.out_dir           = system->GetWorkingFolder();
+    opt.model_theta_var   = "theta";
     opt.allow_missing_obs = true;
-    opt.use_resultgrid   = Use_ResultGrid_ERT;
+    opt.use_resultgrid    = Use_ResultGrid_ERT;
 
-    // Your ERT measurement times (Excel serial days; Base_start=45763 => 2025-04-16 00:00)
     const std::vector<double> ert_times = {
-        45763.588194444, // 4/16/2025 14:07
-        45763.682638889, // 4/16/2025 16:23
-        45763.770833333, // 4/16/2025 18:30
-        45764.673611111, // 4/17/2025 16:10
-        45764.729166667  // 4/17/2025 17:30
+        45763.588194444,
+        45763.682638889,
+        45763.770833333,
+        45764.673611111,
+        45764.729166667
     };
 
-    // File-friendly token (replace '.' with 'p')
     auto time_token = [&](double t) -> std::string
     {
         std::ostringstream oss;
-        oss << std::fixed << std::setprecision(6) << t;   // stable filenames
+        oss << std::fixed << std::setprecision(6) << t;
         std::string s = oss.str();
         std::replace(s.begin(), s.end(), '.', 'p');
         return s;
     };
 
-    // Find nearest time index in uniformoutput_LR to a target serial-day time
+    // Nearest time index in ERT-uniform output (minute grid)
     auto nearest_time_index = [&](double target_t) -> unsigned int
     {
-        if (uniformoutput_LR.size() == 0) return 0;
+        if (uniformoutput_ERT.size() == 0) return 0;
 
-        // Use first series as reference time axis
-        const auto &ts0 = uniformoutput_LR[0];
+        const auto &ts0 = uniformoutput_ERT[0];
         unsigned int n = (unsigned int)ts0.size();
         if (n == 0) return 0;
 
@@ -284,7 +343,6 @@ int main(int argc, char *argv[])
         return best_i;
     };
 
-    // Export snapshots/CSVs for each ERT measurement time
     for (double t_ert : ert_times)
     {
         unsigned int idx = nearest_time_index(t_ert);
@@ -297,11 +355,11 @@ int main(int argc, char *argv[])
 
         std::cout << "\n=== ERT snapshot export ===\n";
         std::cout << "Target ERT time = " << std::setprecision(12) << t_ert << "\n";
-        std::cout << "Nearest model index = " << idx << "\n";
+        std::cout << "Nearest model index (ERT grid) = " << idx << "\n";
         std::cout << "Output prefix = " << opt.file_prefix << "\n";
 
         export_borehole_theta_comparison_csvs(
-            uniformoutput_LR, mp, system,
+            uniformoutput_ERT, mp, system,
             boreholes, opt
         );
     }
