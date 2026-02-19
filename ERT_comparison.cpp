@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 #include "System.h"
 #include "resultgrid.h"
@@ -28,6 +29,88 @@ int mapRadiusToSoilUwIndex(double r_m, const model_parameters& mp)
     int i = 1 + (int)std::floor((r_m - mp.rw_uw) / dr);
     i = std::clamp(i, 1, (int)mp.nr_uw);
     return i;
+}
+
+// -----------------------------------------------------------------------------
+// NEW: use actual act_X rings from the model (Soil-uw / Soil-g)
+// -----------------------------------------------------------------------------
+
+struct RingInfo {
+    int i;       // radial index in Soil-XX (i$j)
+    double r;    // act_X radius (m)
+};
+
+static std::vector<RingInfo> get_rings_from_system(System* system,
+                                                  const std::string& prefix,
+                                                  int max_i)
+{
+    std::vector<RingInfo> rings;
+    if (!system) return rings;
+
+    // Use j=0 as representative (act_X should be constant per ring)
+    for (int i = 0; i <= max_i; ++i)
+    {
+        std::string bname = prefix + " (" + std::to_string(i) + "$0)";
+        auto* b = system->block(bname);
+        if (!b) continue;
+
+        double r = b->GetVal("act_X");
+        if (!std::isfinite(r)) continue;
+
+        rings.push_back({ i, r });
+    }
+
+    std::sort(rings.begin(), rings.end(),
+              [](const RingInfo& a, const RingInfo& b){ return a.r < b.r; });
+
+    return rings;
+}
+
+static int pick_nearest_ring_index(double r_m, const std::vector<RingInfo>& rings)
+{
+    if (rings.empty()) return 0;
+
+    int best_i = rings.front().i;
+    double best_d = std::abs(r_m - rings.front().r);
+
+    for (const auto& rg : rings)
+    {
+        double d = std::abs(r_m - rg.r);
+        if (d < best_d) { best_d = d; best_i = rg.i; }
+    }
+    return best_i;
+}
+
+static bool pick_bracketing_rings(double r_m, const std::vector<RingInfo>& rings,
+                                 int& i0, int& i1, double& w)
+{
+    if (rings.empty()) {
+        i0 = i1 = 0; w = 0.0; return false;
+    }
+    if (rings.size() == 1) {
+        i0 = i1 = rings[0].i; w = 0.0; return true;
+    }
+
+    if (r_m <= rings.front().r) { i0 = i1 = rings.front().i; w = 0.0; return true; }
+    if (r_m >= rings.back().r)  { i0 = i1 = rings.back().i;  w = 0.0; return true; }
+
+    auto it = std::lower_bound(
+        rings.begin(), rings.end(), r_m,
+        [](const RingInfo& a, double x){ return a.r < x; }
+    );
+
+    const auto& hi = *it;
+    const auto& lo = *(it - 1);
+
+    i0 = lo.i;
+    i1 = hi.i;
+
+    double denom = (hi.r - lo.r);
+    if (std::abs(denom) < 1e-30) { w = 0.0; return true; }
+
+    w = (r_m - lo.r) / denom;
+    w = std::clamp(w, 0.0, 1.0);
+    return true;
 }
 
 bool read_observed_profile_csv(
@@ -220,26 +303,94 @@ static void export_one_borehole_resultgrid(
     if (!system) throw std::runtime_error("System is null");
     if (opt.nz_uw_n <= 0) throw std::runtime_error("nz_uw_n <= 0");
 
-    const double dz = (mp.DepthtoGroundWater - mp.DepthofWell_t) / double(mp.nz_uw);
+    // Rings from System for BOTH zones
+    auto rings_g  = get_rings_from_system(system, "Soil-g",  mp.nr_g);
+    auto rings_uw = get_rings_from_system(system, "Soil-uw", mp.nr_uw);
 
-    const int i_uw = mapRadiusToSoilUwIndex(bh.r_m, mp);
+    if (rings_g.empty() && rings_uw.empty())
+        throw std::runtime_error("No Soil-g / Soil-uw rings found in System (act_X missing?)");
 
-    std::vector<std::string> locs;
-    locs.reserve((size_t)opt.nz_uw_n);
-    for (int j = 0; j < opt.nz_uw_n; ++j) {
-        locs.push_back("Soil-uw (" + std::to_string(i_uw) + "$" + std::to_string(j) + ")");
+    const bool radial_interpolate = true; // set false for nearest-only
+
+    int i0_g=0, i1_g=0; double w_g=0.0;
+    int i0_u=0, i1_u=0; double w_u=0.0;
+
+    if (!rings_g.empty()) {
+        if (radial_interpolate) pick_bracketing_rings(bh.r_m, rings_g,  i0_g, i1_g, w_g);
+        else { i0_g = i1_g = pick_nearest_ring_index(bh.r_m, rings_g); w_g = 0.0; }
+    }
+    if (!rings_uw.empty()) {
+        if (radial_interpolate) pick_bracketing_rings(bh.r_m, rings_uw, i0_u, i1_u, w_u);
+        else { i0_u = i1_u = pick_nearest_ring_index(bh.r_m, rings_uw); w_u = 0.0; }
     }
 
-    // Build a ResultGrid that contains theta time series for each depth location
-    ResultGrid thetaRG(uniformoutput, locs, opt.model_theta_var);
+    // Location lists for ALL blocks along depth at the selected rings
+    std::vector<std::string> locs_g0, locs_g1;
+    std::vector<std::string> locs_u0, locs_u1;
 
-    if (thetaRG.size() == 0) throw std::runtime_error("thetaRG empty for borehole " + bh.name);
-    if (thetaRG[0].size() == 0) throw std::runtime_error("thetaRG time series empty for borehole " + bh.name);
+    if (!rings_g.empty()) {
+        locs_g0.reserve((size_t)mp.nz_g);
+        locs_g1.reserve((size_t)mp.nz_g);
+        for (int j = 0; j < mp.nz_g; ++j) {
+            locs_g0.push_back("Soil-g (" + std::to_string(i0_g) + "$" + std::to_string(j) + ")");
+            locs_g1.push_back("Soil-g (" + std::to_string(i1_g) + "$" + std::to_string(j) + ")");
+        }
+    }
 
+    if (!rings_uw.empty()) {
+        locs_u0.reserve((size_t)opt.nz_uw_n);
+        locs_u1.reserve((size_t)opt.nz_uw_n);
+        for (int j = 0; j < opt.nz_uw_n; ++j) {
+            locs_u0.push_back("Soil-uw (" + std::to_string(i0_u) + "$" + std::to_string(j) + ")");
+            locs_u1.push_back("Soil-uw (" + std::to_string(i1_u) + "$" + std::to_string(j) + ")");
+        }
+    }
+
+    // Build ResultGrids once (fast)
+    ResultGrid rg_g0, rg_g1, rg_u0, rg_u1;
+
+    if (!locs_g0.empty()) {
+        rg_g0 = ResultGrid(uniformoutput, locs_g0, opt.model_theta_var);
+        if (rg_g0.size() == 0 || rg_g0[0].size() == 0)
+            throw std::runtime_error("rg_g0 empty/time-empty for borehole " + bh.name);
+
+        if (i1_g != i0_g) {
+            rg_g1 = ResultGrid(uniformoutput, locs_g1, opt.model_theta_var);
+            if (rg_g1.size() == 0 || rg_g1[0].size() == 0) {
+                rg_g1 = rg_g0; i1_g = i0_g; w_g = 0.0;
+            }
+        } else {
+            rg_g1 = rg_g0;
+        }
+    }
+
+    if (!locs_u0.empty()) {
+        rg_u0 = ResultGrid(uniformoutput, locs_u0, opt.model_theta_var);
+        if (rg_u0.size() == 0 || rg_u0[0].size() == 0)
+            throw std::runtime_error("rg_u0 empty/time-empty for borehole " + bh.name);
+
+        if (i1_u != i0_u) {
+            rg_u1 = ResultGrid(uniformoutput, locs_u1, opt.model_theta_var);
+            if (rg_u1.size() == 0 || rg_u1[0].size() == 0) {
+                rg_u1 = rg_u0; i1_u = i0_u; w_u = 0.0;
+            }
+        } else {
+            rg_u1 = rg_u0;
+        }
+    }
+
+    // Clamp time index
     unsigned int jt = opt.time_index;
-    if (jt >= thetaRG[0].size()) jt = (unsigned int)(thetaRG[0].size() - 1);
+    if (!locs_g0.empty()) {
+        if (jt >= rg_g0[0].size()) jt = (unsigned int)(rg_g0[0].size() - 1);
+    } else {
+        if (jt >= rg_u0[0].size()) jt = (unsigned int)(rg_u0[0].size() - 1);
+    }
 
-    const double t = thetaRG[0].getTime(jt);
+    // Use whichever grid exists to report time
+    double t = 0.0;
+    if (!locs_g0.empty()) t = rg_g0[0].getTime(jt);
+    else                 t = rg_u0[0].getTime(jt);
 
     // Read observed profile if provided
     std::vector<double> d_obs, th_obs;
@@ -251,6 +402,78 @@ static void export_one_borehole_resultgrid(
         }
     }
 
+    // Collect rows then sort by depth
+    struct Row {
+        double depth;
+        double th_m;
+        double th_o;
+    };
+    std::vector<Row> rows;
+    rows.reserve((size_t)mp.nz_g + (size_t)opt.nz_uw_n);
+
+    // Collect Soil-g rows
+    if (!locs_g0.empty())
+    {
+        for (int j = 0; j < mp.nz_g; ++j)
+        {
+            const std::string& bname = locs_g0[(size_t)j];
+            auto* b = system->block(bname);
+            if (!b) continue;
+
+            double actY = b->GetVal("act_Y");
+            if (!std::isfinite(actY)) continue;
+
+            double depth = -actY; // act_Y is negative depth in your model
+
+            double th0 = rg_g0[(size_t)j].getValue(jt);
+            double th1 = rg_g1[(size_t)j].getValue(jt);
+
+            double th_m = std::numeric_limits<double>::quiet_NaN();
+            if (std::isfinite(th0) && std::isfinite(th1)) th_m = (1.0 - w_g) * th0 + w_g * th1;
+            else if (std::isfinite(th0)) th_m = th0;
+            else if (std::isfinite(th1)) th_m = th1;
+
+            double th_o = std::numeric_limits<double>::quiet_NaN();
+            if (have_obs && d_obs.size() >= 2) th_o = linear_interp_or_nan(d_obs, th_obs, depth);
+            else if (have_obs && d_obs.size() == 1 && std::abs(d_obs[0] - depth) < 1e-6) th_o = th_obs[0];
+
+            rows.push_back({depth, th_m, th_o});
+        }
+    }
+
+    // Collect Soil-uw rows
+    if (!locs_u0.empty())
+    {
+        for (int j = 0; j < opt.nz_uw_n; ++j)
+        {
+            const std::string& bname = locs_u0[(size_t)j];
+            auto* b = system->block(bname);
+            if (!b) continue;
+
+            double actY = b->GetVal("act_Y");
+            if (!std::isfinite(actY)) continue;
+
+            double depth = -actY;
+
+            double th0 = rg_u0[(size_t)j].getValue(jt);
+            double th1 = rg_u1[(size_t)j].getValue(jt);
+
+            double th_m = std::numeric_limits<double>::quiet_NaN();
+            if (std::isfinite(th0) && std::isfinite(th1)) th_m = (1.0 - w_u) * th0 + w_u * th1;
+            else if (std::isfinite(th0)) th_m = th0;
+            else if (std::isfinite(th1)) th_m = th1;
+
+            double th_o = std::numeric_limits<double>::quiet_NaN();
+            if (have_obs && d_obs.size() >= 2) th_o = linear_interp_or_nan(d_obs, th_obs, depth);
+            else if (have_obs && d_obs.size() == 1 && std::abs(d_obs[0] - depth) < 1e-6) th_o = th_obs[0];
+
+            rows.push_back({depth, th_m, th_o});
+        }
+    }
+
+    std::sort(rows.begin(), rows.end(),
+              [](const Row& a, const Row& b){ return a.depth < b.depth; });
+
     std::string outPath = opt.out_dir;
     if (!outPath.empty() && outPath.back() != '/' && outPath.back() != '\\') outPath += "/";
     outPath += opt.file_prefix + bh.name + opt.file_suffix;
@@ -261,18 +484,10 @@ static void export_one_borehole_resultgrid(
     f << "depth_m,theta_model,theta_obs,time\n";
     f << std::setprecision(15);
 
-    for (int j = 0; j < opt.nz_uw_n; ++j)
+    for (const auto& r : rows)
     {
-        const double depth = (j + 0.5) * dz + mp.DepthofWell_t;
-
-        double th_m = thetaRG[j].getValue(jt);
-
-        double th_o = std::numeric_limits<double>::quiet_NaN();
-        if (have_obs && d_obs.size() >= 2) th_o = linear_interp_or_nan(d_obs, th_obs, depth);
-        else if (have_obs && d_obs.size() == 1 && std::abs(d_obs[0] - depth) < 1e-6) th_o = th_obs[0];
-
-        f << depth << "," << th_m << ",";
-        if (std::isfinite(th_o)) f << th_o;
+        f << r.depth << "," << r.th_m << ",";
+        if (std::isfinite(r.th_o)) f << r.th_o;
         f << "," << t << "\n";
     }
 }

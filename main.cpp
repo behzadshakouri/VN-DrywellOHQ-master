@@ -116,6 +116,11 @@ int main(int argc, char *argv[])
     {
         cout << "Creating model...\n";
         ModCreate.Create(mp, system, &gen, raincfg, simcfg);
+
+        // >>> NEW (needed): pull the actual model parameters back out
+        // because Create(model_parameters mp, ...) takes mp by value.
+        mp = ModCreate.ModelParameters();
+
         cout << "Model build complete.\n\n";
     }
     else
@@ -284,15 +289,10 @@ int main(int argc, char *argv[])
     {
         unsigned int idx = nearest_time_index(t_ert);
 
-        // IMPORTANT: prevent overwriting outputs by changing prefix per time
-        // (ERT_comparison writes: out_dir + file_prefix + bh.name + file_suffix)
         std::string tag = "t" + time_token(t_ert);
 
-        // No underscores in filename:
-        // -> ERTsnap-t45763p588194-ERT-3.csv
         opt.file_prefix = "ERTsnap-" + tag + "-";
         opt.file_suffix = ".csv";
-
         opt.time_index  = idx;
 
         std::cout << "\n=== ERT snapshot export ===\n";
@@ -305,7 +305,6 @@ int main(int argc, char *argv[])
             boreholes, opt
         );
     }
-
 
     // ============================================================
     //   WELL DEPTHS
