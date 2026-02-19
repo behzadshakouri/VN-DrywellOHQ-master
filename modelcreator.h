@@ -2,6 +2,7 @@
 #define MODELCREATOR_H
 
 #include <gsl/gsl_rng.h>
+#include <string>
 
 class System;
 class FieldGenerator;
@@ -27,6 +28,12 @@ struct SimulationConfig
 
     double maximum_time_allowed      = 10 * 86400;     // default 10 days
     double maximum_matrix_inversions = 10 * 200000;    // default 2,000,000
+
+    // NEW: global multiplier for Soil blocks' K_sat
+    // unsaturated_soil_revised_model.json uses:
+    //   K_sat = K_sat_original * K_sat_scale_factor
+    // We will set "K_sat_scale_factor" per Soil block to this value.
+    double KsatScaleFactor = 1.0;
 };
 
 // =============================================================
@@ -113,6 +120,14 @@ struct model_parameters
 //   3 -> use ONLY ERT-3
 //   5 -> use ONLY ERT-5
 //
+
+// =============================================================
+//   CLI parsing (DECLARATIONS ONLY — definitions in modelcreator.cpp)
+// =============================================================
+
+// Ksat scale CLI parsing (keeps main.cpp clean)
+// Accepts: --ksat-scale 0.5   or   --ksat-scale=0.5
+double parse_ksat_scale(int argc, char** argv, double default_val = 1.0);
 
 // =============================================================
 //   ModelCreator Class

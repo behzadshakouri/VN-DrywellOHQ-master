@@ -11,7 +11,7 @@
 #include <iostream>
 #include <cctype>
 
-// Bring in full definitions here (NOT in header)
+// Need full definition of model_parameters fields used below
 #include "modelcreator.h"
 
 #include "System.h"
@@ -38,28 +38,52 @@ std::string lower_copy(std::string s)
 // ------------------------------------------------------------
 InitThetaMode parse_init_theta_mode(int argc, char** argv)
 {
-    InitThetaMode mode = InitThetaMode::ERT_IDW_R;
+    // Default should mean "use mp.initial_theta" unless user overrides via CLI.
+    InitThetaMode mode = InitThetaMode::Default;
+
+    auto normalize = [](std::string v)
+    {
+        v = lower_copy(v);
+        // allow a couple separators
+        std::replace(v.begin(), v.end(), '-', '_');
+        return v;
+    };
+
+    auto apply_token = [&](const std::string& vraw)
+    {
+        const std::string v = normalize(vraw);
+
+        if (v == "default" || v == "off" || v == "none" || v == "mp")
+            mode = InitThetaMode::Default;
+        else if (v == "ert3" || v == "ert3_only" || v == "3")
+            mode = InitThetaMode::ERT3_Only;
+        else if (v == "ert5" || v == "ert5_only" || v == "5")
+            mode = InitThetaMode::ERT5_Only;
+        else if (v == "idw" || v == "ert" || v == "r" || v == "ert_idw_r" || v == "idw_r")
+            mode = InitThetaMode::ERT_IDW_R;
+        else if (v == "avg" || v == "mean" || v == "ravg" || v == "ert_r_avg" || v == "r_avg")
+            mode = InitThetaMode::ERT_R_Avg;
+        // else: ignore unknown tokens (keep prior mode)
+    };
 
     for (int i = 1; i < argc; ++i)
     {
-        std::string a = argv[i];
+        const std::string a = argv[i] ? std::string(argv[i]) : std::string();
 
-        auto read_val = [&](const std::string& vraw)
+        const std::string keyEq = "--init-theta=";
+        if (a.rfind(keyEq, 0) == 0)
         {
-            std::string v = lower_copy(vraw);
-
-            if (v == "default" || v == "off" || v == "none") mode = InitThetaMode::Default;
-            else if (v == "ert3" || v == "ert-3")           mode = InitThetaMode::ERT3_Only;
-            else if (v == "ert5" || v == "ert-5")           mode = InitThetaMode::ERT5_Only;
-            else if (v == "idw" || v == "ert" || v == "r")  mode = InitThetaMode::ERT_IDW_R;
-            else if (v == "avg" || v == "mean")             mode = InitThetaMode::ERT_R_Avg;
-        };
-
-        const std::string key = "--init-theta=";
-        if (a.rfind(key, 0) == 0)
-            read_val(a.substr(key.size()));
+            apply_token(a.substr(keyEq.size()));
+        }
         else if (a == "--init-theta" && i + 1 < argc)
-            read_val(argv[++i]);
+        {
+            apply_token(argv[++i]);
+        }
+        // Optional convenience flags (do not require a value)
+        else if (a == "--ert3")    mode = InitThetaMode::ERT3_Only;
+        else if (a == "--ert5")    mode = InitThetaMode::ERT5_Only;
+        else if (a == "--ert-idw") mode = InitThetaMode::ERT_IDW_R;
+        else if (a == "--ert-ravg")mode = InitThetaMode::ERT_R_Avg;
     }
 
     return mode;

@@ -19,17 +19,19 @@ std::string lower_copy(std::string s);
 // ============================================================
 // CLI: Initial-theta mode (used by main.cpp to configure ModelCreator)
 // ============================================================
+// NOTE: Declarations only. Implement these in EXACTLY ONE .cpp file
+// (e.g., modelcreator.cpp) to avoid multiple-definition linker errors.
 enum class InitThetaMode
 {
-    Default = 0,
-    ERT3_Only,
-    ERT5_Only,
-    ERT_IDW_R,
-    ERT_R_Avg
+    Default,    // use mp.initial_theta
+    ERT3_Only,  // use ERT-3 only (IDW)
+    ERT5_Only,  // use ERT-5 only (IDW)
+    ERT_IDW_R,  // use both, IDW in r
+    ERT_R_Avg   // use both, average in r
 };
 
 InitThetaMode parse_init_theta_mode(int argc, char** argv);
-const char* init_theta_mode_name(InitThetaMode m);
+const char*   init_theta_mode_name(InitThetaMode m);
 
 // ============================================================
 // Data structures for ERT/Borehole exports
