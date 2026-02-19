@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
 
     // (2) Simulation batch index
     int Simulation_num = 1;          // Set for each run
-    double Simulation_days = 0.05;    // Each run window
+    double Simulation_days = 2;    // Each run window
 
     // (3) Base time
     double Base_start;
