@@ -15,6 +15,8 @@
 #include <vector>
 #include <string>
 
+#include "ERT_comparison.h"
+
 // -----------------------------
 // Local helpers (no header changes elsewhere)
 // -----------------------------
@@ -30,348 +32,35 @@ static inline std::string join_path_mc(std::string a, const std::string& b)
     return a + b;
 }
 
-static inline bool is_finite_mc(double x) { return std::isfinite(x); }
-
-static std::vector<std::string> split_csv_line_mc(const std::string& line)
-{
-    std::vector<std::string> cols;
-    cols.reserve(8);
-
-    std::string cur;
-    cur.reserve(line.size());
-
-    // simple CSV split (no quoted commas; your tidy files are simple)
-    for (char ch : line)
-    {
-        if (ch == ',')
-        {
-            cols.push_back(cur);
-            cur.clear();
-        }
-        else
-        {
-            cur.push_back(ch);
-        }
-    }
-    cols.push_back(cur);
-    return cols;
-}
-
-// -----------------------------------------
-// Robust interpolation (clamped)
-// -----------------------------------------
-static double linear_interp_clamped_mc(
-    const std::vector<double>& x,
-    const std::vector<double>& y,
-    double xq)
-{
-    const double NaN = std::numeric_limits<double>::quiet_NaN();
-
-    if (x.size() < 2 || x.size() != y.size()) return NaN;
-    if (!is_finite_mc(xq)) return NaN;
-
-    if (xq <= x.front()) return y.front();
-    if (xq >= x.back())  return y.back();
-
-    auto it = std::lower_bound(x.begin(), x.end(), xq);
-    if (it == x.begin()) return y.front();
-    if (it == x.end())   return y.back();
-
-    size_t hi = (size_t)std::distance(x.begin(), it);
-    size_t lo = hi - 1;
-
-    const double x0 = x[lo], x1 = x[hi];
-    const double y0 = y[lo], y1 = y[hi];
-
-    const double dx = x1 - x0;
-    if (std::abs(dx) < 1e-30) return y0;
-
-    const double w = (xq - x0) / dx;
-    return y0 + w * (y1 - y0);
-}
-
-// -----------------------------------------
-// Pick best depth offset based on overlap
-// -----------------------------------------
-static double overlap_len_mc(double a0, double a1, double b0, double b1)
-{
-    if (a0 > a1) std::swap(a0, a1);
-    if (b0 > b1) std::swap(b0, b1);
-    const double lo = std::max(a0, b0);
-    const double hi = std::min(a1, b1);
-    return std::max(0.0, hi - lo);
-}
-
-static double choose_best_depth_offset_mc(
-    const std::vector<double>& raw_depth,
-    double model_min_depth,
-    double model_max_depth,
-    const std::vector<double>& candidate_offsets,
-    double preferred_offset)
-{
-    if (raw_depth.empty()) return preferred_offset;
-
-    const double dmin = *std::min_element(raw_depth.begin(), raw_depth.end());
-    const double dmax = *std::max_element(raw_depth.begin(), raw_depth.end());
-
-    double best_off = preferred_offset;
-    double best_ov  = overlap_len_mc(dmin + preferred_offset, dmax + preferred_offset,
-                                    model_min_depth, model_max_depth);
-
-    for (double off : candidate_offsets)
-    {
-        double ov = overlap_len_mc(dmin + off, dmax + off, model_min_depth, model_max_depth);
-        if (ov > best_ov + 1e-12)
-        {
-            best_ov = ov;
-            best_off = off;
-        }
-    }
-    return best_off;
-}
-
-// ----------------------------------------------------------
-// Reads FIRST time-slice profile from tidy CSV:
-// borehole,time_str,time_excel,depth_m,soil_moisture_pct
-//
-// Bug fixes:
-//  - robust header skip
-//  - robust earliest time slice grouping (default tol=1 minute)
-//  - removes duplicate depths
-//  - returns depths + theta (0..1)
-// ----------------------------------------------------------
-static bool read_ert_tidy_first_profile_mc(
-    const std::string& path,
-    std::vector<double>& depth_m,
-    std::vector<double>& theta_frac,
-    double depth_offset_m = 0.0,
-    double time_tol_excel_days = (1.0 / 1440.0)) // 1 minute
-{
-    depth_m.clear();
-    theta_frac.clear();
-
-    std::ifstream f(path);
-    if (!f) return false;
-
-    struct Row { double t; double d; double th; };
-    std::vector<Row> rows;
-    rows.reserve(512);
-
-    std::string line;
-    while (std::getline(f, line))
-    {
-        if (line.empty()) continue;
-
-        auto cols = split_csv_line_mc(line);
-        if (cols.size() < 5) continue;
-
-        // Expect:
-        // 0=borehole,1=time_str,2=time_excel,3=depth_m,4=soil_moisture_pct
-        double t_excel = std::numeric_limits<double>::quiet_NaN();
-        double d       = std::numeric_limits<double>::quiet_NaN();
-        double sm      = std::numeric_limits<double>::quiet_NaN();
-
-        try {
-            t_excel = std::stod(cols[2]);
-            d       = std::stod(cols[3]) + depth_offset_m;
-            sm      = std::stod(cols[4]);
-        } catch (...) {
-            // header or bad line -> skip
-            continue;
-        }
-
-        if (!is_finite_mc(t_excel) || !is_finite_mc(d) || !is_finite_mc(sm)) continue;
-
-        // percent -> fraction if needed
-        double th = sm;
-        if (th > 1.5) th /= 100.0;
-
-        // clamp [0,1]
-        if (th < 0.0) th = 0.0;
-        if (th > 1.0) th = 1.0;
-
-        rows.push_back({t_excel, d, th});
-    }
-
-    if (rows.empty()) return false;
-
-    // earliest time
-    double t0 = rows.front().t;
-    for (const auto& r : rows) t0 = std::min(t0, r.t);
-
-    // collect earliest slice with tolerance
-    for (const auto& r : rows)
-    {
-        if (std::abs(r.t - t0) <= time_tol_excel_days)
-        {
-            depth_m.push_back(r.d);
-            theta_frac.push_back(r.th);
-        }
-    }
-
-    // If tolerance failed (rare), fallback: pick exact minimum time rows
-    if (depth_m.empty())
-    {
-        for (const auto& r : rows)
-        {
-            if (r.t == t0)
-            {
-                depth_m.push_back(r.d);
-                theta_frac.push_back(r.th);
-            }
-        }
-    }
-
-    if (depth_m.empty()) return false;
-
-    // sort by depth
-    if (depth_m.size() >= 2)
-    {
-        std::vector<size_t> idx(depth_m.size());
-        for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
-
-        std::sort(idx.begin(), idx.end(), [&](size_t i, size_t j){
-            return depth_m[i] < depth_m[j];
-        });
-
-        std::vector<double> d2, t2;
-        d2.reserve(depth_m.size());
-        t2.reserve(theta_frac.size());
-
-        for (size_t k = 0; k < idx.size(); ++k)
-        {
-            d2.push_back(depth_m[idx[k]]);
-            t2.push_back(theta_frac[idx[k]]);
-        }
-        depth_m.swap(d2);
-        theta_frac.swap(t2);
-    }
-
-    // remove duplicate depths (keep last)
-    {
-        std::vector<double> d3, t3;
-        d3.reserve(depth_m.size());
-        t3.reserve(theta_frac.size());
-
-        for (size_t i = 0; i < depth_m.size(); ++i)
-        {
-            if (!d3.empty() && std::abs(depth_m[i] - d3.back()) < 1e-9)
-            {
-                // overwrite last
-                t3.back() = theta_frac[i];
-            }
-            else
-            {
-                d3.push_back(depth_m[i]);
-                t3.push_back(theta_frac[i]);
-            }
-        }
-        depth_m.swap(d3);
-        theta_frac.swap(t3);
-    }
-
-    return !depth_m.empty();
-}
-
-// -----------------------------------------
-// Borehole container for ERT IC
-// -----------------------------------------
-struct ObsBH_MC {
-    std::string name;
-    double r_m = 0.0;
-    std::vector<double> depth;
-    std::vector<double> theta;
-    double depth_offset_m = 0.0;
-};
-
-// IDW in radius using available boreholes at requested depth
-static double theta_idw_r_from_bhs_mc(
-    const std::vector<ObsBH_MC>& bhs,
-    double r_m,
-    double depth_m,
-    double fallback_theta)
-{
-    const double eps = 0.05;  // m
-    const double p   = 2.0;
-
-    double num = 0.0, den = 0.0;
-
-    for (const auto& bh : bhs)
-    {
-        if (bh.depth.size() < 1) continue;
-
-        double th = std::numeric_limits<double>::quiet_NaN();
-        if (bh.depth.size() >= 2)
-            th = linear_interp_clamped_mc(bh.depth, bh.theta, depth_m);
-        else
-            th = bh.theta[0];
-
-        if (!is_finite_mc(th)) continue;
-
-        double w = 1.0 / std::pow(std::abs(r_m - bh.r_m) + eps, p);
-        num += w * th;
-        den += w;
-    }
-
-    if (den > 0.0) return num / den;
-    return fallback_theta;
-}
-
-// Average across available boreholes (no r dependence)
-static double theta_r_avg_profile_mc(
-    const std::vector<ObsBH_MC>& bhs,
-    double depth_m,
-    double fallback_theta)
-{
-    double sum = 0.0;
-    int cnt = 0;
-
-    for (const auto& bh : bhs)
-    {
-        if (bh.depth.size() < 1) continue;
-
-        double th = std::numeric_limits<double>::quiet_NaN();
-        if (bh.depth.size() >= 2)
-            th = linear_interp_clamped_mc(bh.depth, bh.theta, depth_m);
-        else
-            th = bh.theta[0];
-
-        if (!is_finite_mc(th)) continue;
-
-        sum += th;
-        cnt++;
-    }
-
-    if (cnt > 0) return sum / (double)cnt;
-    return fallback_theta;
-}
-
-// -----------------------------
-// CLI parsing (declared in modelcreator.h)
-// -----------------------------
-static bool starts_with_mc(const std::string& s, const std::string& pfx)
+// ------------------------------------------------------------
+// CLI parsing (definition for modelcreator.h declaration)
+// ------------------------------------------------------------
+static bool starts_with_ksat_(const std::string& s, const std::string& pfx)
 {
     return s.size() >= pfx.size() && s.compare(0, pfx.size(), pfx) == 0;
 }
 
 // Accepts: --ksat-scale 0.5   or   --ksat-scale=0.5
-double parse_ksat_scale(int argc, char* argv[], double default_val)
+double parse_ksat_scale(int argc, char** argv, double default_val)
 {
     for (int i = 1; i < argc; ++i)
     {
         std::string a = argv[i] ? std::string(argv[i]) : std::string();
 
         std::string v;
-        const std::string key1 = "--ksat-scale=";
-        const std::string key2 = "--ksat-scale";
+        const std::string keyEq = "--ksat-scale=";
+        const std::string keySp = "--ksat-scale";
 
-        if (starts_with_mc(a, key1))
+        if (starts_with_ksat_(a, keyEq))
         {
-            v = a.substr(key1.size());
+            v = a.substr(keyEq.size());
         }
-        else if (a == key2)
+        else if (a == keySp)
         {
-            if (i + 1 < argc) v = argv[i + 1] ? std::string(argv[i + 1]) : std::string();
+            if (i + 1 < argc)
+                v = argv[i + 1] ? std::string(argv[i + 1]) : std::string();
+            else
+                return default_val;
         }
         else
         {
@@ -387,6 +76,178 @@ double parse_ksat_scale(int argc, char* argv[], double default_val)
     }
 
     return default_val;
+}
+
+// Reads FIRST time-slice profile from a tidy CSV like:
+// borehole,time_str,time_excel,depth_m,soil_moisture_pct
+// Returns depth_m (meters) and theta (fraction 0..1)
+static bool read_ert_tidy_first_profile_mc(
+    const std::string& path,
+    std::vector<double>& depth_m,
+    std::vector<double>& theta_frac,
+    double depth_offset_m = 0.0,
+    double time_tol = (1.0 / 1440.0)) // 1 minute in Excel-days (FIX)
+{
+    depth_m.clear();
+    theta_frac.clear();
+
+    std::ifstream f(path);
+    if (!f) return false;
+
+    struct Row { double t; double d; double th; };
+    std::vector<Row> rows;
+    rows.reserve(256);
+
+    std::string line;
+    bool first = true;
+
+    while (std::getline(f, line)) {
+        if (line.empty()) continue;
+
+        if (first) {
+            first = false;
+            bool has_alpha = std::any_of(line.begin(), line.end(), [](unsigned char c){
+                return std::isalpha(c);
+            });
+            if (has_alpha) continue; // skip header
+        }
+
+        // borehole,time_str,time_excel,depth_m,soil_moisture_pct
+        std::stringstream ss(line);
+        std::string c0, c1, c2, c3, c4;
+        if (!std::getline(ss, c0, ',')) continue;
+        if (!std::getline(ss, c1, ',')) continue;
+        if (!std::getline(ss, c2, ',')) continue;
+        if (!std::getline(ss, c3, ',')) continue;
+        if (!std::getline(ss, c4, ',')) continue;
+
+        try {
+            double t_excel = std::stod(c2);
+            double d       = std::stod(c3) + depth_offset_m;
+
+            // tidy has theta in percent (0..100) -> model needs 0..1
+            double sm_pct  = std::stod(c4);
+            double th      = sm_pct;
+            if (th > 1.5) th /= 100.0;   // keep your “check” behavior
+            if (th < 0.0) th = 0.0;
+            if (th > 1.0) th = 1.0;
+
+            rows.push_back({t_excel, d, th});
+        } catch (...) {
+            // skip bad lines
+        }
+    }
+
+    if (rows.empty()) return false;
+
+    // Find earliest time
+    double t0 = rows.front().t;
+    for (const auto& r : rows) t0 = std::min(t0, r.t);
+
+    // Keep only rows at earliest time slice (within tolerance)
+    for (const auto& r : rows) {
+        if (std::abs(r.t - t0) <= time_tol) {
+            depth_m.push_back(r.d);
+            theta_frac.push_back(r.th);
+        }
+    }
+
+    // Fallback: if tolerance was still too strict for some reason, take exact min time rows
+    if (depth_m.empty()) {
+        for (const auto& r : rows) {
+            if (r.t == t0) {
+                depth_m.push_back(r.d);
+                theta_frac.push_back(r.th);
+            }
+        }
+    }
+
+    if (depth_m.empty()) return false;
+
+    // Sort by depth
+    if (depth_m.size() >= 2) {
+        std::vector<size_t> idx(depth_m.size());
+        for (size_t i = 0; i < idx.size(); ++i) idx[i] = i;
+
+        std::sort(idx.begin(), idx.end(), [&](size_t i, size_t j){
+            return depth_m[i] < depth_m[j];
+        });
+
+        std::vector<double> d2, t2;
+        d2.reserve(depth_m.size());
+        t2.reserve(theta_frac.size());
+        for (size_t k = 0; k < idx.size(); ++k) {
+            d2.push_back(depth_m[idx[k]]);
+            t2.push_back(theta_frac[idx[k]]);
+        }
+        depth_m.swap(d2);
+        theta_frac.swap(t2);
+    }
+
+    return true;
+}
+
+static double linear_interp_or_nan_mc(
+    const std::vector<double>& x,
+    const std::vector<double>& y,
+    double xq)
+{
+    const double NaN = std::numeric_limits<double>::quiet_NaN();
+    if (x.size() < 2 || x.size() != y.size()) return NaN;
+    if (xq < x.front() || xq > x.back()) return NaN;
+
+    auto it = std::lower_bound(x.begin(), x.end(), xq);
+    if (it == x.begin()) return y.front();
+    if (it == x.end()) return y.back();
+
+    size_t hi = (size_t)std::distance(x.begin(), it);
+    size_t lo = hi - 1;
+
+    const double x0 = x[lo], x1 = x[hi];
+    const double y0 = y[lo], y1 = y[hi];
+
+    const double dx = x1 - x0;
+    if (std::abs(dx) < 1e-30) return y0;
+
+    const double w = (xq - x0) / dx;
+    return y0 + w * (y1 - y0);
+}
+
+struct ObsBH_MC {
+    std::string name;
+    double r_m = 0.0;
+    std::vector<double> depth;
+    std::vector<double> theta;
+    double depth_offset_m = 0.0;
+};
+
+static double theta_from_ert_mc(
+    const std::vector<ObsBH_MC>& bhs,
+    double r_m,
+    double depth_m,
+    double fallback_theta)
+{
+    // IDW in radius
+    const double eps = 0.05;  // m
+    const double p   = 2.0;
+
+    double num = 0.0, den = 0.0;
+
+    for (const auto& bh : bhs) {
+        double th = std::numeric_limits<double>::quiet_NaN();
+
+        if (bh.depth.size() >= 2) th = linear_interp_or_nan_mc(bh.depth, bh.theta, depth_m);
+        else if (bh.depth.size() == 1 && std::abs(bh.depth[0] - depth_m) < 1e-6) th = bh.theta[0];
+
+        if (!std::isfinite(th)) continue;
+
+        double w = 1.0 / std::pow(std::abs(r_m - bh.r_m) + eps, p);
+        num += w * th;
+        den += w;
+    }
+
+    if (den > 0.0) return num / den;
+    return fallback_theta;
 }
 
 // -----------------------------
@@ -425,7 +286,7 @@ bool ModelCreator::Create(model_parameters mp,
     SoilDataCDF.write(path+"CDF.csv"); // Check CDF
 
     system->GetQuanTemplate(ohq_r+"main_components.json");
-    system->AppendQuanTemplate(ohq_r+"unsaturated_soil_revised_model.json"); // revised version
+    system->AppendQuanTemplate(ohq_r+"unsaturated_soil_revised_model.json"); //revised version
     system->AppendQuanTemplate(ohq_r+"Well.json");
     system->AppendQuanTemplate(ohq_r+"Sewer_system.json");
     system->AppendQuanTemplate(ohq_r+"pipe_pump_tank.json");
@@ -435,172 +296,56 @@ bool ModelCreator::Create(model_parameters mp,
     system->SetNumThreads(16);
 
     // ==================================================================
-    // Ksat scale factor (controlled from main via simcfg.KsatScaleFactor)
-    // ==================================================================
-    double KsatScale = simcfg.KsatScaleFactor;
-    if (!std::isfinite(KsatScale) || KsatScale <= 0.0) KsatScale = 1.0;
-
-    // ==================================================================
-    // OPTIONAL: Assign initial theta from ERT tidy observed profiles
-    //
-    // Fixes:
-    //  - robust file location search
-    //  - robust earliest time-slice selection
-    //  - depth mismatch detection + auto offset trial
-    //  - prints a summary: how many blocks used ERT vs fallback
-    //
-    // Honors:
-    //   UseERTInitialTheta
-    //   ERTInitialThetaMode  (0=IDW in r, 1=avg in r)
-    //   ERTInitialThetaWhich (0=both, 3=ERT-3 only, 5=ERT-5 only)
+    //   OPTIONAL: Assign initial theta from ERT tidy observed profiles
+    //   Uses FIRST time-slice in each tidy file and maps pct->fraction
     // ==================================================================
     std::vector<ObsBH_MC> initBHs;
 
-    // Model depth range for matching (positive depth in meters)
-    // Use the broadest range that covers both Soil-g and Soil-uw:
-    const double model_min_depth = std::min(mp.DepthofWell_c, mp.DepthofWell_t);
-    const double model_max_depth = mp.DepthtoGroundWater;
-
     if (UseERTInitialTheta)
     {
-        std::cout << "\n=== ERT Initial Theta (ERT-IC) ===\n";
-        std::cout << "Model depth range (target): [" << model_min_depth << ", " << model_max_depth << "] m\n";
-        std::cout << "Mode  (0=IDW_R,1=R_Avg)   : " << ERTInitialThetaMode << "\n";
-        std::cout << "Which (0=Both,3=ERT3,5=ERT5): " << ERTInitialThetaWhich << "\n";
-        std::cout << "Fallback mp.initial_theta : " << mp.initial_theta << "\n";
-        std::cout << "WorkingFolder             : " << system->GetWorkingFolder() << "\n";
-    }
-
-    auto try_load_bh = [&](const std::string& name,
-                           double r_m,
-                           const std::vector<std::string>& candidate_paths,
-                           double preferred_depth_offset_m)
-    {
-        for (const auto& csv : candidate_paths)
+        auto addBH = [&](const std::string& name, double r_m, const std::string& csv, double depth_offset_m)
         {
-            if (!file_exists_mc(csv)) continue;
-
-            // first load without extra auto offset (we’ll apply offset logic afterwards)
-            std::vector<double> d_raw, th_raw;
-            if (!read_ert_tidy_first_profile_mc(csv, d_raw, th_raw,
-                                                /*depth_offset_m=*/0.0,
-                                                /*time_tol_excel_days=*/(1.0/1440.0))) // 1 minute
-            {
-                std::cout << "ERT-IC: found but failed to parse: " << csv << "\n";
-                continue;
-            }
-
-            const double dmin = d_raw.front();
-            const double dmax = d_raw.back();
-
-            // Choose best offset among candidates if mismatch
-            std::vector<double> offs = {
-                preferred_depth_offset_m,
-                0.0,
-                mp.DepthofWell_t,
-                mp.DepthofWell_c
-            };
-
-            double best_off = choose_best_depth_offset_mc(
-                d_raw, model_min_depth, model_max_depth, offs, preferred_depth_offset_m);
-
-            // apply offset
-            std::vector<double> d_shift = d_raw;
-            for (auto& x : d_shift) x += best_off;
-
-            double ov = overlap_len_mc(d_shift.front(), d_shift.back(), model_min_depth, model_max_depth);
-
             ObsBH_MC bh;
             bh.name = name;
             bh.r_m  = r_m;
-            bh.depth_offset_m = best_off;
-            bh.depth = std::move(d_shift);
-            bh.theta = std::move(th_raw);
+            bh.depth_offset_m = depth_offset_m;
 
-            initBHs.push_back(std::move(bh));
-
-            std::cout << "ERT-IC: loaded " << name << "\n";
-            std::cout << "  path           : " << csv << "\n";
-            std::cout << "  rows           : " << initBHs.back().depth.size() << "\n";
-            std::cout << "  raw depth      : [" << dmin << ", " << dmax << "] m\n";
-            std::cout << "  chosen offset  : " << best_off << " m\n";
-            std::cout << "  shifted depth  : [" << initBHs.back().depth.front() << ", " << initBHs.back().depth.back() << "] m\n";
-            std::cout << "  overlap w/model: " << ov << " m\n";
-
-            if (ov <= 1e-6)
+            std::vector<double> d, t;
+            if (read_ert_tidy_first_profile_mc(csv, d, t, depth_offset_m))
             {
-                std::cout << "  WARNING: depth overlap is ~0. You will mostly fallback to mp.initial_theta.\n";
-                std::cout << "  TIP: check your tidy depth units (m) and reference (surface vs absolute).\n";
+                bh.depth = std::move(d);
+                bh.theta = std::move(t);
+                initBHs.push_back(std::move(bh));
+                std::cout << "ERT-IC: loaded FIRST time-slice " << name
+                          << " (" << csv << ") n=" << initBHs.back().depth.size() << "\n";
             }
+            else
+            {
+                std::cout << "ERT-IC: WARNING could not read " << csv << " for " << name << "\n";
+            }
+        };
 
-            return; // success
-        }
-
-        // none found
-        std::cout << "ERT-IC: WARNING could not find/read " << name << " tidy file.\n";
-        std::cout << "  Tried:\n";
-        for (const auto& p : candidate_paths)
-            std::cout << "    " << p << " (exists=" << (file_exists_mc(p) ? "yes" : "no") << ")\n";
-    };
-
-    if (UseERTInitialTheta)
-    {
-        const bool want3 = (ERTInitialThetaWhich == 0 || ERTInitialThetaWhich == 3);
-        const bool want5 = (ERTInitialThetaWhich == 0 || ERTInitialThetaWhich == 5);
-
+        // FIX: prefer obs/ERT-*_tidy.csv (as you noted), but keep fallback to old location
         const std::string wf = system->GetWorkingFolder();
 
-        if (want3)
-        {
-            try_load_bh("ERT-3", 6.7979,
-                        {
-                            join_path_mc(wf, "obs/ERT-3_tidy.csv"),
-                            join_path_mc(wf, "ERT-3_tidy.csv"),
-                            join_path_mc(path, "ERT-3_tidy.csv")
-                        },
-                        /*preferred_depth_offset_m=*/0.0);
-        }
+        const std::string ert3_new = join_path_mc(join_path_mc(wf, "obs"), "ERT-3_tidy.csv");
+        const std::string ert5_new = join_path_mc(join_path_mc(wf, "obs"), "ERT-5_tidy.csv");
 
-        if (want5)
-        {
-            try_load_bh("ERT-5", 4.3974,
-                        {
-                            join_path_mc(wf, "obs/ERT-5_tidy.csv"),
-                            join_path_mc(wf, "ERT-5_tidy.csv"),
-                            join_path_mc(path, "ERT-5_tidy.csv")
-                        },
-                        /*preferred_depth_offset_m=*/0.0);
-        }
+        const std::string ert3_old = join_path_mc(wf, "ERT-3_tidy.csv");
+        const std::string ert5_old = join_path_mc(wf, "ERT-5_tidy.csv");
 
-        if (initBHs.empty())
-        {
-            std::cout << "ERT-IC: No valid tidy profiles loaded -> ALL blocks will use mp.initial_theta\n";
-        }
-        else
-        {
-            std::cout << "ERT-IC: Loaded boreholes = " << initBHs.size() << "\n";
-        }
-        std::cout << "==============================\n\n";
+        if (file_exists_mc(ert3_new)) addBH("ERT-3", 6.7979, ert3_new, 0.0);
+        else                          addBH("ERT-3", 6.7979, ert3_old, 0.0);
+
+        if (file_exists_mc(ert5_new)) addBH("ERT-5", 4.3974, ert5_new, 0.0);
+        else                          addBH("ERT-5", 4.3974, ert5_old, 0.0);
+
+        if (initBHs.size() == 0)
+            std::cout << "ERT-IC: No valid borehole tidy loaded -> will fallback to mp.initial_theta\n";
     }
 
-    auto theta_from_ert = [&](double r_m, double depth_m, double fallback)->double
-    {
-        if (!UseERTInitialTheta || initBHs.empty()) return fallback;
-
-        // avg through r
-        if (ERTInitialThetaMode == 1)
-            return theta_r_avg_profile_mc(initBHs, depth_m, fallback);
-
-        // default: IDW in r
-        return theta_idw_r_from_bhs_mc(initBHs, r_m, depth_m, fallback);
-    };
-
-    // Track how often we used ERT vs fallback (debug)
-    long long n_theta_ert = 0;
-    long long n_theta_fallback = 0;
-
     // ==================================================================
-    // RAINFALL DATABASE
+    //   RAINFALL DATABASE
     // ==================================================================
     struct RainDataset {
         std::string file;
@@ -632,7 +377,7 @@ bool ModelCreator::Create(model_parameters mp,
     std::string rain_file = path + RC.file;
 
     // ==================================================================
-    // Model blocks, links, ...
+    //   Model blocks, links, ...
     // ==================================================================
     double dr;
     double dz;
@@ -699,9 +444,6 @@ bool ModelCreator::Create(model_parameters mp,
                 B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             }
 
-            // NEW: Ksat scale factor (used by unsaturated_soil_revised_model.json)
-            B.SetVal("K_sat_scale_factor", KsatScale);
-
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
@@ -717,14 +459,16 @@ bool ModelCreator::Create(model_parameters mp,
             B.SetVal("act_X",actX);
             B.SetVal("act_Y",actY);
 
-            // INITIAL THETA
-            double theta_init = theta_from_ert(actX, actual_depth, mp.initial_theta);
-            if (UseERTInitialTheta && !initBHs.empty() && is_finite_mc(theta_init)) n_theta_ert++;
-            else n_theta_fallback++;
-
+            // INITIAL THETA (switchable)
+            double theta_init = mp.initial_theta;
+            if (UseERTInitialTheta && initBHs.size() > 0)
+            {
+                theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
+            }
             B.SetVal("theta",theta_init);
 
             B.SetVal("L",mp.L);
+
             system->AddBlock(B,false);
         }
     }
@@ -792,9 +536,6 @@ bool ModelCreator::Create(model_parameters mp,
                 B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             }
 
-            // NEW: Ksat scale factor
-            B.SetVal("K_sat_scale_factor", KsatScale);
-
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
@@ -810,14 +551,14 @@ bool ModelCreator::Create(model_parameters mp,
             B.SetVal("act_X",actX);
             B.SetVal("act_Y",actY);
 
-            // INITIAL THETA
-            double theta_init = theta_from_ert(actX, actual_depth, mp.initial_theta);
-            if (UseERTInitialTheta && !initBHs.empty() && is_finite_mc(theta_init)) n_theta_ert++;
-            else n_theta_fallback++;
-
+            // INITIAL THETA (switchable)
+            double theta_init = mp.initial_theta;
+            if (UseERTInitialTheta && initBHs.size() > 0)
+                theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
             B.SetVal("theta",theta_init);
 
             B.SetVal("L",mp.L);
+
             system->AddBlock(B,false);
         }
 
@@ -852,9 +593,6 @@ bool ModelCreator::Create(model_parameters mp,
                 B.SetVal("theta_res",SoilData["theta_r"].interpol(actual_depth));
             }
 
-            // NEW: Ksat scale factor
-            B.SetVal("K_sat_scale_factor", KsatScale);
-
             B.SetVal("area",area);
             B.SetVal("_width",dr*500);
             B.SetVal("_height",dr*500);
@@ -870,30 +608,22 @@ bool ModelCreator::Create(model_parameters mp,
             B.SetVal("act_X",actX);
             B.SetVal("act_Y",actY);
 
-            // INITIAL THETA
-            double theta_init = theta_from_ert(actX, actual_depth, mp.initial_theta);
-            if (UseERTInitialTheta && !initBHs.empty() && is_finite_mc(theta_init)) n_theta_ert++;
-            else n_theta_fallback++;
-
+            // INITIAL THETA (switchable)
+            double theta_init = mp.initial_theta;
+            if (UseERTInitialTheta && initBHs.size() > 0)
+                theta_init = theta_from_ert_mc(initBHs, actX, actual_depth, mp.initial_theta);
             B.SetVal("theta",theta_init);
 
             B.SetVal("L",mp.L);
+
             system->AddBlock(B,false);
         }
     }
 
-    // Debug summary (why you were seeing 0.2 everywhere)
-    if (UseERTInitialTheta)
-    {
-        std::cout << "\n=== ERT-IC summary ===\n";
-        std::cout << "Blocks set from ERT (computed): " << n_theta_ert << "\n";
-        std::cout << "Blocks fallback to mp.initial_theta: " << n_theta_fallback << "\n";
-        if (initBHs.empty())
-            std::cout << "Reason: initBHs empty (no tidy loaded / parsing failed / path wrong).\n";
-        std::cout << "======================\n\n";
-    }
-
-    // --- remainder unchanged (links, wells, rain, solver setup) ---
+    // -----------------------------
+    // The remainder of your file (links, wells, rain, solver setup)
+    // is unchanged from what you pasted.
+    // -----------------------------
 
     // Horizontal links for soils of gravel part
     std::cout<<"Horizontal links for soils of gravel part"<<std::endl;
@@ -909,10 +639,7 @@ bool ModelCreator::Create(model_parameters mp,
             L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
             L.SetVal("length",dr);
 
-            system->AddLink(L,
-                ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(),
-                ("Soil-g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(),
-                false);
+            system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil-g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
         }
 
     // Vertical links for soils of gravel part
@@ -926,10 +653,7 @@ bool ModelCreator::Create(model_parameters mp,
             L.SetName(("VL-Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil-g (" + QString::number(i+1) + "$" + QString::number(j+1)+ ")").toStdString());
             L.SetType("soil_to_soil_link");
 
-            system->AddLink(L,
-                ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(),
-                ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(),
-                false);
+            system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
         }
 
     // Horizontal links for soils under well
@@ -947,10 +671,7 @@ bool ModelCreator::Create(model_parameters mp,
                 L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_uw));
                 L.SetVal("length",dr);
 
-                system->AddLink(L,
-                    ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(),
-                    ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(),
-                    false);
+                system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(), ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), false);
             }
 
     // Vertical links for soils under well (first one)
@@ -965,29 +686,23 @@ bool ModelCreator::Create(model_parameters mp,
         L.SetName(("VL-Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ") - Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw)+ ")").toStdString());
         L.SetType("soil_to_soil_link");
 
-        system->AddLink(L,
-            ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ")").toStdString(),
-            ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw) + ")").toStdString(),
-            false);
+        system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ")").toStdString(), ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw) + ")").toStdString(), false);
     }
 
     // Vertical links for soils under well
     std::cout<<"Vertical links for soils under well"<<std::endl;
     for (int i=0; i<mp.nr_uw+1; i++)
-        for (int j = 0; j < nz_uw_n; j++)
+       for (int j = 0; j < nz_uw_n; j++)
             if (j*dz<mp.DepthtoGroundWater)
             {
-                Link L;
-                L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
+            Link L;
+            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
 
-                L.SetName(("VL-Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ") - Soil-uw (" + QString::number(i) + "$" + QString::number(j+1)+ ")").toStdString());
-                L.SetType("soil_to_soil_link");
+            L.SetName(("VL-Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ") - Soil-uw (" + QString::number(i) + "$" + QString::number(j+1)+ ")").toStdString());
+            L.SetType("soil_to_soil_link");
 
-                system->AddLink(L,
-                    ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(),
-                    ("Soil-uw (" + QString::number(i) + "$" + QString::number(j+1) + ")").toStdString(),
-                    false);
-            }
+            system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(), ("Soil-uw (" + QString::number(i) + "$" + QString::number(j+1) + ")").toStdString(), false);
+    }
 
     // Well_c
     std::cout<<"Well_c"<<std::endl;
@@ -1074,33 +789,29 @@ bool ModelCreator::Create(model_parameters mp,
     for (int j=0; j<mp.nz_g; j++)
         if (j*dz<mp.DepthofWell_t)
         {
-            Link L;
-            L.SetQuantities(system->GetMetaModel(), "Well2soil horizontal link");
+                Link L;
+                L.SetQuantities(system->GetMetaModel(), "Well2soil horizontal link");
 
-            int i_g=1;
-            L.SetName(("HL_Well_g - Soil-g (" + QString::number(i_g) + "$" + QString::number(j)+ ")").toStdString());
-            L.SetType("Well2soil horizontal link");
+                int i_g=1;
+                L.SetName(("HL_Well_g - Soil-g (" + QString::number(i_g) + "$" + QString::number(j)+ ")").toStdString());
+                L.SetType("Well2soil horizontal link");
 
-            L.SetVal("length",dr/2);
+                L.SetVal("length",dr/2);
 
-            system->AddLink(L, "Well_g",
-                ("Soil-g (" + QString::number(i_g) + "$" + QString::number(j) + ")").toStdString(),
-                false);
+                system->AddLink(L, "Well_g", ("Soil-g (" + QString::number(i_g) + "$" + QString::number(j) + ")").toStdString(), false);
         }
 
     // Vertical links for well to under well soils
     std::cout<<"Vertical links for well to under well soils"<<std::endl;
-    Link L1;
-    L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");
+        Link L1;
+        L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");
 
-    int i_uw=0;
-    int j_uw=0;
-    L1.SetName(("VL_Well_g - Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw)+ ")").toStdString());
-    L1.SetType("Well2soil vertical link");
+        int i_uw=0;
+        int j_uw=0;
+        L1.SetName(("VL_Well_g - Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw)+ ")").toStdString());
+        L1.SetType("Well2soil vertical link");
 
-    system->AddLink(L1, "Well_g",
-        ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(),
-        false);
+        system->AddLink(L1, "Well_g", ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(), false);
 
     // Graoundwater fixed head
     std::cout<<"Groundwater"<<std::endl;
@@ -1125,56 +836,54 @@ bool ModelCreator::Create(model_parameters mp,
         L2.SetName(("Soil to Groundwater (" + QString::number(i) + ")").toStdString());
         L2.SetType("soil_to_fixedhead_link");
 
-        system->AddLink(L2,
-            ("Soil-uw (" + QString::number(i) + "$" + QString::number(nz_uw_n-1) + ")").toStdString(),
-            "Ground Water",
-            false);
+        system->AddLink(L2, ("Soil-uw (" + QString::number(i) + "$" + QString::number(nz_uw_n-1) + ")").toStdString(), "Ground Water", false);
     }
 
     if (raincfg.rain_data != 5)
     {
-        // Rain
-        std::cout<<"Rain"<<std::endl;
-        Source rain;
-        rain.SetQuantities(system->GetMetaModel(), "Precipitation");
-        rain.SetType("Precipitation");
-        rain.SetName("Rain");
-        rain.SetVal("_height",3000);
-        rain.SetVal("_width",3000);
-        rain.SetVal("x",-5000);
-        rain.SetVal("y",-500);
+    // Rain
+    std::cout<<"Rain"<<std::endl;
+    Source rain;
+    rain.SetQuantities(system->GetMetaModel(), "Precipitation");
+    rain.SetType("Precipitation");
+    rain.SetName("Rain");
+    rain.SetVal("_height",3000);
+    rain.SetVal("_width",3000);
+    rain.SetVal("x",-5000);
+    rain.SetVal("y",-500);
 
-        rain.SetProperty("timeseries", rain_file);
-        system->AddSource(rain, false);
+    rain.SetProperty("timeseries", rain_file);
 
-        // Catchment
-        std::cout<<"Catchment"<<std::endl;
-        Block catchment;
-        catchment.SetQuantities(system->GetMetaModel(), "Catchment");
-        catchment.SetName("Catchment");
-        catchment.SetType("Catchment");
-        catchment.SetVal("_height",3000);
-        catchment.SetVal("_width",3000);
-        catchment.SetVal("x",-5000);
-        catchment.SetVal("y",0);
-        catchment.SetVal("ManningCoeff",mp.ManningCoeff_cm);
-        catchment.SetVal("Slope",mp.Slope_cm);
-        catchment.SetVal("area",mp.area_cm);
-        catchment.SetVal("Width",mp.Width_cm);
-        catchment.SetVal("y",0);
-        system->AddBlock(catchment,false);
-        system->block("Catchment")->SetProperty("Precipitation","Rain");
-        std::cout<<"Catchment to well link"<<std::endl;
+    system->AddSource(rain, false);
 
-        // Catchment to well
-        std::cout<<"Catchment to well"<<std::endl;
-        Link L3;
-        L3.SetQuantities(system->GetMetaModel(), "Surface water to well");
-        L3.SetName("Catchment to well");
-        L3.SetType("Surface water to well");
-        L3.SetVal("ManningCoeff",mp.ManningCoeff_cmw);
-        L3.SetVal("length",mp.length_cmw);
-        system->AddLink(L3, "Catchment", "Well_c", false);
+    // Catchment
+    std::cout<<"Catchment"<<std::endl;
+    Block catchment;
+    catchment.SetQuantities(system->GetMetaModel(), "Catchment");
+    catchment.SetName("Catchment");
+    catchment.SetType("Catchment");
+    catchment.SetVal("_height",3000);
+    catchment.SetVal("_width",3000);
+    catchment.SetVal("x",-5000);
+    catchment.SetVal("y",0);
+    catchment.SetVal("ManningCoeff",mp.ManningCoeff_cm);
+    catchment.SetVal("Slope",mp.Slope_cm);
+    catchment.SetVal("area",mp.area_cm);
+    catchment.SetVal("Width",mp.Width_cm);
+    catchment.SetVal("y",0);
+    system->AddBlock(catchment,false);
+    system->block("Catchment")->SetProperty("Precipitation","Rain");
+    std::cout<<"Catchment to well link"<<std::endl;
+
+    // Catchment to well
+    std::cout<<"Catchment to well"<<std::endl;
+    Link L3;
+    L3.SetQuantities(system->GetMetaModel(), "Surface water to well");
+    L3.SetName("Catchment to well");
+    L3.SetType("Surface water to well");
+    L3.SetVal("ManningCoeff",mp.ManningCoeff_cmw);
+    L3.SetVal("length",mp.length_cmw);
+    system->AddLink(L3, "Catchment", "Well_c", false);
     }
 
     // Tracer (mean age)
@@ -1200,6 +909,7 @@ bool ModelCreator::Create(model_parameters mp,
     system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
 
     system->SetSettingsParameter("maximum_time_allowed",simcfg.maximum_time_allowed);
+
     system->SetSettingsParameter("maximum_number_of_matrix_inverstions",simcfg.maximum_matrix_inversions);
 
     system->SetSystemSettings();
