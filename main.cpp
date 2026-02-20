@@ -91,50 +91,35 @@ int main(int argc, char *argv[])
     //       K_sat = K_sat_original * K_sat_scale_factor
     //
     //   CLI examples:
-    //       --ksat-scale 0.5
-    //       --ksat-scale=2.0
+    //       --ksat-scale 10
+    //       --ksat-scale=10
+    //
+    //   Optional per-group overrides:
+    //       --ksat-scale-g 2
+    //       --ksat-scale-uw 0.5
+    //
+    //   Behavior:
+    //     - default applies to ALL soils
+    //     - if g/uw override is provided (finite >0), it overrides only that group
     // ============================================================
-    simcfg.KsatScaleFactor = parse_ksat_scale(argc, argv, /*default=*/2.0);
+    simcfg.KsatScaleFactor    = parse_ksat_scale(argc, argv, 1.0);
+    simcfg.KsatScaleFactor_g  = parse_ksat_scale_g(argc, argv, 1.0);
+    simcfg.KsatScaleFactor_uw = parse_ksat_scale_uw(argc, argv, 5.0);
 
     // ============================================================
     //   INITIAL THETA MODE (AUTO for ERT analysis runs)
-    //
-    //   - If user explicitly provides --init-theta, we respect it.
-    //   - Otherwise, when rain_data == 5 (ERT analysis), default to ERT_IDW_R
-    //
-    //   Modes:
-    //     Default      -> uniform mp.initial_theta
-    //     ERT_IDW_R    -> ERT depth profiles + radial IDW blend  => theta(r,z)
-    //     ERT_R_Avg    -> ERT depth profiles + radial average    => theta(z)
-    //     ERT3_Only    -> only ERT-3 profile
-    //     ERT5_Only    -> only ERT-5 profile
-    //
-    //   CLI examples:
-    //     --init-theta idw
-    //     --init-theta ravg
-    //     --init-theta ert3
-    //     --init-theta ert5
-    //     --init-theta default
     // ============================================================
 
     const bool is_ert_analysis_run = (raincfg.rain_data == 5);
 
-    // IMPORTANT:
-    // cli_has_init_theta() is now implemented in ERT_comparison.cpp (single TU),
-    // declared in ERT_comparison.h to avoid multiple-definition/link errors.
     const bool user_set_init_theta = cli_has_init_theta(argc, argv);
-
     InitThetaMode initThetaMode = parse_init_theta_mode(argc, argv);
 
-    // AUTO default for ERT analysis runs if user did not specify init-theta
     if (is_ert_analysis_run && !user_set_init_theta)
-        initThetaMode = InitThetaMode::ERT_IDW_R;  // automatic default for ERT runs
+        initThetaMode = InitThetaMode::ERT_IDW_R;
 
     const bool useERTInit = (initThetaMode != InitThetaMode::Default);
 
-    // ModelCreator expects simple integer switches:
-    //   ERTInitialThetaMode  : 0 = IDW_R , 1 = R_Avg
-    //   ERTInitialThetaWhich : 0 = both , 3 = ERT-3 only , 5 = ERT-5 only
     int mc_mode  = 0;
     int mc_which = 0;
 
@@ -157,7 +142,9 @@ int main(int argc, char *argv[])
          << ", mc_mode=" << mc_mode
          << ", mc_which=" << mc_which << ")\n";
 
-    cout << "KsatScaleFactor = " << simcfg.KsatScaleFactor << "\n\n";
+    cout << "KsatScaleFactor(default) = " << simcfg.KsatScaleFactor << "\n";
+    cout << "KsatScaleFactor_g        = " << simcfg.KsatScaleFactor_g  << "\n";
+    cout << "KsatScaleFactor_uw       = " << simcfg.KsatScaleFactor_uw << "\n\n";
 
     // ============================================================
     //   FIELD GENERATOR
@@ -189,7 +176,6 @@ int main(int argc, char *argv[])
 
     ModelCreator ModCreate;
 
-    // Pass ERT initialization settings to ModelCreator (modelcreator.cpp)
     ModCreate.UseERTInitialTheta   = useERTInit;
     ModCreate.ERTInitialThetaMode  = mc_mode;
     ModCreate.ERTInitialThetaWhich = mc_which;
@@ -314,9 +300,6 @@ int main(int argc, char *argv[])
     // ============================================================
     //   ERT plots / snapshots @ measurement times
     // ============================================================
-    // With the AUTO init-theta logic above:
-    //   - rain_data == 5 defaults to ERT_IDW_R
-    //   - unless user overrides with --init-theta ...
     export_ert_snapshots_at_measurement_times(
         uniformoutput_ERT, mp, system, raincfg,
         /*use_resultgrid_ert=*/true,

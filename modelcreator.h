@@ -3,6 +3,7 @@
 
 #include <gsl/gsl_rng.h>
 #include <string>
+#include <limits>   // <-- for quiet_NaN()
 
 class System;
 class FieldGenerator;
@@ -29,11 +30,20 @@ struct SimulationConfig
     double maximum_time_allowed      = 10 * 86400;     // default 10 days
     double maximum_matrix_inversions = 10 * 200000;    // default 2,000,000
 
-    // NEW: global multiplier for Soil blocks' K_sat
+    // ---------------------------------------------------------
+    // Ksat scaling (DEFAULT + per-group overrides)
+    //
     // unsaturated_soil_revised_model.json uses:
     //   K_sat = K_sat_original * K_sat_scale_factor
-    // We will set "K_sat_scale_factor" per Soil block to this value.
-    double KsatScaleFactor = 1.0;
+    //
+    // We set "K_sat_scale_factor" per Soil block.
+    // If group override is NaN (or <=0), it falls back to default.
+    // ---------------------------------------------------------
+    double KsatScaleFactor = 1.0;  // default for ALL soil blocks
+
+    // Optional overrides:
+    double KsatScaleFactor_g  = std::numeric_limits<double>::quiet_NaN(); // Soil-g
+    double KsatScaleFactor_uw = std::numeric_limits<double>::quiet_NaN(); // Soil-uw
 };
 
 // =============================================================
@@ -105,29 +115,18 @@ struct model_parameters
 };
 
 // =============================================================
-//   Initial-theta (ERT) mode switches (NEW)
-// =============================================================
-//
-// These are intentionally small/simple ints so you can toggle
-// them from main without pulling extra headers.
-//
-// ERTInitialThetaMode:
-//   0 -> ERT-based through r (IDW in radius), depth-varying profile
-//   1 -> ERT-based average through r (one depth-varying profile)
-//
-// ERTInitialThetaWhich:
-//   0 -> use BOTH ERT-3 and ERT-5
-//   3 -> use ONLY ERT-3
-//   5 -> use ONLY ERT-5
-//
-
-// =============================================================
 //   CLI parsing (DECLARATIONS ONLY — definitions in modelcreator.cpp)
 // =============================================================
 
-// Ksat scale CLI parsing (keeps main.cpp clean)
+// Default/global Ksat scale
 // Accepts: --ksat-scale 0.5   or   --ksat-scale=0.5
 double parse_ksat_scale(int argc, char** argv, double default_val = 1.0);
+
+// Optional per-group overrides (use provided default if flag is missing)
+// Accepts: --ksat-scale-g 0.5   or   --ksat-scale-g=0.5
+//          --ksat-scale-uw 2.0  or   --ksat-scale-uw=2.0
+double parse_ksat_scale_g(int argc, char** argv, double default_val = 1.0);
+double parse_ksat_scale_uw(int argc, char** argv, double default_val = 1.0);
 
 // =============================================================
 //   ModelCreator Class
@@ -148,8 +147,6 @@ public:
 
     // ------------------------------------------------------------
     // Optional initial-theta assignment from ERT tidy CSVs
-    // (ERT-3_tidy.csv, ERT-5_tidy.csv). Uses the FIRST time slice
-    // in each tidy file and maps theta [%] -> theta [0..1].
     // ------------------------------------------------------------
     bool UseERTInitialTheta = false;
 

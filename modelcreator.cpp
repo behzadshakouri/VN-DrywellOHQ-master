@@ -1,7 +1,7 @@
 // modelcreator.cpp  (FULL, updated)
-// - Restores Ksat scale factor behavior: writes "K_sat_scale_factor" into ALL Soil blocks
-// - Keeps your ERT initial-theta logic as you had it (toggle via main -> simcfg + flags)
-// - Keeps parse_ksat_scale() definition here (matches modelcreator.h declaration)
+// - Supports Ksat scale factors: default + per-group (g / uw)
+// - Writes "K_sat_scale_factor" into ALL Soil blocks
+// - parse_ksat_scale(), parse_ksat_scale_g(), parse_ksat_scale_uw() defined here ONLY
 
 #include "modelcreator.h"
 #include "System.h"
@@ -38,23 +38,22 @@ static inline std::string join_path_mc(std::string a, const std::string& b)
 }
 
 // ------------------------------------------------------------
-// CLI parsing (definition for modelcreator.h declaration)
+// CLI parsing (definitions for modelcreator.h declarations)
 // ------------------------------------------------------------
 static bool starts_with_ksat_(const std::string& s, const std::string& pfx)
 {
     return s.size() >= pfx.size() && s.compare(0, pfx.size(), pfx) == 0;
 }
 
-// Accepts: --ksat-scale 0.5   or   --ksat-scale=0.5
-double parse_ksat_scale(int argc, char** argv, double default_val)
+static double parse_ksat_scale_key(int argc, char** argv,
+                                  const std::string& keySp,
+                                  const std::string& keyEq,
+                                  double default_val)
 {
     for (int i = 1; i < argc; ++i)
     {
         std::string a = argv[i] ? std::string(argv[i]) : std::string();
-
         std::string v;
-        const std::string keyEq = "--ksat-scale=";
-        const std::string keySp = "--ksat-scale";
 
         if (starts_with_ksat_(a, keyEq))
         {
@@ -79,8 +78,29 @@ double parse_ksat_scale(int argc, char** argv, double default_val)
             return default_val;
         }
     }
-
     return default_val;
+}
+
+// Accepts: --ksat-scale 0.5   or   --ksat-scale=0.5
+double parse_ksat_scale(int argc, char** argv, double default_val)
+{
+    return parse_ksat_scale_key(argc, argv, "--ksat-scale", "--ksat-scale=", default_val);
+}
+
+// Accepts: --ksat-scale-g 0.5   or   --ksat-scale-g=0.5
+double parse_ksat_scale_g(int argc, char** argv, double default_val)
+{
+    return parse_ksat_scale_key(argc, argv,
+        "--ksat-scale-g", "--ksat-scale-g=",
+        default_val);
+}
+
+// Accepts: --ksat-scale-uw 0.5   or   --ksat-scale-uw=0.5
+double parse_ksat_scale_uw(int argc, char** argv, double default_val)
+{
+    return parse_ksat_scale_key(argc, argv,
+        "--ksat-scale-uw", "--ksat-scale-uw=",
+        default_val);
 }
 
 // Reads FIRST time-slice profile from a tidy CSV like:
@@ -157,7 +177,7 @@ static bool read_ert_tidy_first_profile_mc(
         }
     }
 
-    // Fallback: if tolerance was still too strict for some reason, take exact min time rows
+    // Fallback: if tolerance was still too strict, take exact min time rows
     if (depth_m.empty()) {
         for (const auto& r : rows) {
             if (r.t == t0) {
@@ -302,7 +322,6 @@ bool ModelCreator::Create(model_parameters mp,
 
     // ==================================================================
     //   OPTIONAL: Assign initial theta from ERT tidy observed profiles
-    //   Uses FIRST time-slice in each tidy file and maps pct->fraction
     // ==================================================================
     std::vector<ObsBH_MC> initBHs;
 
@@ -330,7 +349,6 @@ bool ModelCreator::Create(model_parameters mp,
             }
         };
 
-        // FIX: prefer obs/ERT-*_tidy.csv, keep fallback to old location
         const std::string wf = system->GetWorkingFolder();
 
         const std::string ert3_new = join_path_mc(join_path_mc(wf, "obs"), "ERT-3_tidy.csv");
@@ -390,16 +408,20 @@ bool ModelCreator::Create(model_parameters mp,
     int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw;
 
     // ============================================================
-    // Ksat scale factor (from main via simcfg)
-    // unsaturated_soil_revised_model.json uses:
-    //   K_sat = K_sat_original * K_sat_scale_factor
+    // Ksat scale factors: default + per-group overrides
     // ============================================================
-    const double ksat_scale =
-        (std::isfinite(simcfg.KsatScaleFactor) && simcfg.KsatScaleFactor > 0.0)
-        ? simcfg.KsatScaleFactor
-        : 1.0;
+    auto sane_scale = [](double x, double fallback)
+    {
+        return (std::isfinite(x) && x > 0.0) ? x : fallback;
+    };
 
-    std::cout << "KsatScaleFactor (applied to Soil blocks) = " << ksat_scale << "\n";
+    const double ksat_scale_default = sane_scale(simcfg.KsatScaleFactor, 1.0);
+    const double ksat_scale_g       = sane_scale(simcfg.KsatScaleFactor_g,  ksat_scale_default);
+    const double ksat_scale_uw      = sane_scale(simcfg.KsatScaleFactor_uw, ksat_scale_default);
+
+    std::cout << "KsatScaleFactor default = " << ksat_scale_default << "\n"
+              << "KsatScaleFactor_g       = " << ksat_scale_g << "\n"
+              << "KsatScaleFactor_uw      = " << ksat_scale_uw << "\n";
 
     // Soil Blocks around gravel part
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
@@ -447,7 +469,7 @@ bool ModelCreator::Create(model_parameters mp,
             if (Mode == _realization_mode::stochastic)
             {
                 B.SetVal("K_sat_original",Ksat);
-                B.SetVal("K_sat_scale_factor", ksat_scale);
+                B.SetVal("K_sat_scale_factor", ksat_scale_g); // <-- Soil-g uses g scale
 
                 B.SetVal("alpha",alpha);
                 B.SetVal("n",n);
@@ -457,7 +479,7 @@ bool ModelCreator::Create(model_parameters mp,
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
-                B.SetVal("K_sat_scale_factor", ksat_scale);
+                B.SetVal("K_sat_scale_factor", ksat_scale_g); // <-- Soil-g uses g scale
 
                 B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
                 B.SetVal("n",SoilData["n"].interpol(actual_depth));
@@ -543,7 +565,7 @@ bool ModelCreator::Create(model_parameters mp,
             if (Mode == _realization_mode::stochastic)
             {
                 B.SetVal("K_sat_original",Ksat);
-                B.SetVal("K_sat_scale_factor", ksat_scale);
+                B.SetVal("K_sat_scale_factor", ksat_scale_uw); // <-- Soil-uw uses uw scale
 
                 B.SetVal("alpha",alpha);
                 B.SetVal("n",n);
@@ -553,7 +575,7 @@ bool ModelCreator::Create(model_parameters mp,
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
-                B.SetVal("K_sat_scale_factor", ksat_scale);
+                B.SetVal("K_sat_scale_factor", ksat_scale_uw); // <-- Soil-uw uses uw scale
 
                 B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
                 B.SetVal("n",SoilData["n"].interpol(actual_depth));
@@ -604,7 +626,7 @@ bool ModelCreator::Create(model_parameters mp,
             if (Mode == _realization_mode::stochastic)
             {
                 B.SetVal("K_sat_original",Ksat);
-                B.SetVal("K_sat_scale_factor", ksat_scale);
+                B.SetVal("K_sat_scale_factor", ksat_scale_uw); // <-- also uw scale
 
                 B.SetVal("alpha",alpha);
                 B.SetVal("n",n);
@@ -614,7 +636,7 @@ bool ModelCreator::Create(model_parameters mp,
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
-                B.SetVal("K_sat_scale_factor", ksat_scale);
+                B.SetVal("K_sat_scale_factor", ksat_scale_uw); // <-- also uw scale
 
                 B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
                 B.SetVal("n",SoilData["n"].interpol(actual_depth));
