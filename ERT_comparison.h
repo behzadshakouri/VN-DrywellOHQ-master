@@ -13,6 +13,7 @@ struct RainConfig;
 // ============================================================
 // Small shared helpers (used by main.cpp too)
 // ============================================================
+// NOTE: Declarations only. Implement these in EXACTLY ONE .cpp file.
 bool file_exists_cpp(const std::string& p);
 std::string lower_copy(std::string s);
 
@@ -20,7 +21,7 @@ std::string lower_copy(std::string s);
 // CLI: Initial-theta mode (used by main.cpp to configure ModelCreator)
 // ============================================================
 // NOTE: Declarations only. Implement these in EXACTLY ONE .cpp file
-// (e.g., modelcreator.cpp) to avoid multiple-definition linker errors.
+// (e.g., ERT_comparison.cpp) to avoid multiple-definition linker errors.
 enum class InitThetaMode
 {
     Default,    // use mp.initial_theta
@@ -30,8 +31,13 @@ enum class InitThetaMode
     ERT_R_Avg   // use both, average in r
 };
 
+// Returns parsed mode (if flag not provided, your implementation decides default).
 InitThetaMode parse_init_theta_mode(int argc, char** argv);
 const char*   init_theta_mode_name(InitThetaMode m);
+
+// True if user explicitly provided --init-theta or --init-theta=<val>
+// (useful for "automatic" behavior in main: only enable ERT init when flag exists)
+bool          cli_has_init_theta(int argc, char** argv);
 
 // ============================================================
 // Data structures for ERT/Borehole exports

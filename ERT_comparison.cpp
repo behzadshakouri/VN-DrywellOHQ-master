@@ -29,13 +29,29 @@ bool file_exists_cpp(const std::string& p)
 std::string lower_copy(std::string s)
 {
     std::transform(s.begin(), s.end(), s.begin(),
-                   [](unsigned char c){ return (unsigned char)std::tolower(c); });
+                   [](unsigned char c){ return (char)std::tolower(c); });
     return s;
 }
 
 // ------------------------------------------------------------
 // CLI parsing for init-theta
 // ------------------------------------------------------------
+
+// NEW: moved-from-main helper (declaration in ERT_comparison.h)
+bool cli_has_init_theta(int argc, char** argv)
+{
+    // user explicitly provided init-theta?
+    //   --init-theta <val>
+    //   --init-theta=<val>
+    for (int i = 1; i < argc; ++i)
+    {
+        std::string a = argv[i] ? argv[i] : "";
+        if (a == "--init-theta") return true;
+        if (a.rfind("--init-theta=", 0) == 0) return true;
+    }
+    return false;
+}
+
 InitThetaMode parse_init_theta_mode(int argc, char** argv)
 {
     // Default should mean "use mp.initial_theta" unless user overrides via CLI.
@@ -80,10 +96,10 @@ InitThetaMode parse_init_theta_mode(int argc, char** argv)
             apply_token(argv[++i]);
         }
         // Optional convenience flags (do not require a value)
-        else if (a == "--ert3")    mode = InitThetaMode::ERT3_Only;
-        else if (a == "--ert5")    mode = InitThetaMode::ERT5_Only;
-        else if (a == "--ert-idw") mode = InitThetaMode::ERT_IDW_R;
-        else if (a == "--ert-ravg")mode = InitThetaMode::ERT_R_Avg;
+        else if (a == "--ert3")     mode = InitThetaMode::ERT3_Only;
+        else if (a == "--ert5")     mode = InitThetaMode::ERT5_Only;
+        else if (a == "--ert-idw")  mode = InitThetaMode::ERT_IDW_R;
+        else if (a == "--ert-ravg") mode = InitThetaMode::ERT_R_Avg;
     }
 
     return mode;

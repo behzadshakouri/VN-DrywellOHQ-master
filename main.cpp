@@ -18,17 +18,17 @@
 #include <iomanip>
 
 #ifdef Behzad
-    const string path="/home/behzad/Projects/VN Drywell_Models/";
-    const string ohq_r="/home/behzad/Projects/OpenHydroQual/resources/";
+    const std::string path  = "/home/behzad/Projects/VN Drywell_Models/";
+    const std::string ohq_r = "/home/behzad/Projects/OpenHydroQual/resources/";
 #elif PowerEdge
-    const string path="/mnt/3rd900/Projects/VN Drywell_Models/";
-    const string ohq_r="/mnt/3rd900/Projects/OpenHydroQual/resources/";
+    const std::string path  = "/mnt/3rd900/Projects/VN Drywell_Models/";
+    const std::string ohq_r = "/mnt/3rd900/Projects/OpenHydroQual/resources/";
 #elif Arash
-    const string path="/home/arash/Projects/VN Drywell_Models/";
-    const string ohq_r="/home/arash/Projects/OpenHydroQual/resources/";
+    const std::string path  = "/home/arash/Projects/VN Drywell_Models/";
+    const std::string ohq_r = "/home/arash/Projects/OpenHydroQual/resources/";
 #elif SligoCreek
-    const string path="/media/arash/E/Projects/VN Drywell_Models/";
-    const string ohq_r="/media/arash/E/Projects/OpenHydroQual/resources/";
+    const std::string path  = "/media/arash/E/Projects/VN Drywell_Models/";
+    const std::string ohq_r = "/media/arash/E/Projects/OpenHydroQual/resources/";
 #endif
 
 using namespace std;
@@ -39,17 +39,21 @@ int main(int argc, char *argv[])
     //   SIMULATION CONFIGURATION
     // ============================================================
 
-    bool Model_Creator = 1; // 1 = build model and solve; 0 = load model and re-use saved outputs
-    bool Run_Solve = Model_Creator;
+    bool Model_Creator = 1;   // 1 = build model and solve; 0 = load model and re-use saved outputs
+    bool Run_Solve     = Model_Creator;
 
     SimulationConfig simcfg;
     RainConfig raincfg;
 
-    raincfg.rain_data = 5; // Synthetic
+    // ------------------------------------------
+    // ERT analysis run = synthetic rainfall (5)
+    // ------------------------------------------
+    raincfg.rain_data = 5;   // Synthetic rainfall
 
-    int Simulation_num = 1;
+    int    Simulation_num  = 1;
     double Simulation_days = 2;
 
+    // Base_start is an Excel-day reference for your rainfall datasets
     double Base_start;
     if (raincfg.rain_data < 4)
         Base_start = 43750;
@@ -63,36 +67,76 @@ int main(int argc, char *argv[])
     simcfg.Base_start = Base_start;
     simcfg.Base_end   = Base_end;
 
-    if (Model_Creator) {
+    if (Model_Creator)
+    {
+        // New run: run from the base window
         simcfg.start_time = simcfg.Base_start;
         simcfg.end_time   = simcfg.Base_end;
-    } else {
+    }
+    else
+    {
+        // Re-using outputs: optionally shift the window by Simulation_num
         double shift = Simulation_days * (Simulation_num - 1);
         simcfg.start_time = simcfg.Base_start + shift;
         simcfg.end_time   = simcfg.Base_end   + shift;
     }
 
-    simcfg.maximum_time_allowed = 10 * 86400;
+    simcfg.maximum_time_allowed      = 10 * 86400;
     simcfg.maximum_matrix_inversions = 10 * 200000;
 
     // ============================================================
-    //   Ksat scale (CLI -> parsed in modelcreator.cpp, NOT here)
-    //   Usage:
-    //     --ksat-scale 0.5
-    //     --ksat-scale=2.0
+    //   Ksat Scale Factor (CLI)
+    //
+    //   unsaturated_soil_revised_model.json must use:
+    //       K_sat = K_sat_original * K_sat_scale_factor
+    //
+    //   CLI examples:
+    //       --ksat-scale 0.5
+    //       --ksat-scale=2.0
     // ============================================================
-    simcfg.KsatScaleFactor = parse_ksat_scale(argc, argv, /*default=*/2.0);
+    simcfg.KsatScaleFactor = parse_ksat_scale(argc, argv, /*default=*/1.0);
 
     // ============================================================
-    //   INITIAL THETA MODE (CLI switch)
+    //   INITIAL THETA MODE (AUTO for ERT analysis runs)
+    //
+    //   - If user explicitly provides --init-theta, we respect it.
+    //   - Otherwise, when rain_data == 5 (ERT analysis), default to ERT_IDW_R
+    //
+    //   Modes:
+    //     Default      -> uniform mp.initial_theta
+    //     ERT_IDW_R    -> ERT depth profiles + radial IDW blend  => theta(r,z)
+    //     ERT_R_Avg    -> ERT depth profiles + radial average    => theta(z)
+    //     ERT3_Only    -> only ERT-3 profile
+    //     ERT5_Only    -> only ERT-5 profile
+    //
+    //   CLI examples:
+    //     --init-theta idw
+    //     --init-theta ravg
+    //     --init-theta ert3
+    //     --init-theta ert5
+    //     --init-theta default
     // ============================================================
+
+    const bool is_ert_analysis_run = (raincfg.rain_data == 5);
+
+    // IMPORTANT:
+    // cli_has_init_theta() is now implemented in ERT_comparison.cpp (single TU),
+    // declared in ERT_comparison.h to avoid multiple-definition/link errors.
+    const bool user_set_init_theta = cli_has_init_theta(argc, argv);
 
     InitThetaMode initThetaMode = parse_init_theta_mode(argc, argv);
 
-    bool useERTInit = (initThetaMode != InitThetaMode::Default);
+    // AUTO default for ERT analysis runs if user did not specify init-theta
+    if (is_ert_analysis_run && !user_set_init_theta)
+        initThetaMode = InitThetaMode::ERT_IDW_R;  // automatic default for ERT runs
 
-    int mc_mode  = 0; // 0=IDW_R, 1=R_Avg
-    int mc_which = 0; // 0=Both, 3=ERT-3 only, 5=ERT-5 only
+    const bool useERTInit = (initThetaMode != InitThetaMode::Default);
+
+    // ModelCreator expects simple integer switches:
+    //   ERTInitialThetaMode  : 0 = IDW_R , 1 = R_Avg
+    //   ERTInitialThetaWhich : 0 = both , 3 = ERT-3 only , 5 = ERT-5 only
+    int mc_mode  = 0;
+    int mc_which = 0;
 
     if (initThetaMode == InitThetaMode::ERT3_Only) { mc_which = 3; mc_mode = 0; }
     if (initThetaMode == InitThetaMode::ERT5_Only) { mc_which = 5; mc_mode = 0; }
@@ -101,13 +145,18 @@ int main(int argc, char *argv[])
 
     cout << "=== Simulation Window ===\n";
     cout << "Start = " << simcfg.start_time << "\n";
-    cout << "End   = " << simcfg.end_time << "\n";
+    cout << "End   = " << simcfg.end_time   << "\n";
     cout << "Model_Creator = " << Model_Creator << "\n";
-    cout << "Run_Solve     = " << Run_Solve << "\n";
+    cout << "Run_Solve     = " << Run_Solve     << "\n";
+    cout << "Rain data     = " << raincfg.rain_data
+         << (is_ert_analysis_run ? " (ERT analysis)\n" : "\n");
+
     cout << "InitThetaMode = " << init_theta_mode_name(initThetaMode)
-         << " (UseERTInitialTheta=" << useERTInit
-         << ", mode=" << mc_mode
-         << ", which=" << mc_which << ")\n";
+         << " (user_set=" << (user_set_init_theta ? 1 : 0)
+         << ", UseERTInitialTheta=" << (useERTInit ? 1 : 0)
+         << ", mc_mode=" << mc_mode
+         << ", mc_which=" << mc_which << ")\n";
+
     cout << "KsatScaleFactor = " << simcfg.KsatScaleFactor << "\n\n";
 
     // ============================================================
@@ -118,18 +167,16 @@ int main(int argc, char *argv[])
     gen.setPDFMode(FieldGenerator::pdfmode::parametric);
     gen.setDx(0.5);
 
-    double currentDx = gen.getDx();
-    std::cout << "Grid spacing: " << currentDx << " m\n";
+    cout << "Grid spacing: " << gen.getDx() << " m\n";
 
-    std::string csvFile   = std::string(path) + "Soil retention params vs depth.csv";
-    std::string outPrefix = std::string(path);
+    std::string csvFile   = path + "Soil retention params vs depth.csv";
+    std::string outPrefix = path;
 
     std::vector<double> testDistances = {};
     std::vector<std::string> parameters = {"alpha", "n", "theta_s", "theta_r", "Ksat"};
 
-    for (const auto &param : parameters) {
+    for (const auto &param : parameters)
         generateAndAnalyzeField(gen, csvFile, param, 1, testDistances, outPrefix);
-    }
 
     // ============================================================
     //   BUILD OR LOAD MODEL
@@ -142,7 +189,8 @@ int main(int argc, char *argv[])
 
     ModelCreator ModCreate;
 
-    ModCreate.UseERTInitialTheta = useERTInit;
+    // Pass ERT initialization settings to ModelCreator (modelcreator.cpp)
+    ModCreate.UseERTInitialTheta   = useERTInit;
     ModCreate.ERTInitialThetaMode  = mc_mode;
     ModCreate.ERTInitialThetaWhich = mc_which;
 
@@ -161,7 +209,7 @@ int main(int argc, char *argv[])
         system->AddSolveVariableOrder("Storage");
 
         system->SetSettingsParameter("simulation_start_time", simcfg.start_time);
-        system->SetSettingsParameter("simulation_end_time", simcfg.end_time);
+        system->SetSettingsParameter("simulation_end_time",   simcfg.end_time);
         system->SetSystemSettings();
 
         mp = ModCreate.ModelParameters();
@@ -173,11 +221,12 @@ int main(int argc, char *argv[])
     // ============================================================
 
     system->SetSilent(false);
-    cout<<"Saving"<<endl;
-    system->SavetoScriptFile(path + "/CreatedModel.ohq");
-    system->SavetoJson(path + "Model_test.json",system->addedtemplates, false, true );
 
-    cout<<"CalcAllInitialValues ..."<<endl;
+    cout << "Saving model files...\n";
+    system->SavetoScriptFile(path + "/CreatedModel.ohq");
+    system->SavetoJson(path + "Model_test.json", system->addedtemplates, false, true);
+
+    cout << "CalcAllInitialValues ...\n";
     system->CalcAllInitialValues();
 
     // ============================================================
@@ -189,6 +238,7 @@ int main(int argc, char *argv[])
         auto start = std::chrono::high_resolution_clock::now();
         system->Solve(false, false);
         auto end = std::chrono::high_resolution_clock::now();
+
         std::chrono::duration<double> elapsed = end - start;
         std::cout << "Solve took " << elapsed.count()/3600 << " hrs\n";
     }
@@ -212,7 +262,6 @@ int main(int argc, char *argv[])
         std::string outFile = system->GetWorkingFolder() + system->OutputFileName();
         std::string outLR   = system->GetWorkingFolder() + "Output_LR.txt";
 
-        // NO HELPERS: use Qt QFileInfo
         QString qOutFile = QString::fromStdString(outFile);
         QString qOutLR   = QString::fromStdString(outLR);
 
@@ -234,9 +283,11 @@ int main(int argc, char *argv[])
         }
     }
 
+    // Uniform time grids
     TimeSeriesSet<double> uniformoutput_LR  = rawOutputs.make_uniform(1);
     TimeSeriesSet<double> uniformoutput_HR  = rawOutputs.make_uniform(0.1);
 
+    // ERT grid: 1 minute in Excel-days
     double dt_ert_days = 1.0 / 1440.0;
     TimeSeriesSet<double> uniformoutput_ERT = rawOutputs.make_uniform(dt_ert_days);
 
@@ -246,19 +297,26 @@ int main(int argc, char *argv[])
 
     double start_counter = Model_Creator ? 0 : (simcfg.start_time - simcfg.Base_start);
 
-    ResultGrid resgrid(uniformoutput_LR,"theta",system);
-    cout<<"Writing VTPs"<<endl;
-    resgrid.WriteToVTP("Moisture_content",system->GetWorkingFolder()+"Moisture/"+"moisture.vtp",0,start_counter);
-    resgrid.write(system->GetWorkingFolder()+"theta_results.csv");
+    ResultGrid resgrid(uniformoutput_LR, "theta", system);
+    cout << "Writing VTPs\n";
+    resgrid.WriteToVTP("Moisture_content",
+                       system->GetWorkingFolder() + "Moisture/" + "moisture.vtp",
+                       0, start_counter);
+    resgrid.write(system->GetWorkingFolder() + "theta_results.csv");
 
-    ResultGrid resgrid_age(uniformoutput_LR,"meanagetracer:concentration",system);
-    cout<<"Writing age VTPs"<<endl;
-    resgrid_age.WriteToVTP("Mean Age",system->GetWorkingFolder()+"Moisture/"+"mean_age.vtp",0,start_counter);
-    resgrid_age.write(system->GetWorkingFolder()+"age_results.csv");
+    ResultGrid resgrid_age(uniformoutput_LR, "meanagetracer:concentration", system);
+    cout << "Writing age VTPs\n";
+    resgrid_age.WriteToVTP("Mean Age",
+                           system->GetWorkingFolder() + "Moisture/" + "mean_age.vtp",
+                           0, start_counter);
+    resgrid_age.write(system->GetWorkingFolder() + "age_results.csv");
 
-    //  =========================================================
-    //  ERT plots / snapshots @ measurement times
-    //  =========================================================
+    // ============================================================
+    //   ERT plots / snapshots @ measurement times
+    // ============================================================
+    // With the AUTO init-theta logic above:
+    //   - rain_data == 5 defaults to ERT_IDW_R
+    //   - unless user overrides with --init-theta ...
     export_ert_snapshots_at_measurement_times(
         uniformoutput_ERT, mp, system, raincfg,
         /*use_resultgrid_ert=*/true,
@@ -266,55 +324,11 @@ int main(int argc, char *argv[])
     );
 
     // ============================================================
-    //   WELL DEPTHS
-    // ============================================================
-
-    vector<string> well_block_c; well_block_c.push_back("Well_c");
-    ResultGrid well_depth_c = ResultGrid(uniformoutput_HR,well_block_c,"depth");
-    well_depth_c.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_c.csv");
-
-    // ============================================================
-    //   MEAN AGE AT GROUNDWATER + RECHARGE
-    // ============================================================
-
-    vector<string> age_tracer_locations;
-    vector<string> gw_rechage_locations;
-    for (unsigned int i = 0; i<=ModCreate.ModelParameters().nr_uw; i++)
-    {
-        age_tracer_locations.push_back("Soil-uw ("+ aquiutils::numbertostring(i) +"$"+ aquiutils::numbertostring(ModCreate.ModelParameters().nz_uw-1)+")");
-        gw_rechage_locations.push_back("Soil to Groundwater (" + aquiutils::numbertostring(i) + ")");
-    }
-    ResultGrid age_tracer_res = ResultGrid(uniformoutput_HR,age_tracer_locations, "meanagetracer:concentration");
-    ResultGrid flow_to_gw_res = ResultGrid(uniformoutput_HR,gw_rechage_locations, "flow");
-
-    TimeSeries<double> mean_age;
-    TimeSeries<double> groundwater_recharge;
-    for (unsigned int j = 0; j<age_tracer_res.maxnumpoints(); j++)
-    {
-        double sumprod = 0;
-        double sumflow = 0;
-        for (unsigned int i = 0; i<ModCreate.ModelParameters().nr_uw; i++)
-        {
-            sumprod += age_tracer_res[i].getValue(j)*flow_to_gw_res[i].getValue(j);
-            sumflow += flow_to_gw_res[i].getValue(j);
-        }
-        mean_age.append(age_tracer_res[0].getTime(j),sumprod/sumflow);
-        groundwater_recharge.append(age_tracer_res[0].getTime(j),sumflow);
-    }
-
-    mean_age.writefile(system->GetWorkingFolder()+"mean_age_at_gw.csv");
-    groundwater_recharge.writefile(system->GetWorkingFolder()+"gw_recharge.csv");
-
-    vector<string> well_block_g; well_block_g.push_back("Well_g");
-    ResultGrid well_depth_g = ResultGrid(uniformoutput_HR,well_block_g,"depth");
-    well_depth_g.Sum().writefile(system->GetWorkingFolder()+"WaterDepth_g.csv");
-
-    // ============================================================
     //   SAVE STATE VARIABLES
     // ============================================================
 
-    system->SaveStateVariableToJson("meanagetracer:concentration",path + "Age.json");
-    system->SaveStateVariableToJson("theta",path + "theta.json");
+    system->SaveStateVariableToJson("meanagetracer:concentration", path + "Age.json");
+    system->SaveStateVariableToJson("theta",                      path + "theta.json");
 
     return 0;
 }
