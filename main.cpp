@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
     //       --ksat-scale 0.5
     //       --ksat-scale=2.0
     // ============================================================
-    simcfg.KsatScaleFactor = parse_ksat_scale(argc, argv, /*default=*/1.0);
+    simcfg.KsatScaleFactor = parse_ksat_scale(argc, argv, /*default=*/5.0);
 
     // ============================================================
     //   INITIAL THETA MODE (AUTO for ERT analysis runs)

@@ -1,3 +1,8 @@
+// modelcreator.cpp  (FULL, updated)
+// - Restores Ksat scale factor behavior: writes "K_sat_scale_factor" into ALL Soil blocks
+// - Keeps your ERT initial-theta logic as you had it (toggle via main -> simcfg + flags)
+// - Keeps parse_ksat_scale() definition here (matches modelcreator.h declaration)
+
 #include "modelcreator.h"
 #include "System.h"
 #include "QString"
@@ -325,7 +330,7 @@ bool ModelCreator::Create(model_parameters mp,
             }
         };
 
-        // FIX: prefer obs/ERT-*_tidy.csv (as you noted), but keep fallback to old location
+        // FIX: prefer obs/ERT-*_tidy.csv, keep fallback to old location
         const std::string wf = system->GetWorkingFolder();
 
         const std::string ert3_new = join_path_mc(join_path_mc(wf, "obs"), "ERT-3_tidy.csv");
@@ -384,6 +389,18 @@ bool ModelCreator::Create(model_parameters mp,
 
     int nz_uw_n = (raincfg.rain_data == 5) ? mp.nz_uw_n : mp.nz_uw;
 
+    // ============================================================
+    // Ksat scale factor (from main via simcfg)
+    // unsaturated_soil_revised_model.json uses:
+    //   K_sat = K_sat_original * K_sat_scale_factor
+    // ============================================================
+    const double ksat_scale =
+        (std::isfinite(simcfg.KsatScaleFactor) && simcfg.KsatScaleFactor > 0.0)
+        ? simcfg.KsatScaleFactor
+        : 1.0;
+
+    std::cout << "KsatScaleFactor (applied to Soil blocks) = " << ksat_scale << "\n";
+
     // Soil Blocks around gravel part
     dr = (mp.RadiousOfInfluence-mp.rw_g)/mp.nr_g;
     dz = mp.DepthofWell_g/mp.nz_g;
@@ -430,6 +447,8 @@ bool ModelCreator::Create(model_parameters mp,
             if (Mode == _realization_mode::stochastic)
             {
                 B.SetVal("K_sat_original",Ksat);
+                B.SetVal("K_sat_scale_factor", ksat_scale);
+
                 B.SetVal("alpha",alpha);
                 B.SetVal("n",n);
                 B.SetVal("theta_sat",theta_s);
@@ -438,6 +457,8 @@ bool ModelCreator::Create(model_parameters mp,
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
+                B.SetVal("K_sat_scale_factor", ksat_scale);
+
                 B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
                 B.SetVal("n",SoilData["n"].interpol(actual_depth));
                 B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
@@ -522,6 +543,8 @@ bool ModelCreator::Create(model_parameters mp,
             if (Mode == _realization_mode::stochastic)
             {
                 B.SetVal("K_sat_original",Ksat);
+                B.SetVal("K_sat_scale_factor", ksat_scale);
+
                 B.SetVal("alpha",alpha);
                 B.SetVal("n",n);
                 B.SetVal("theta_sat",theta_s);
@@ -530,6 +553,8 @@ bool ModelCreator::Create(model_parameters mp,
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
+                B.SetVal("K_sat_scale_factor", ksat_scale);
+
                 B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
                 B.SetVal("n",SoilData["n"].interpol(actual_depth));
                 B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
@@ -579,6 +604,8 @@ bool ModelCreator::Create(model_parameters mp,
             if (Mode == _realization_mode::stochastic)
             {
                 B.SetVal("K_sat_original",Ksat);
+                B.SetVal("K_sat_scale_factor", ksat_scale);
+
                 B.SetVal("alpha",alpha);
                 B.SetVal("n",n);
                 B.SetVal("theta_sat",theta_s);
@@ -587,6 +614,8 @@ bool ModelCreator::Create(model_parameters mp,
             else
             {
                 B.SetVal("K_sat_original",SoilData["Ksat"].interpol(actual_depth));
+                B.SetVal("K_sat_scale_factor", ksat_scale);
+
                 B.SetVal("alpha",SoilData["alpha"].interpol(actual_depth));
                 B.SetVal("n",SoilData["n"].interpol(actual_depth));
                 B.SetVal("theta_sat",SoilData["theta_s"].interpol(actual_depth));
@@ -639,7 +668,8 @@ bool ModelCreator::Create(model_parameters mp,
             L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_g));
             L.SetVal("length",dr);
 
-            system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil-g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
+            system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(),
+                               ("Soil-g (" + QString::number(i+2) + "$" + QString::number(j) + ")").toStdString(), false);
         }
 
     // Vertical links for soils of gravel part
@@ -653,7 +683,8 @@ bool ModelCreator::Create(model_parameters mp,
             L.SetName(("VL-Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ") - Soil-g (" + QString::number(i+1) + "$" + QString::number(j+1)+ ")").toStdString());
             L.SetType("soil_to_soil_link");
 
-            system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
+            system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(),
+                               ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j+1) + ")").toStdString(), false);
         }
 
     // Horizontal links for soils under well
@@ -671,7 +702,8 @@ bool ModelCreator::Create(model_parameters mp,
                 L.SetVal("area",2*pi*((i+0.5)*dr+mp.rw_uw));
                 L.SetVal("length",dr);
 
-                system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(), ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), false);
+                system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(),
+                                   ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j) + ")").toStdString(), false);
             }
 
     // Vertical links for soils under well (first one)
@@ -686,7 +718,8 @@ bool ModelCreator::Create(model_parameters mp,
         L.SetName(("VL-Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ") - Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw)+ ")").toStdString());
         L.SetType("soil_to_soil_link");
 
-        system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ")").toStdString(), ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw) + ")").toStdString(), false);
+        system->AddLink(L, ("Soil-g (" + QString::number(i+1) + "$" + QString::number(j_g) + ")").toStdString(),
+                           ("Soil-uw (" + QString::number(i+1) + "$" + QString::number(j_uw) + ")").toStdString(), false);
     }
 
     // Vertical links for soils under well
@@ -695,14 +728,15 @@ bool ModelCreator::Create(model_parameters mp,
        for (int j = 0; j < nz_uw_n; j++)
             if (j*dz<mp.DepthtoGroundWater)
             {
-            Link L;
-            L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
+                Link L;
+                L.SetQuantities(system->GetMetaModel(), "soil_to_soil_link");
 
-            L.SetName(("VL-Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ") - Soil-uw (" + QString::number(i) + "$" + QString::number(j+1)+ ")").toStdString());
-            L.SetType("soil_to_soil_link");
+                L.SetName(("VL-Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ") - Soil-uw (" + QString::number(i) + "$" + QString::number(j+1)+ ")").toStdString());
+                L.SetType("soil_to_soil_link");
 
-            system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(), ("Soil-uw (" + QString::number(i) + "$" + QString::number(j+1) + ")").toStdString(), false);
-    }
+                system->AddLink(L, ("Soil-uw (" + QString::number(i) + "$" + QString::number(j) + ")").toStdString(),
+                                   ("Soil-uw (" + QString::number(i) + "$" + QString::number(j+1) + ")").toStdString(), false);
+            }
 
     // Well_c
     std::cout<<"Well_c"<<std::endl;
@@ -789,31 +823,31 @@ bool ModelCreator::Create(model_parameters mp,
     for (int j=0; j<mp.nz_g; j++)
         if (j*dz<mp.DepthofWell_t)
         {
-                Link L;
-                L.SetQuantities(system->GetMetaModel(), "Well2soil horizontal link");
+            Link L;
+            L.SetQuantities(system->GetMetaModel(), "Well2soil horizontal link");
 
-                int i_g=1;
-                L.SetName(("HL_Well_g - Soil-g (" + QString::number(i_g) + "$" + QString::number(j)+ ")").toStdString());
-                L.SetType("Well2soil horizontal link");
+            int i_g=1;
+            L.SetName(("HL_Well_g - Soil-g (" + QString::number(i_g) + "$" + QString::number(j)+ ")").toStdString());
+            L.SetType("Well2soil horizontal link");
 
-                L.SetVal("length",dr/2);
+            L.SetVal("length",dr/2);
 
-                system->AddLink(L, "Well_g", ("Soil-g (" + QString::number(i_g) + "$" + QString::number(j) + ")").toStdString(), false);
+            system->AddLink(L, "Well_g", ("Soil-g (" + QString::number(i_g) + "$" + QString::number(j) + ")").toStdString(), false);
         }
 
     // Vertical links for well to under well soils
     std::cout<<"Vertical links for well to under well soils"<<std::endl;
-        Link L1;
-        L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");
+    Link L1;
+    L1.SetQuantities(system->GetMetaModel(), "Well2soil vertical link");
 
-        int i_uw=0;
-        int j_uw=0;
-        L1.SetName(("VL_Well_g - Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw)+ ")").toStdString());
-        L1.SetType("Well2soil vertical link");
+    int i_uw=0;
+    int j_uw=0;
+    L1.SetName(("VL_Well_g - Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw)+ ")").toStdString());
+    L1.SetType("Well2soil vertical link");
 
-        system->AddLink(L1, "Well_g", ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(), false);
+    system->AddLink(L1, "Well_g", ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(), false);
 
-    // Graoundwater fixed head
+    // Groundwater fixed head
     std::cout<<"Groundwater"<<std::endl;
     Block gw;
     gw.SetQuantities(system->GetMetaModel(), "fixed_head");
@@ -841,49 +875,49 @@ bool ModelCreator::Create(model_parameters mp,
 
     if (raincfg.rain_data != 5)
     {
-    // Rain
-    std::cout<<"Rain"<<std::endl;
-    Source rain;
-    rain.SetQuantities(system->GetMetaModel(), "Precipitation");
-    rain.SetType("Precipitation");
-    rain.SetName("Rain");
-    rain.SetVal("_height",3000);
-    rain.SetVal("_width",3000);
-    rain.SetVal("x",-5000);
-    rain.SetVal("y",-500);
+        // Rain
+        std::cout<<"Rain"<<std::endl;
+        Source rain;
+        rain.SetQuantities(system->GetMetaModel(), "Precipitation");
+        rain.SetType("Precipitation");
+        rain.SetName("Rain");
+        rain.SetVal("_height",3000);
+        rain.SetVal("_width",3000);
+        rain.SetVal("x",-5000);
+        rain.SetVal("y",-500);
 
-    rain.SetProperty("timeseries", rain_file);
+        rain.SetProperty("timeseries", rain_file);
 
-    system->AddSource(rain, false);
+        system->AddSource(rain, false);
 
-    // Catchment
-    std::cout<<"Catchment"<<std::endl;
-    Block catchment;
-    catchment.SetQuantities(system->GetMetaModel(), "Catchment");
-    catchment.SetName("Catchment");
-    catchment.SetType("Catchment");
-    catchment.SetVal("_height",3000);
-    catchment.SetVal("_width",3000);
-    catchment.SetVal("x",-5000);
-    catchment.SetVal("y",0);
-    catchment.SetVal("ManningCoeff",mp.ManningCoeff_cm);
-    catchment.SetVal("Slope",mp.Slope_cm);
-    catchment.SetVal("area",mp.area_cm);
-    catchment.SetVal("Width",mp.Width_cm);
-    catchment.SetVal("y",0);
-    system->AddBlock(catchment,false);
-    system->block("Catchment")->SetProperty("Precipitation","Rain");
-    std::cout<<"Catchment to well link"<<std::endl;
+        // Catchment
+        std::cout<<"Catchment"<<std::endl;
+        Block catchment;
+        catchment.SetQuantities(system->GetMetaModel(), "Catchment");
+        catchment.SetName("Catchment");
+        catchment.SetType("Catchment");
+        catchment.SetVal("_height",3000);
+        catchment.SetVal("_width",3000);
+        catchment.SetVal("x",-5000);
+        catchment.SetVal("y",0);
+        catchment.SetVal("ManningCoeff",mp.ManningCoeff_cm);
+        catchment.SetVal("Slope",mp.Slope_cm);
+        catchment.SetVal("area",mp.area_cm);
+        catchment.SetVal("Width",mp.Width_cm);
+        catchment.SetVal("y",0);
+        system->AddBlock(catchment,false);
+        system->block("Catchment")->SetProperty("Precipitation","Rain");
+        std::cout<<"Catchment to well link"<<std::endl;
 
-    // Catchment to well
-    std::cout<<"Catchment to well"<<std::endl;
-    Link L3;
-    L3.SetQuantities(system->GetMetaModel(), "Surface water to well");
-    L3.SetName("Catchment to well");
-    L3.SetType("Surface water to well");
-    L3.SetVal("ManningCoeff",mp.ManningCoeff_cmw);
-    L3.SetVal("length",mp.length_cmw);
-    system->AddLink(L3, "Catchment", "Well_c", false);
+        // Catchment to well
+        std::cout<<"Catchment to well"<<std::endl;
+        Link L3;
+        L3.SetQuantities(system->GetMetaModel(), "Surface water to well");
+        L3.SetName("Catchment to well");
+        L3.SetType("Surface water to well");
+        L3.SetVal("ManningCoeff",mp.ManningCoeff_cmw);
+        L3.SetVal("length",mp.length_cmw);
+        system->AddLink(L3, "Catchment", "Well_c", false);
     }
 
     // Tracer (mean age)
@@ -909,7 +943,6 @@ bool ModelCreator::Create(model_parameters mp,
     system->SetSettingsParameter("simulation_end_time",Simulation_end_time);
 
     system->SetSettingsParameter("maximum_time_allowed",simcfg.maximum_time_allowed);
-
     system->SetSettingsParameter("maximum_number_of_matrix_inverstions",simcfg.maximum_matrix_inversions);
 
     system->SetSystemSettings();
