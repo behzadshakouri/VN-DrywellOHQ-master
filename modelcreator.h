@@ -63,8 +63,8 @@ struct model_parameters
     double RadiousOfInfluence = 20;
 
     int nr_c  = 4;
-    int nr_g  = 12;
-    int nr_uw = 12;
+    int nr_g  = 16; // 12
+    int nr_uw = 16; // 12
 
     int nz_c   = 5;
     int nz_g   = 15;
