@@ -1,0 +1,4 @@
+for d in *sc*; do
+  nd=$(echo "$d" | tr ' ' '_')
+  [ "$d" != "$nd" ] && ln -s "$d" "$nd"
+done
