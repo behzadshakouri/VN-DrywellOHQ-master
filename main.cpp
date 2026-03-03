@@ -103,8 +103,8 @@ int main(int argc, char *argv[])
     //     - if g/uw override is provided (finite >0), it overrides only that group
     // ============================================================
     simcfg.KsatScaleFactor    = parse_ksat_scale(argc, argv, 1.0);
-    simcfg.KsatScaleFactor_g  = parse_ksat_scale_g(argc, argv, 2.5);
-    simcfg.KsatScaleFactor_uw = parse_ksat_scale_uw(argc, argv, 25.0);
+    simcfg.KsatScaleFactor_g  = parse_ksat_scale_g(argc, argv, 3.0);
+    simcfg.KsatScaleFactor_uw = parse_ksat_scale_uw(argc, argv, 30.0);
 
     // ============================================================
     //   INITIAL THETA MODE (AUTO for ERT analysis runs)
@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
     //   ERTInitialThetaMode  : 0 = IDW_R , 1 = R_Avg
     //   ERTInitialThetaWhich : 0 = both , 3 = ERT-3 only , 5 = ERT-5 only
     int mc_mode  = 0;
-    int mc_which = 5;
+    int mc_which = 0;
 
     if (initThetaMode == InitThetaMode::ERT3_Only) { mc_which = 3; mc_mode = 0; }
     if (initThetaMode == InitThetaMode::ERT5_Only) { mc_which = 5; mc_mode = 0; }
