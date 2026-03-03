@@ -2,22 +2,30 @@
 """
 auto_sip_pipeline_v27_noscipy.py
 
-v27:
-- TARGET plot now matches "Van Nuys S12 Saturation Exponents at 0.01 Hz":
-  * Uses RAW linear-fit values (with intercept) but plotted on index-style axes:
-      logRI_vn  = log10(rho/rho_ref) = logRho - logRho_ref
-      logICI_vn = log10(sig_ref/sig) = logSig_ref - logImag   (always downtrend)
-    Reported n,p and R^2 in TARGET therefore match RAW values (e.g., n~1.03, p~0.72)
-    while BOTH panels trend downward.
-- TARGET gnuplot uses robust column("name") addressing (no fragile column numbers).
-- Keeps v26 features:
-  * FIXED ICI definition by default for INDEX (goal) via --ici-mode
-  * Logistic optional, diagnostics, clean-results, no SciPy F-test/AIC, etc.
-- Also fixes sign convention for p(index) depending on --ici-mode so it remains a positive exponent.
+v27 (FULL, corrected):
+- TARGET plot now matches your "Van Nuys S12 Saturation Exponents at 0.01 Hz":
+  * Uses RAW-like (WITH intercept) linear fits on VN-style index axes:
+      logRI_vn  = log10(rho/rho_ref)        = logRho - logRho_ref
+      logICI_vn = log10(sig_ref/sig_imag)   = logSig_ref - logImag   (always downtrend)
+    -> TARGET legend shows n,p and R^2 that match RAW behavior (e.g., n≈1.03, p≈0.72)
+    -> BOTH panels trend downward by construction.
 
-Notes:
-- The TARGET plot is now "raw-like Van Nuys style".
-- The INDEX plot remains the through-origin "goal" plot.
+- INDEX plot stays your "goal/through-origin" plot:
+    logRhoIdx  = log10(rho/rho_ref)
+    logImagIdx depends on --ici-mode:
+      --ici-mode sigref_over_sig  => logImagIdx = log10(sig_ref/sig_imag)
+      --ici-mode sig_over_sigref  => logImagIdx = log10(sig_imag/sig_ref)
+  p(index) is reported as a POSITIVE exponent consistently.
+
+- Uses robust gnuplot column("name") everywhere (no fragile column numbers).
+- Keeps v26 features: no SciPy F-test/AIC, optional logistic on RAW logRho vs logS, diagnostics,
+  --clean-results, etc.
+
+Runner example:
+  python3 auto_sip_pipeline_v27_noscipy.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+    --freq 0.01 --min-points 4 \
+    --logistic-min-points 6 --logistic-fast --logistic-max-seconds 8 \
+    --clean-results --ici-mode sig_over_sigref
 """
 
 import math
@@ -406,10 +414,12 @@ def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float):
         rho = to_float(df.iloc[idx][rho_col])
         sim = to_float(df.iloc[idx][imag_col])
 
-        out.append({"measurement": str(sh).strip(),
-                    "freq_hz": f_found,
-                    "rho": float(rho),
-                    "sigma_imag": float(sim)})
+        out.append({
+            "measurement": str(sh).strip(),
+            "freq_hz": f_found,
+            "rho": float(rho),
+            "sigma_imag": float(sim)
+        })
     return pd.DataFrame(out)
 
 # ---------------- Results cleaning ----------------
@@ -427,12 +437,6 @@ def clean_results_dir(results_dir: Path):
 # ---------------- Plot writers ----------------
 def write_plot_target(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
                       n_vn: float, r2_ri_vn: float, p_vn: float, r2_ici_vn: float):
-    """
-    v27 TARGET: Van Nuys style (raw-like values, both downtrend)
-      logRI_vn  = logRho - logRho_ref
-      logICI_vn = logSig_ref - logImag
-    Fits are WITH intercept (stored in *_fit columns), and legend shows only (n,p,R^2) like Van Nuys.
-    """
     label = "{:g}".format(target_freq)
     gp = """reset
 set datafile separator ','
@@ -446,14 +450,14 @@ set tics out
 set key top right
 set xlabel 'log10(Saturation)'
 
-# --- TOP: RI (Van Nuys style) ---
+# --- TOP: RI (Van Nuys raw-like, WITH intercept fit) ---
 set title 'VNs-12: Saturation Exponent (Resistivity Index) at {label} Hz'
 set ylabel 'log10(Resistivity Index)'
 plot '{csv}' using (column("logS")):(column("logRI_vn")) with points pt 7 ps 1.8 lc rgb '#0066ff' title 'data', \\
      '{csv}' using (column("logS")):(column("logRI_vn_fit")) with lines dt 2 lw 3 lc rgb '#0066ff' \\
      title sprintf('{label}Hz: n = %.2f, R^2 = %.3f', {nval}, {r2a})
 
-# --- BOTTOM: ICI (Van Nuys style) ---
+# --- BOTTOM: ICI (Van Nuys raw-like, WITH intercept fit; always downtrend) ---
 set title 'VNs-12: Saturation Exponent (Imag Conductivity Index) at {label} Hz'
 set ylabel 'log10(Imag Conductivity Index)'
 plot '{csv}' using (column("logS")):(column("logICI_vn")) with points pt 7 ps 1.8 lc rgb '#dd0000' title 'data', \\
@@ -461,11 +465,46 @@ plot '{csv}' using (column("logS")):(column("logICI_vn")) with points pt 7 ps 1.
      title sprintf('{label}Hz: p = %.2f, R^2 = %.3f', {pval}, {r2b})
 
 unset multiplot
-""".format(
-        out_png=out_png, label=label, csv=csv_name,
-        nval=n_vn, r2a=r2_ri_vn, pval=p_vn, r2b=r2_ici_vn
-    )
+""".format(out_png=out_png, csv=csv_name, label=label,
+           nval=n_vn, r2a=r2_ri_vn, pval=p_vn, r2b=r2_ici_vn)
     (results_dir / "plot_target_exponents.gp").write_text(gp)
+
+def write_plot_index(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                     n_idx: float, r2_ri: float, p_idx: float, r2_ici: float):
+    label = "{:g}".format(target_freq)
+    gp = """reset
+set datafile separator ','
+set datafile missing ''
+set term pngcairo size 1200,1600 enhanced font 'Arial,26'
+set output '{out_png}'
+set multiplot layout 2,1
+
+set grid
+set tics out
+set key top right
+set xlabel 'log10(Saturation)'
+
+# --- TOP: goal RI (through-origin) ---
+set title 'Resistivity Index vs Saturation (log-log) at {label} Hz'
+set ylabel 'log10(Resistivity Index)'
+a1 = {a1}
+f1(x) = a1*x
+plot '{csv}' using (column("logS")):(column("logRhoIdx")) with points pt 7 ps 1.7 title 'data', \\
+     f1(x) with lines dt 2 lw 3 title sprintf('{label}Hz: n=%.2f, R^2=%.3f', {n_idx}, {r2_ri})
+
+# --- BOTTOM: goal ICI (through-origin) ---
+set title 'Imag Conductivity Index vs Saturation (log-log) at {label} Hz'
+set ylabel 'log10(Imag Conductivity Index)'
+a2 = {a2}
+f2(x) = a2*x
+plot '{csv}' using (column("logS")):(column("logImagIdx")) with points pt 7 ps 1.7 title 'data', \\
+     f2(x) with lines dt 2 lw 3 title sprintf('{label}Hz: p=%.2f, R^2=%.3f', {p_idx}, {r2_ici})
+
+unset multiplot
+""".format(out_png=out_png, csv=csv_name, label=label,
+           a1=(-n_idx), n_idx=n_idx, r2_ri=r2_ri,
+           a2=(-p_idx), p_idx=p_idx, r2_ici=r2_ici)
+    (results_dir / "plot_index_exponents.gp").write_text(gp)
 
 def write_plot_raw(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
                    lin_rho, lin_im, log_fit_acc):
@@ -521,49 +560,11 @@ plot '{csv}' using (column("logS")):(column("logImag")) with points pt 7 ps 1.7 
      f2(x) with lines dt 2 lw 3 title sprintf('linear: p=%.2f, R^2=%.3f, p=%.3g', a2, {r2_i:.12g}, {p_i:.12g})
 
 unset multiplot
-""".format(
-        out_png=out_png, label=label, csv=csv_name,
-        a1=a_r, b1=b_r, r2_r=r2_r, p_r=p_r,
-        a2=a_i, b2=b_i, r2_i=r2_i, p_i=p_i,
-        log_defs=log_defs, log_clause=log_clause
-    )
+""".format(out_png=out_png, csv=csv_name, label=label,
+           a1=a_r, b1=b_r, r2_r=r2_r, p_r=p_r,
+           a2=a_i, b2=b_i, r2_i=r2_i, p_i=p_i,
+           log_defs=log_defs, log_clause=log_clause)
     (results_dir / "plot_raw_exponents.gp").write_text(gp)
-
-def write_plot_index(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                     n_idx: float, r2_ri: float, p_idx: float, r2_ici: float):
-    # Through-origin goal plot (kept)
-    label = "{:g}".format(target_freq)
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1200,1600 enhanced font 'Arial,26'
-set output '{out_png}'
-set multiplot layout 2,1
-set grid
-set key top right
-set xlabel 'log10(Saturation)'
-
-set title 'Resistivity Index vs Saturation (log-log) at {label} Hz'
-set ylabel 'log10(Resistivity Index)'
-a1 = {a1}
-f1(x) = a1*x
-plot '{csv}' using (column("logS")):(column("logRhoIdx")) with points pt 7 ps 1.7 title 'data', \\
-     f1(x) with lines dt 2 lw 3 title sprintf('{label}Hz: n=%.2f, R^2=%.3f', {n_idx}, {r2_ri})
-
-set title 'Imag Conductivity Index vs Saturation (log-log) at {label} Hz'
-set ylabel 'log10(Imag Conductivity Index)'
-a2 = {a2}
-f2(x) = a2*x
-plot '{csv}' using (column("logS")):(column("logImagIdx")) with points pt 7 ps 1.7 title 'data', \\
-     f2(x) with lines dt 2 lw 3 title sprintf('{label}Hz: p=%.2f, R^2=%.3f', {p_idx}, {r2_ici})
-
-unset multiplot
-""".format(
-        out_png=out_png, label=label, csv=csv_name,
-        a1=(-n_idx), n_idx=n_idx, r2_ri=r2_ri,
-        a2=(-p_idx), p_idx=p_idx, r2_ici=r2_ici
-    )
-    (results_dir / "plot_index_exponents.gp").write_text(gp)
 
 def write_plot_logistic_only(results_dir: Path, csv_name: str, out_png: str, target_freq: float, log_fit_acc):
     label = "{:g}".format(target_freq)
@@ -603,7 +604,7 @@ set ylabel 'log10(Resistivity)'
 {log_defs}
 plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
      {log_line}
-""".format(out_png=out_png, label=label, csv=csv_name, log_defs=log_defs, log_line=log_line)
+""".format(out_png=out_png, csv=csv_name, label=label, log_defs=log_defs, log_line=log_line)
     (results_dir / "plot_logistic_only.gp").write_text(gp)
 
 def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str, target_freq: float, has_log: bool):
@@ -659,9 +660,11 @@ set ylabel 'residual'
 {panel3}
 
 unset multiplot
-""".format(out_png=out_png, label=label, csv=csv_name, extra_curve=extra_curve, extra3=extra3, panel3=panel3)
+""".format(out_png=out_png, label=label, csv=csv_name,
+           extra_curve=extra_curve, extra3=extra3, panel3=panel3)
     (results_dir / "plot_logistic_diagnostics.gp").write_text(gp)
 
+# ---------------- Runner helpers ----------------
 def discover_run_roots_fast(base: Path):
     roots = set()
     for a in base.rglob(ANALYSIS_DIR):
@@ -733,17 +736,18 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     logRho_ref = safe_log10(rho_ref)
     logSig_ref = safe_log10(sig_ref)
 
-    # Indices (goal/index system)
+    # Common RI index axis
     sip_df["rho_idx"]   = sip_df["rho"] / rho_ref
+    sip_df["logRhoIdx"] = sip_df["logRho"] - logRho_ref
+
+    # ICI index depends on mode (for GOAL plot only)
     if ici_mode == "sig_over_sigref":
         sip_df["imag_idx"]   = sip_df["sigma_imag"] / sig_ref
         sip_df["logImagIdx"] = sip_df["logImag"] - logSig_ref
     else:
-        # default: FIXED ICI = sig_ref/sig
         sip_df["imag_idx"]   = sig_ref / sip_df["sigma_imag"]
         sip_df["logImagIdx"] = logSig_ref - sip_df["logImag"]
 
-    sip_df["logRhoIdx"] = sip_df["logRho"] - logRho_ref
     sip_df = sip_df[np.isfinite(sip_df["logRhoIdx"]) & np.isfinite(sip_df["logImagIdx"])]
 
     # RAW fits (logRho and logImag vs logS)
@@ -752,26 +756,26 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     lin_rho = {"slope": slope_r, "intercept": intercept_r, "r2": r2_r, "p": p_r, "aic": aic_lin_r}
     lin_im  = {"slope": slope_i, "intercept": intercept_i, "r2": r2_i, "p": p_i, "aic": aic_lin_i}
 
-    # Through-origin fits on INDEX (goal)
+    # Through-origin fits on INDEX (goal plot)
     a_ri,  r2_ri,  _ = linear_fit_through_origin(sip_df["logS"], sip_df["logRhoIdx"])
     a_ici, r2_ici, _ = linear_fit_through_origin(sip_df["logS"], sip_df["logImagIdx"])
 
-    # Convention: show positive exponents n,p such that plotted line is y = -(exponent)*logS
+    # Report positive exponents consistently:
     n_idx = -a_ri
     if ici_mode == "sig_over_sigref":
-        # logImagIdx = log(sig/sigref) => slope ~ +p
+        # logImagIdx = log(sig/sigref) => slope is +p
         p_idx = +a_ici
     else:
-        # logImagIdx = log(sigref/sig) => slope ~ -p
+        # logImagIdx = log(sigref/sig) => slope is -p
         p_idx = -a_ici
 
-    # ---- v27 Van Nuys TARGET variables (raw-like values, both downtrend) ----
-    # These are independent of --ici-mode on the goal plot; we lock them to the Van Nuys style.
-    sip_df["logRI_vn"]  = sip_df["logRho"] - logRho_ref             # log10(rho/rho_ref)
-    sip_df["logICI_vn"] = logSig_ref - sip_df["logImag"]            # log10(sig_ref/sig) => downtrend
+    # ---- v27 TARGET (Van Nuys style): raw-like linear fits WITH intercept ----
+    # Lock to VN definition always (independent of --ici-mode):
+    sip_df["logRI_vn"]  = sip_df["logRhoIdx"]                 # log10(rho/rho_ref)
+    sip_df["logICI_vn"] = logSig_ref - sip_df["logImag"]      # log10(sig_ref/sig_imag) => downtrend
 
-    slope_RI_vn,  int_RI_vn,  r2_RI_vn,  p_RI_vn,  _, _ = linear_fit(sip_df["logS"], sip_df["logRI_vn"])
-    slope_ICI_vn, int_ICI_vn, r2_ICI_vn, p_ICI_vn, _, _ = linear_fit(sip_df["logS"], sip_df["logICI_vn"])
+    slope_RI_vn,  int_RI_vn,  r2_RI_vn,  _, _, _ = linear_fit(sip_df["logS"], sip_df["logRI_vn"])
+    slope_ICI_vn, int_ICI_vn, r2_ICI_vn, _, _, _ = linear_fit(sip_df["logS"], sip_df["logICI_vn"])
 
     n_vn = -slope_RI_vn
     p_vn = -slope_ICI_vn
@@ -821,14 +825,16 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     sip_df[[
         "measurement","freq_hz","S","rho","sigma_imag",
         "logS","logRho","logImag",
-        "rho_idx","imag_idx","logRhoIdx","logImagIdx",
 
-        # v27 Van Nuys target variables + fitted lines
+        "rho_idx","imag_idx",
+        "logRhoIdx","logImagIdx",
+
+        # v27 TARGET VN columns
         "logRI_vn","logICI_vn","logRI_vn_fit","logICI_vn_fit",
 
-        # diagnostics/residuals/fit lines for RAW rho
+        # diagnostics columns
         "resid_lin_rho","resid_log_rho",
-        "logRho_linfit","logRho_logfit"
+        "logRho_linfit","logRho_logfit",
     ]].to_csv(csv_path, index=False)
 
     report = results_dir / f"fit_report_{tag}Hz.txt"
@@ -837,22 +843,22 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
         f"Matched points used: {len(sip_df)}\n"
         f"Reference point (max S): {sip_df.iloc[iref]['measurement']}  S_ref={sip_df.iloc[iref]['S']:.6g}\n"
         f"rho_ref={rho_ref:.6g}, sigma_ref={sig_ref:.6g}\n\n"
-        f"ICI mode (GOAL/INDEX plot): {ici_mode}\n"
-        f"INDEX defs (goal plot): RI=rho/rho_ref\n"
-        f"                     ICI={'sigma_imag/sigma_ref' if ici_mode=='sig_over_sigref' else 'sigma_ref/sigma_imag'}\n\n"
+        f"GOAL/INDEX ici_mode: {ici_mode}\n"
+        f"GOAL defs: RI=rho/rho_ref\n"
+        f"          ICI={'sigma_imag/sigma_ref' if ici_mode=='sig_over_sigref' else 'sigma_ref/sigma_imag'}\n\n"
         f"GOAL (through-origin) exponents:\n"
         f"  n(index)={n_idx:.6g} (R2={r2_ri:.6g})\n"
         f"  p(index)={p_idx:.6g} (R2={r2_ici:.6g})\n\n"
-        f"TARGET (Van Nuys style: RAWLIKE, with intercept, both downtrend):\n"
-        f"  logRI_vn = log10(rho/rho_ref)  => n={n_vn:.6g}, R2={r2_RI_vn:.6g}, p(F)={p_RI_vn:.6g}\n"
-        f"  logICI_vn = log10(sig_ref/sig) => p={p_vn:.6g}, R2={r2_ICI_vn:.6g}, p(F)={p_ICI_vn:.6g}\n\n"
+        f"TARGET (Van Nuys style; WITH intercept; both downtrend):\n"
+        f"  n_vn={n_vn:.6g} (R2={r2_RI_vn:.6g})\n"
+        f"  p_vn={p_vn:.6g} (R2={r2_ICI_vn:.6g})\n\n"
         f"RAW linear:\n"
-        f"  logRho=a*logS+b: a={slope_r:.6g}, b={intercept_r:.6g}, n(raw)={-slope_r:.6g}, R2={r2_r:.6g}, p(F)={p_r:.6g}\n"
-        f"  logImag=p*logS+q: p={slope_i:.6g}, q={intercept_i:.6g}, R2={r2_i:.6g}, p(F)={p_i:.6g}\n\n"
+        f"  logRho=a*logS+b: a={slope_r:.6g}, b={intercept_r:.6g}, n(raw)={-slope_r:.6g}, R2={r2_r:.6g}\n"
+        f"  logImag=p*logS+q: p={slope_i:.6g}, q={intercept_i:.6g}, R2={r2_i:.6g}\n\n"
         f"Logistic: status={log_status}, accepted={bool(log_fit_acc is not None)}, reason={log_accept_reason}\n"
     )
 
-    # Plot scripts
+    # Plot scripts + gnuplot
     write_plot_target(results_dir, csv_path.name, f"target_exponents_{tag}Hz.png", target_freq,
                       n_vn, r2_RI_vn, p_vn, r2_ICI_vn)
 
@@ -867,7 +873,6 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     write_plot_logistic_diag(results_dir, csv_path.name, f"exponents_logistic_diagnostics_{tag}Hz.png",
                              target_freq, has_log=(log_fit_acc is not None))
 
-    # Run gnuplot
     if not dry_run:
         _run_gnuplot("plot_target_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
         _run_gnuplot("plot_index_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
@@ -875,12 +880,20 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
         _run_gnuplot("plot_logistic_only.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
         _run_gnuplot("plot_logistic_diagnostics.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
 
-    return {"run": str(run_root), "status": "OK", "points": int(len(sip_df)),
-            "logistic_attempted": bool(log_fit is not None),
-            "logistic_accepted": bool(log_fit_acc is not None),
-            "logistic_status": log_status,
-            "logistic_reason": log_accept_reason,
-            "ici_mode": ici_mode}
+    return {
+        "run": str(run_root),
+        "status": "OK",
+        "points": int(len(sip_df)),
+        "logistic_attempted": bool(log_fit is not None),
+        "logistic_accepted": bool(log_fit_acc is not None),
+        "logistic_status": log_status,
+        "logistic_reason": log_accept_reason,
+        "ici_mode": ici_mode,
+        "n_vn": float(n_vn) if np.isfinite(n_vn) else n_vn,
+        "p_vn": float(p_vn) if np.isfinite(p_vn) else p_vn,
+        "n_idx": float(n_idx) if np.isfinite(n_idx) else n_idx,
+        "p_idx": float(p_idx) if np.isfinite(p_idx) else p_idx,
+    }
 
 def main():
     ap = argparse.ArgumentParser()
@@ -899,8 +912,8 @@ def main():
                     help="Delete files inside each run's Results/ before writing new outputs.")
     ap.add_argument("--ici-mode", type=str, default="sigref_over_sig",
                     choices=["sigref_over_sig","sig_over_sigref"],
-                    help="GOAL/INDEX definition for ICI: sigref_over_sig (default, ICI=sigma_ref/sigma) "
-                         "or sig_over_sigref (ICI=sigma/sigma_ref). TARGET plot is always Van Nuys style.")
+                    help="GOAL/INDEX ICI definition: sigref_over_sig (default, ICI=sig_ref/sig) "
+                         "or sig_over_sigref (ICI=sig/sig_ref). TARGET is always Van Nuys style.")
     args = ap.parse_args()
 
     base = Path(args.top).expanduser().resolve()
@@ -934,6 +947,7 @@ def main():
             rows.append(res)
             dt = time.time() - ti
             print(f"[{i}/{len(roots)}] OK points={res.get('points',0)} "
+                  f"n_vn={res.get('n_vn',np.nan):.3g} p_vn={res.get('p_vn',np.nan):.3g} "
                   f"logistic_attempted={res.get('logistic_attempted',False)} "
                   f"logistic_accepted={res.get('logistic_accepted',False)} ({dt:.1f}s)", flush=True)
         except subprocess.TimeoutExpired:
