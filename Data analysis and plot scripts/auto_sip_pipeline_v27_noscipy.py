@@ -2,42 +2,28 @@
 """
 auto_sip_pipeline_v27_noscipy.py  (FULL)
 
-v27 (updated per your latest notes):
-1) TARGET plot matches Van Nuys style + values:
-   - VN-style indices on Y axes:
-       logRI_vn  = log10(rho/rho_ref)      = logRho - logRho_ref
-       logICI_vn = log10(sig_ref/sig_imag) = logSig_ref - logImag   (ALWAYS this for TARGET)
-   - Linear fit WITH intercept on these VN axes (raw-like), so values match your Van Nuys plots.
-   - Both panels trend downward by construction for typical SIP data.
+v27 (keeps ALL existing behavior) + ADDS one new fit method + new plots:
 
-2) Robust logbook handling even if Excel "Sample" name is wrong:
-   - We IGNORE Sample names when choosing which saturation block to use.
-   - We choose the best saturation block by OVERLAP with SIP measurement IDs (e.g., M1..M6)
-     found in the SIP output workbook for that run.
-   - Folder name is the source name for plots/reports.
+NEW (added, opt-in):
+- --vn-smin <float> : create an extra Van-Nuys-style TARGET fit/plot using ONLY points with S >= vn_smin
+  * Does NOT change existing fits/plots/outputs.
+  * Adds:
+      - fit numbers: n_vn_smin, p_vn_smin, R2s
+      - CSV columns: logRI_vn_fit_smin, logICI_vn_fit_smin
+      - Plot: target_exponents_Smin_<tag>Hz.png
+      - Script: plot_target_exponents_smin.gp
+      - Summary columns in Results_Summary_*Hz.csv
 
-3) Plot title formatting:
-   - Uses folder name (pretty-printed) as the source label.
-   - Converts patterns like "S-1" to "S_{-1}" (gnuplot enhanced text) so the minus is grouped.
-
-4) INDEX (goal) plot remains through-origin:
-   - logRhoIdx = log10(rho/rho_ref)
-   - logImagIdx depends on --ici-mode:
-       sigref_over_sig  => logImagIdx = log10(sig_ref/sig_imag)
-       sig_over_sigref  => logImagIdx = log10(sig_imag/sig_ref)
-   - Report p(index) as positive exponent consistently.
-
-5) Keeps v26 features:
-   - no SciPy F-test/AIC
-   - optional logistic on RAW logRho vs logS (fast grid search)
-   - diagnostics plots
-   - --clean-results
+Also:
+- Plot titles use folder name as source label.
+- Put S-1 in braces: 'S_{-1}' (gnuplot enhanced text) so the minus stays grouped.
 
 Runner example:
   python3 auto_sip_pipeline_v27_noscipy.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
     --freq 0.01 --min-points 4 \
     --logistic-min-points 6 --logistic-fast --logistic-max-seconds 8 \
-    --clean-results --ici-mode sig_over_sigref
+    --clean-results --ici-mode sig_over_sigref \
+    --vn-smin 0.30
 """
 
 import math
@@ -138,7 +124,6 @@ def pretty_source_name(run_folder_name: str) -> str:
     - Convert 'S-1' -> 'S_{-1}' for gnuplot enhanced text
     """
     s = str(run_folder_name).replace("_", " ").strip()
-    # Put S-<digits> in braces so minus sticks with the number (gnuplot enhanced text)
     s = re.sub(r'\bS-(\d+)\b', r'S_{-\1}', s)
     return s
 
@@ -443,7 +428,6 @@ def read_logbook_bestblock_by_overlap(log_xlsx: Path, sip_measurements_norm: lis
         if not id_col:
             continue
 
-        # usable row if has measurement id and has saturation (direct or computable)
         has_meas = ~df[id_col].astype(str).apply(_is_blank)
 
         if sat_col:
@@ -552,6 +536,66 @@ unset multiplot
 """.format(out_png=out_png, csv=csv_name, label=label, src=source_label,
            nval=n_vn, r2a=r2_ri_vn, pval=p_vn, r2b=r2_ici_vn)
     (results_dir / "plot_target_exponents.gp").write_text(gp)
+
+def write_plot_target_smin(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                           source_label: str, vn_smin: float,
+                           n_vn_smin: float, r2_ri_vn_smin: float, p_vn_smin: float, r2_ici_vn_smin: float):
+    label = "{:g}".format(target_freq)
+
+    # If fit not available, still generate a PNG with a clear message.
+    if not (np.isfinite(n_vn_smin) and np.isfinite(p_vn_smin) and np.isfinite(r2_ri_vn_smin) and np.isfinite(r2_ici_vn_smin)):
+        gp = """reset
+set term pngcairo size 1200,700 enhanced font 'Arial,26'
+set output '{out_png}'
+set grid
+unset key
+set title '{src}: TARGET (S >= {smin:g}) at {label} Hz'
+set label 1 'Not enough points for S >= {smin:g}' at graph 0.5,0.5 center
+set xrange [-2:0]
+set yrange [-1:1]
+plot '-' using 1:2 with points pt 7 ps 0 notitle
+-2 0
+0  0
+e
+""".format(out_png=out_png, src=source_label, smin=vn_smin, label=label)
+        (results_dir / "plot_target_exponents_smin.gp").write_text(gp)
+        return
+
+    gp = """reset
+set datafile separator ','
+set datafile missing ''
+set term pngcairo size 1200,1600 enhanced font 'Arial,26'
+set output '{out_png}'
+set multiplot layout 2,1
+
+set grid
+set tics out
+set key top right
+set xlabel 'log10(Saturation)'
+
+# --- TOP: RI (VN style, S>=Smin, WITH intercept) ---
+set title '{src}: TARGET (S >= {smin:g}) - Resistivity Index at {label} Hz'
+set ylabel 'log10(Resistivity Index)'
+plot '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logRI_vn"):1/0) \\
+     with points pt 7 ps 1.8 lc rgb '#0066ff' title 'data (S>=Smin)', \\
+     '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logRI_vn_fit_smin"):1/0) \\
+     with lines dt 2 lw 3 lc rgb '#0066ff' \\
+     title sprintf('{label}Hz: n = %.2f, R^2 = %.3f', {nval}, {r2a})
+
+# --- BOTTOM: ICI (VN style, S>=Smin, WITH intercept) ---
+set title '{src}: TARGET (S >= {smin:g}) - Imag Conductivity Index at {label} Hz'
+set ylabel 'log10(Imag Conductivity Index)'
+plot '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logICI_vn"):1/0) \\
+     with points pt 7 ps 1.8 lc rgb '#dd0000' title 'data (S>=Smin)', \\
+     '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logICI_vn_fit_smin"):1/0) \\
+     with lines dt 2 lw 3 lc rgb '#dd0000' \\
+     title sprintf('{label}Hz: p = %.2f, R^2 = %.3f', {pval}, {r2b})
+
+unset multiplot
+""".format(out_png=out_png, csv=csv_name, label=label, src=source_label, smin=vn_smin,
+           nval=n_vn_smin, r2a=r2_ri_vn_smin, pval=p_vn_smin, r2b=r2_ici_vn_smin)
+
+    (results_dir / "plot_target_exponents_smin.gp").write_text(gp)
 
 def write_plot_index(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
                      source_label: str,
@@ -785,7 +829,8 @@ def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
                 logistic_fast: bool, logistic_max_seconds: float,
                 gnuplot_timeout: int,
                 clean_results: bool,
-                ici_mode: str):
+                ici_mode: str,
+                vn_smin: float):
 
     analysis_dir = run_root / ANALYSIS_DIR
     raw_dir      = run_root / RAW_DIR
@@ -823,7 +868,7 @@ def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["logRho"]  = sip_df["rho"].apply(safe_log10)
     sip_df["logImag"] = sip_df["sigma_imag"].apply(safe_log10)
 
-    # Save dropped rows (missing S or bad logs) for debugging
+    # Save before filter for debugging
     dbg_all = sip_df.copy()
     dbg_all.to_csv(results_dir / f"debug_before_filter_{tag}Hz.csv", index=False)
 
@@ -895,6 +940,31 @@ def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["logRI_vn_fit"]  = slope_RI_vn  * sip_df["logS"] + int_RI_vn
     sip_df["logICI_vn_fit"] = slope_ICI_vn * sip_df["logS"] + int_ICI_vn
 
+    # ---- EXTRA TARGET FIT (VN style, WITH intercept) but only for S >= vn_smin ----
+    n_vn_smin = np.nan
+    p_vn_smin = np.nan
+    r2_RI_vn_smin = np.nan
+    r2_ICI_vn_smin = np.nan
+    slope_RI_vn_smin = np.nan
+    int_RI_vn_smin   = np.nan
+    slope_ICI_vn_smin = np.nan
+    int_ICI_vn_smin   = np.nan
+
+    sip_df["logRI_vn_fit_smin"]  = np.nan
+    sip_df["logICI_vn_fit_smin"] = np.nan
+
+    if vn_smin and vn_smin > 0:
+        sub = sip_df[sip_df["S"] >= vn_smin].copy()
+        if len(sub) >= min_points:
+            slope_RI_vn_smin, int_RI_vn_smin, r2_RI_vn_smin, _, _, _ = linear_fit(sub["logS"], sub["logRI_vn"])
+            slope_ICI_vn_smin, int_ICI_vn_smin, r2_ICI_vn_smin, _, _, _ = linear_fit(sub["logS"], sub["logICI_vn"])
+            n_vn_smin = -slope_RI_vn_smin
+            p_vn_smin = -slope_ICI_vn_smin
+
+            m = sip_df["S"] >= vn_smin
+            sip_df.loc[m, "logRI_vn_fit_smin"]  = slope_RI_vn_smin  * sip_df.loc[m, "logS"] + int_RI_vn_smin
+            sip_df.loc[m, "logICI_vn_fit_smin"] = slope_ICI_vn_smin * sip_df.loc[m, "logS"] + int_ICI_vn_smin
+
     # Logistic on RAW logRho vs logS
     log_fit = None
     log_status = "skipped"
@@ -943,6 +1013,7 @@ def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
 
         # TARGET VN columns
         "logRI_vn","logICI_vn","logRI_vn_fit","logICI_vn_fit",
+        "logRI_vn_fit_smin","logICI_vn_fit_smin",
 
         # diagnostics columns
         "resid_lin_rho","resid_log_rho",
@@ -976,10 +1047,25 @@ def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
         f"Logistic: status={log_status}, accepted={bool(log_fit_acc is not None)}, reason={log_accept_reason}\n"
     )
 
+    if vn_smin and vn_smin > 0:
+        report.write_text(report.read_text() +
+            f"\nEXTRA TARGET (VN style; WITH intercept; S >= {vn_smin:g}):\n"
+            f"  n_vn_smin={n_vn_smin:.6g} (R2={r2_RI_vn_smin:.6g})\n"
+            f"  p_vn_smin={p_vn_smin:.6g} (R2={r2_ICI_vn_smin:.6g})\n"
+        )
+
     # Plot scripts + gnuplot
     write_plot_target(results_dir, csv_path.name, f"target_exponents_{tag}Hz.png", target_freq,
                       source_label,
                       n_vn, r2_RI_vn, p_vn, r2_ICI_vn)
+
+    # Extra Smin plot (optional; does not affect anything else)
+    if vn_smin and vn_smin > 0:
+        write_plot_target_smin(
+            results_dir, csv_path.name, f"target_exponents_Smin_{tag}Hz.png", target_freq,
+            source_label, vn_smin,
+            n_vn_smin, r2_RI_vn_smin, p_vn_smin, r2_ICI_vn_smin
+        )
 
     write_plot_index(results_dir, csv_path.name, f"index_exponents_{tag}Hz.png", target_freq,
                      source_label,
@@ -1000,6 +1086,8 @@ def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
 
     if not dry_run:
         _run_gnuplot("plot_target_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
+        if vn_smin and vn_smin > 0:
+            _run_gnuplot("plot_target_exponents_smin.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
         _run_gnuplot("plot_index_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
         _run_gnuplot("plot_raw_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
         _run_gnuplot("plot_logistic_only.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
@@ -1018,10 +1106,16 @@ def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
         "logistic_status": log_status,
         "logistic_reason": log_accept_reason,
         "ici_mode": ici_mode,
+
         "n_vn": float(n_vn) if np.isfinite(n_vn) else n_vn,
         "p_vn": float(p_vn) if np.isfinite(p_vn) else p_vn,
         "n_idx": float(n_idx) if np.isfinite(n_idx) else n_idx,
         "p_idx": float(p_idx) if np.isfinite(p_idx) else p_idx,
+
+        # NEW summary fields (remain NaN if vn_smin not enabled or not enough points)
+        "vn_smin": float(vn_smin) if (vn_smin and vn_smin > 0) else 0.0,
+        "n_vn_smin": float(n_vn_smin) if np.isfinite(n_vn_smin) else n_vn_smin,
+        "p_vn_smin": float(p_vn_smin) if np.isfinite(p_vn_smin) else p_vn_smin,
     }
 
 
@@ -1045,6 +1139,10 @@ def main():
                     choices=["sigref_over_sig","sig_over_sigref"],
                     help="GOAL/INDEX ICI definition: sigref_over_sig (default, ICI=sig_ref/sig) "
                          "or sig_over_sigref (ICI=sig/sig_ref). TARGET always uses sig_ref/sig.")
+    # NEW:
+    ap.add_argument("--vn-smin", type=float, default=0.0,
+                    help="Extra VN-style TARGET fit/plot using only points with S >= vn_smin. "
+                         "Keeps existing fits/plots unchanged. Example: --vn-smin 0.30")
     args = ap.parse_args()
 
     base = Path(args.top).expanduser().resolve()
@@ -1071,16 +1169,23 @@ def main():
                 logistic_max_seconds=args.logistic_max_seconds,
                 gnuplot_timeout=args.gnuplot_timeout,
                 clean_results=args.clean_results,
-                ici_mode=args.ici_mode
+                ici_mode=args.ici_mode,
+                vn_smin=args.vn_smin
             )
             if res is None:
                 continue
             rows.append(res)
             dt = time.time() - ti
-            print(f"[{i}/{len(roots)}] OK points={res.get('points',0)} "
-                  f"n_vn={res.get('n_vn',np.nan):.3g} p_vn={res.get('p_vn',np.nan):.3g} "
-                  f"logistic_attempted={res.get('logistic_attempted',False)} "
-                  f"logistic_accepted={res.get('logistic_accepted',False)} ({dt:.1f}s)", flush=True)
+
+            msg = (f"[{i}/{len(roots)}] OK points={res.get('points',0)} "
+                   f"n_vn={res.get('n_vn',np.nan):.3g} p_vn={res.get('p_vn',np.nan):.3g}")
+            if args.vn_smin and args.vn_smin > 0:
+                msg += (f" | n_vn_smin={res.get('n_vn_smin',np.nan):.3g} "
+                        f"p_vn_smin={res.get('p_vn_smin',np.nan):.3g}")
+            msg += (f" logistic_attempted={res.get('logistic_attempted',False)} "
+                    f"logistic_accepted={res.get('logistic_accepted',False)} ({dt:.1f}s)")
+            print(msg, flush=True)
+
         except subprocess.TimeoutExpired:
             rows.append({"run": str(run), "status": "FAIL", "reason": "gnuplot timeout", "points": 0})
             print(f"[{i}/{len(roots)}] FAIL gnuplot timeout", flush=True)
