@@ -1,25 +1,37 @@
 #!/usr/bin/env python3
 """
-auto_sip_pipeline_v27_noscipy.py
+auto_sip_pipeline_v27_noscipy.py  (FULL)
 
-v27 (FULL, corrected):
-- TARGET plot now matches your "Van Nuys S12 Saturation Exponents at 0.01 Hz":
-  * Uses RAW-like (WITH intercept) linear fits on VN-style index axes:
-      logRI_vn  = log10(rho/rho_ref)        = logRho - logRho_ref
-      logICI_vn = log10(sig_ref/sig_imag)   = logSig_ref - logImag   (always downtrend)
-    -> TARGET legend shows n,p and R^2 that match RAW behavior (e.g., n≈1.03, p≈0.72)
-    -> BOTH panels trend downward by construction.
+v27 (updated per your latest notes):
+1) TARGET plot matches Van Nuys style + values:
+   - VN-style indices on Y axes:
+       logRI_vn  = log10(rho/rho_ref)      = logRho - logRho_ref
+       logICI_vn = log10(sig_ref/sig_imag) = logSig_ref - logImag   (ALWAYS this for TARGET)
+   - Linear fit WITH intercept on these VN axes (raw-like), so values match your Van Nuys plots.
+   - Both panels trend downward by construction for typical SIP data.
 
-- INDEX plot stays your "goal/through-origin" plot:
-    logRhoIdx  = log10(rho/rho_ref)
-    logImagIdx depends on --ici-mode:
-      --ici-mode sigref_over_sig  => logImagIdx = log10(sig_ref/sig_imag)
-      --ici-mode sig_over_sigref  => logImagIdx = log10(sig_imag/sig_ref)
-  p(index) is reported as a POSITIVE exponent consistently.
+2) Robust logbook handling even if Excel "Sample" name is wrong:
+   - We IGNORE Sample names when choosing which saturation block to use.
+   - We choose the best saturation block by OVERLAP with SIP measurement IDs (e.g., M1..M6)
+     found in the SIP output workbook for that run.
+   - Folder name is the source name for plots/reports.
 
-- Uses robust gnuplot column("name") everywhere (no fragile column numbers).
-- Keeps v26 features: no SciPy F-test/AIC, optional logistic on RAW logRho vs logS, diagnostics,
-  --clean-results, etc.
+3) Plot title formatting:
+   - Uses folder name (pretty-printed) as the source label.
+   - Converts patterns like "S-1" to "S_{-1}" (gnuplot enhanced text) so the minus is grouped.
+
+4) INDEX (goal) plot remains through-origin:
+   - logRhoIdx = log10(rho/rho_ref)
+   - logImagIdx depends on --ici-mode:
+       sigref_over_sig  => logImagIdx = log10(sig_ref/sig_imag)
+       sig_over_sigref  => logImagIdx = log10(sig_imag/sig_ref)
+   - Report p(index) as positive exponent consistently.
+
+5) Keeps v26 features:
+   - no SciPy F-test/AIC
+   - optional logistic on RAW logRho vs logS (fast grid search)
+   - diagnostics plots
+   - --clean-results
 
 Runner example:
   python3 auto_sip_pipeline_v27_noscipy.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
@@ -32,6 +44,7 @@ import math
 import argparse
 import subprocess
 import time
+import re
 from pathlib import Path
 
 import numpy as np
@@ -63,16 +76,9 @@ LOGISTIC_R2_EPS = 0.005
 LOGISTIC_REQUIRE_BETTER_AIC = True
 
 
+# ---------------- basic helpers ----------------
 def _norm(s: str) -> str:
     return str(s).strip().lower()
-
-def find_first_matching_file(folder: Path, hint: str, ext=".xlsx"):
-    if not folder.exists():
-        return None
-    for p in folder.rglob(f"*{ext}"):
-        if hint.lower() in p.name.lower():
-            return p
-    return None
 
 def pick_col(df: pd.DataFrame, cands):
     low = {_norm(c): c for c in df.columns}
@@ -81,6 +87,14 @@ def pick_col(df: pd.DataFrame, cands):
         if kk in low:
             return low[kk]
     return ""
+
+def find_first_matching_file(folder: Path, hint: str, ext=".xlsx"):
+    if not folder.exists():
+        return None
+    for p in folder.rglob(f"*{ext}"):
+        if hint.lower() in p.name.lower():
+            return p
+    return None
 
 def to_float(x):
     try:
@@ -102,6 +116,32 @@ def safe_log10(x):
 def sse(y, yhat):
     r = y - yhat
     return float(np.sum(r*r))
+
+def _is_blank(x) -> bool:
+    if x is None:
+        return True
+    s = str(x).strip()
+    return (s == "") or (s.lower() in ["nan", "none"])
+
+def norm_measid(s: str) -> str:
+    """
+    Normalize measurement ids like 'M 1', 'm-1', 'M_1' -> 'm1'
+    """
+    s = str(s).strip().lower()
+    s = re.sub(r'[^a-z0-9]+', '', s)
+    return s
+
+def pretty_source_name(run_folder_name: str) -> str:
+    """
+    Folder name used as plot/report source label.
+    - Replace '_' with space
+    - Convert 'S-1' -> 'S_{-1}' for gnuplot enhanced text
+    """
+    s = str(run_folder_name).replace("_", " ").strip()
+    # Put S-<digits> in braces so minus sticks with the number (gnuplot enhanced text)
+    s = re.sub(r'\bS-(\d+)\b', r'S_{-\1}', s)
+    return s
+
 
 # ---------------- F distribution SF (no SciPy) ----------------
 def betacf(a, b, x, maxit=200, eps=3e-14):
@@ -195,6 +235,7 @@ def linear_fit_through_origin(x, y):
     ss_tot = sse(y, np.full_like(y, np.mean(y)))
     r2 = 1.0 - ss_res/ss_tot if ss_tot > 0 else np.nan
     return a, float(r2), float(ss_res)
+
 
 # ---------------- Logistic fit (fast grid search, no SciPy) ----------------
 def logistic4(x, L, k, x0, c):
@@ -311,82 +352,15 @@ def accept_logistic(lin_r2, lin_aic, log_fit):
         return True, "AIC_improved"
     return False, "rejected"
 
-# ---------------- Logbook reading ----------------
-def read_logbook_anysheet(log_xlsx: Path, sample_filter: str|None):
-    xls = pd.ExcelFile(log_xlsx)
-    best = None
-
-    for sh in xls.sheet_names:
-        try:
-            df = pd.read_excel(log_xlsx, sheet_name=sh)
-        except Exception:
-            continue
-        if df.empty or len(df.columns) < 2:
-            continue
-
-        id_col     = pick_col(df, LOGBOOK_ID_COLS_CAND)
-        sat_col    = pick_col(df, LOGBOOK_SAT_COLS_CAND)
-        sample_col = pick_col(df, LOGBOOK_SAMPLE_COLS_CAND)
-
-        mw_col  = pick_col(df, LOGBOOK_MASSWATER_CAND)
-        por_col = pick_col(df, LOGBOOK_POROSITY_CAND)
-        vol_col = pick_col(df, LOGBOOK_COLVOL_CAND)
-
-        score = 0
-        if id_col: score += 3
-        if sat_col: score += 4
-        if sample_col: score += 1
-        if (not sat_col) and (mw_col and por_col and vol_col): score += 3
-        if score == 0:
-            continue
-
-        if (best is None) or (score > best[0]):
-            best = (score, sh, df, id_col, sat_col, sample_col, mw_col, por_col, vol_col)
-
-    if best is None:
-        raise RuntimeError(f"Logbook has no sheet with saturation info. Sheets: {xls.sheet_names}")
-
-    _, sh, df, id_col, sat_col, sample_col, mw_col, por_col, vol_col = best
-
-    if sample_filter and sample_col:
-        df = df[df[sample_col].astype(str).str.contains(sample_filter, case=False, na=False)]
-
-    if not id_col:
-        id_col = df.columns[0]
-
-    sat_map = {}
-    for _, r in df.iterrows():
-        mid = str(r.get(id_col, "")).strip()
-        if not mid or mid.lower() in ["nan","none"]:
-            continue
-
-        S = np.nan
-        if sat_col:
-            S = to_float(r.get(sat_col, np.nan))
-            if np.isfinite(S) and S > 1.0 and S <= 100.0:
-                S = S/100.0
-        else:
-            Mw  = to_float(r.get(mw_col, np.nan))   # g
-            phi = to_float(r.get(por_col, np.nan))
-            V   = to_float(r.get(vol_col, np.nan))  # m3
-            if np.isfinite(Mw) and np.isfinite(phi) and np.isfinite(V) and phi > 0 and V > 0:
-                Mw_kg = Mw/1000.0
-                rho_w = 1000.0
-                S = Mw_kg / (rho_w * (phi * V))
-
-        if np.isfinite(S) and S > 0:
-            sat_map[mid] = float(S)
-
-    if not sat_map:
-        raise RuntimeError(f"Selected logbook sheet '{sh}' but mapped 0 saturation rows.")
-
-    return sat_map, sh
 
 # ---------------- SIP output reading ----------------
-def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float):
+def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float, sheet_filter: str|None):
     xls = pd.ExcelFile(sip_xlsx)
     out = []
     for sh in xls.sheet_names:
+        if sheet_filter and (sheet_filter.lower() not in str(sh).lower()):
+            continue
+
         df = pd.read_excel(sip_xlsx, sheet_name=sh)
         if df.empty:
             continue
@@ -395,6 +369,7 @@ def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float):
         rho_col  = pick_col(df, SIP_RHO_CANDS)
         imag_col = pick_col(df, SIP_IMAG_CANDS)
 
+        # fallback heuristic
         if (not rho_col) or (not imag_col):
             if len(df.columns) >= 5:
                 imag_col = df.columns[1]
@@ -416,11 +391,118 @@ def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float):
 
         out.append({
             "measurement": str(sh).strip(),
+            "measurement_norm": norm_measid(sh),
             "freq_hz": f_found,
             "rho": float(rho),
             "sigma_imag": float(sim)
         })
     return pd.DataFrame(out)
+
+
+# ---------------- Logbook reading: choose best saturation BLOCK by overlap ----------------
+def _contiguous_blocks(mask: np.ndarray):
+    blocks = []
+    in_block = False
+    i0 = 0
+    for i, v in enumerate(mask):
+        if v and (not in_block):
+            in_block = True
+            i0 = i
+        elif (not v) and in_block:
+            blocks.append((i0, i-1))
+            in_block = False
+    if in_block:
+        blocks.append((i0, len(mask)-1))
+    return blocks
+
+def read_logbook_bestblock_by_overlap(log_xlsx: Path, sip_measurements_norm: list[str]):
+    """
+    Robust: ignore Sample names; choose the best saturation block by overlap with SIP measurement IDs.
+    """
+    xls = pd.ExcelFile(log_xlsx)
+    sip_set = set([m for m in sip_measurements_norm if not _is_blank(m)])
+
+    best = None
+    # best tuple: (score, sheet, blk_df, id_col, sat_col, mw_col, por_col, vol_col, overlap_count)
+
+    for sh in xls.sheet_names:
+        try:
+            df = pd.read_excel(log_xlsx, sheet_name=sh)
+        except Exception:
+            continue
+        if df is None or df.empty:
+            continue
+
+        id_col  = pick_col(df, LOGBOOK_ID_COLS_CAND) or ""
+        sat_col = pick_col(df, LOGBOOK_SAT_COLS_CAND)
+
+        mw_col  = pick_col(df, LOGBOOK_MASSWATER_CAND)
+        por_col = pick_col(df, LOGBOOK_POROSITY_CAND)
+        vol_col = pick_col(df, LOGBOOK_COLVOL_CAND)
+
+        if not id_col:
+            continue
+
+        # usable row if has measurement id and has saturation (direct or computable)
+        has_meas = ~df[id_col].astype(str).apply(_is_blank)
+
+        if sat_col:
+            has_sat = df[sat_col].apply(lambda x: np.isfinite(to_float(x)))
+        else:
+            if not (mw_col and por_col and vol_col):
+                continue
+            has_sat = df.apply(lambda r: np.isfinite(to_float(r.get(mw_col, np.nan)))
+                                         and np.isfinite(to_float(r.get(por_col, np.nan)))
+                                         and np.isfinite(to_float(r.get(vol_col, np.nan))), axis=1)
+
+        usable = (has_meas & has_sat).to_numpy(bool)
+        blocks = _contiguous_blocks(usable)
+        if not blocks:
+            continue
+
+        for (i0, i1) in blocks:
+            blk = df.iloc[i0:i1+1].copy()
+            blk_ids = blk[id_col].astype(str).apply(norm_measid).tolist()
+            overlap = len(set(blk_ids) & sip_set)
+
+            # Score: overlap dominates; tie-break by block size
+            score = overlap * 1000 + (i1 - i0 + 1)
+            if (best is None) or (score > best[0]):
+                best = (score, sh, blk, id_col, sat_col, mw_col, por_col, vol_col, overlap)
+
+    if best is None:
+        raise RuntimeError(f"Logbook has no usable saturation blocks. Sheets: {xls.sheet_names}")
+
+    _, sh, blk, id_col, sat_col, mw_col, por_col, vol_col, overlap = best
+
+    sat_map = {}
+    for _, r in blk.iterrows():
+        mid = str(r.get(id_col, "")).strip()
+        if _is_blank(mid):
+            continue
+
+        S = np.nan
+        if sat_col:
+            S = to_float(r.get(sat_col, np.nan))
+            if np.isfinite(S) and S > 1.0 and S <= 100.0:
+                S = S/100.0
+        else:
+            Mw  = to_float(r.get(mw_col, np.nan))   # g
+            phi = to_float(r.get(por_col, np.nan))
+            V   = to_float(r.get(vol_col, np.nan))  # m3
+            if np.isfinite(Mw) and np.isfinite(phi) and np.isfinite(V) and phi > 0 and V > 0:
+                Mw_kg = Mw/1000.0
+                rho_w = 1000.0
+                S = Mw_kg / (rho_w * (phi * V))
+
+        if np.isfinite(S) and S > 0:
+            sat_map[norm_measid(mid)] = float(S)
+
+    if not sat_map:
+        raise RuntimeError(f"Selected logbook sheet '{sh}' but mapped 0 saturation rows.")
+
+    return sat_map, sh, int(overlap), int(len(blk))
+
 
 # ---------------- Results cleaning ----------------
 def clean_results_dir(results_dir: Path):
@@ -434,8 +516,10 @@ def clean_results_dir(results_dir: Path):
         except Exception:
             pass
 
-# ---------------- Plot writers ----------------
+
+# ---------------- Plot writers (gnuplot column("name") everywhere) ----------------
 def write_plot_target(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                      source_label: str,
                       n_vn: float, r2_ri_vn: float, p_vn: float, r2_ici_vn: float):
     label = "{:g}".format(target_freq)
     gp = """reset
@@ -451,25 +535,26 @@ set key top right
 set xlabel 'log10(Saturation)'
 
 # --- TOP: RI (Van Nuys raw-like, WITH intercept fit) ---
-set title 'VNs-12: Saturation Exponent (Resistivity Index) at {label} Hz'
+set title '{src}: Saturation Exponent (Resistivity Index) at {label} Hz'
 set ylabel 'log10(Resistivity Index)'
 plot '{csv}' using (column("logS")):(column("logRI_vn")) with points pt 7 ps 1.8 lc rgb '#0066ff' title 'data', \\
      '{csv}' using (column("logS")):(column("logRI_vn_fit")) with lines dt 2 lw 3 lc rgb '#0066ff' \\
      title sprintf('{label}Hz: n = %.2f, R^2 = %.3f', {nval}, {r2a})
 
 # --- BOTTOM: ICI (Van Nuys raw-like, WITH intercept fit; always downtrend) ---
-set title 'VNs-12: Saturation Exponent (Imag Conductivity Index) at {label} Hz'
+set title '{src}: Saturation Exponent (Imag Conductivity Index) at {label} Hz'
 set ylabel 'log10(Imag Conductivity Index)'
 plot '{csv}' using (column("logS")):(column("logICI_vn")) with points pt 7 ps 1.8 lc rgb '#dd0000' title 'data', \\
      '{csv}' using (column("logS")):(column("logICI_vn_fit")) with lines dt 2 lw 3 lc rgb '#dd0000' \\
      title sprintf('{label}Hz: p = %.2f, R^2 = %.3f', {pval}, {r2b})
 
 unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label,
+""".format(out_png=out_png, csv=csv_name, label=label, src=source_label,
            nval=n_vn, r2a=r2_ri_vn, pval=p_vn, r2b=r2_ici_vn)
     (results_dir / "plot_target_exponents.gp").write_text(gp)
 
 def write_plot_index(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                     source_label: str,
                      n_idx: float, r2_ri: float, p_idx: float, r2_ici: float):
     label = "{:g}".format(target_freq)
     gp = """reset
@@ -485,7 +570,7 @@ set key top right
 set xlabel 'log10(Saturation)'
 
 # --- TOP: goal RI (through-origin) ---
-set title 'Resistivity Index vs Saturation (log-log) at {label} Hz'
+set title '{src}: Resistivity Index vs Saturation (goal, through-origin) at {label} Hz'
 set ylabel 'log10(Resistivity Index)'
 a1 = {a1}
 f1(x) = a1*x
@@ -493,7 +578,7 @@ plot '{csv}' using (column("logS")):(column("logRhoIdx")) with points pt 7 ps 1.
      f1(x) with lines dt 2 lw 3 title sprintf('{label}Hz: n=%.2f, R^2=%.3f', {n_idx}, {r2_ri})
 
 # --- BOTTOM: goal ICI (through-origin) ---
-set title 'Imag Conductivity Index vs Saturation (log-log) at {label} Hz'
+set title '{src}: Imag Conductivity Index vs Saturation (goal, through-origin) at {label} Hz'
 set ylabel 'log10(Imag Conductivity Index)'
 a2 = {a2}
 f2(x) = a2*x
@@ -501,12 +586,13 @@ plot '{csv}' using (column("logS")):(column("logImagIdx")) with points pt 7 ps 1
      f2(x) with lines dt 2 lw 3 title sprintf('{label}Hz: p=%.2f, R^2=%.3f', {p_idx}, {r2_ici})
 
 unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label,
+""".format(out_png=out_png, csv=csv_name, label=label, src=source_label,
            a1=(-n_idx), n_idx=n_idx, r2_ri=r2_ri,
            a2=(-p_idx), p_idx=p_idx, r2_ici=r2_ici)
     (results_dir / "plot_index_exponents.gp").write_text(gp)
 
 def write_plot_raw(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                   source_label: str,
                    lin_rho, lin_im, log_fit_acc):
     label = "{:g}".format(target_freq)
     a_r = lin_rho["slope"]; b_r = lin_rho["intercept"]; r2_r = lin_rho["r2"]; p_r = lin_rho["p"]
@@ -540,7 +626,7 @@ set multiplot layout 2,1
 set grid
 set key top right
 
-set title 'Resistivity vs Saturation (log-log) at {label} Hz'
+set title '{src}: Resistivity vs Saturation (log-log) at {label} Hz'
 set xlabel 'log10(Saturation)'
 set ylabel 'log10(Resistivity)'
 a1={a1:.12g}
@@ -550,7 +636,7 @@ f1(x)=a1*x+b1
 plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
      f1(x) with lines dt 2 lw 3 title sprintf('linear: n=%.2f, R^2=%.3f, p=%.3g', -a1, {r2_r:.12g}, {p_r:.12g}){log_clause}
 
-set title 'Imag Conductivity vs Saturation (log-log) at {label} Hz'
+set title '{src}: Imag Conductivity vs Saturation (log-log) at {label} Hz'
 set xlabel 'log10(Saturation)'
 set ylabel 'log10(Imag Conductivity)'
 a2={a2:.12g}
@@ -560,13 +646,15 @@ plot '{csv}' using (column("logS")):(column("logImag")) with points pt 7 ps 1.7 
      f2(x) with lines dt 2 lw 3 title sprintf('linear: p=%.2f, R^2=%.3f, p=%.3g', a2, {r2_i:.12g}, {p_i:.12g})
 
 unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label,
+""".format(out_png=out_png, csv=csv_name, label=label, src=source_label,
            a1=a_r, b1=b_r, r2_r=r2_r, p_r=p_r,
            a2=a_i, b2=b_i, r2_i=r2_i, p_i=p_i,
            log_defs=log_defs, log_clause=log_clause)
     (results_dir / "plot_raw_exponents.gp").write_text(gp)
 
-def write_plot_logistic_only(results_dir: Path, csv_name: str, out_png: str, target_freq: float, log_fit_acc):
+def write_plot_logistic_only(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                            source_label: str,
+                            log_fit_acc):
     label = "{:g}".format(target_freq)
     log_defs = ""
     log_line = ""
@@ -595,7 +683,7 @@ set datafile missing ''
 set term pngcairo size 1200,800 enhanced font 'Arial,26'
 set output '{out_png}'
 
-set title 'Resistivity vs Saturation (log-log) at {label} Hz (logistic only)'
+set title '{src}: Resistivity vs Saturation (log-log) at {label} Hz (logistic only)'
 set grid
 set key top right
 set xlabel 'log10(Saturation)'
@@ -604,10 +692,12 @@ set ylabel 'log10(Resistivity)'
 {log_defs}
 plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
      {log_line}
-""".format(out_png=out_png, csv=csv_name, label=label, log_defs=log_defs, log_line=log_line)
+""".format(out_png=out_png, csv=csv_name, label=label, src=source_label, log_defs=log_defs, log_line=log_line)
     (results_dir / "plot_logistic_only.gp").write_text(gp)
 
-def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str, target_freq: float, has_log: bool):
+def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                             source_label: str,
+                             has_log: bool):
     label = "{:g}".format(target_freq)
     extra_curve = ""
     if has_log:
@@ -637,7 +727,7 @@ set term pngcairo size 1200,1800 enhanced font 'Arial,24'
 set output '{out_png}'
 set multiplot layout 3,1
 
-set title 'Diagnostics: logRho vs logS at {label} Hz'
+set title '{src}: Diagnostics: logRho vs logS at {label} Hz'
 set grid
 set key top right
 set xlabel 'log10(Saturation)'
@@ -660,9 +750,10 @@ set ylabel 'residual'
 {panel3}
 
 unset multiplot
-""".format(out_png=out_png, label=label, csv=csv_name,
+""".format(out_png=out_png, label=label, csv=csv_name, src=source_label,
            extra_curve=extra_curve, extra3=extra3, panel3=panel3)
     (results_dir / "plot_logistic_diagnostics.gp").write_text(gp)
+
 
 # ---------------- Runner helpers ----------------
 def discover_run_roots_fast(base: Path):
@@ -687,13 +778,15 @@ def _run_gnuplot(script_name: str, cwd: Path, timeout_s: int, fatal: bool):
         print(f"[WARN] gnuplot failed for {cwd}/{script_name}: {msg}", flush=True)
         return False, msg
 
-def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
+
+def process_run(run_root: Path, target_freq: float, sheet_filter: str|None,
                 dry_run: bool, min_points: int, max_df: float,
                 do_logistic: bool, logistic_min_points: int,
                 logistic_fast: bool, logistic_max_seconds: float,
                 gnuplot_timeout: int,
                 clean_results: bool,
                 ici_mode: str):
+
     analysis_dir = run_root / ANALYSIS_DIR
     raw_dir      = run_root / RAW_DIR
     results_dir  = run_root / RESULTS_DIR
@@ -703,31 +796,52 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     if sip_xlsx is None or log_xlsx is None:
         return None
 
+    source_label = pretty_source_name(run_root.name)
+
     results_dir.mkdir(parents=True, exist_ok=True)
     if clean_results:
         clean_results_dir(results_dir)
 
-    sat_map, used_sheet = read_logbook_anysheet(log_xlsx, sample_filter)
-    sip_df = read_sip_output(sip_xlsx, target_freq, max_df=max_df)
+    # SIP read first (so we know the measurement IDs present)
+    sip_df = read_sip_output(sip_xlsx, target_freq, max_df=max_df, sheet_filter=sheet_filter)
 
     tag = str(target_freq).replace(".","p")
 
     if sip_df.empty:
         return {"run": str(run_root), "status": "FAIL",
                 "reason": "No SIP sheets readable / target freq missing",
-                "points": 0, "logbook_sheet": used_sheet}
+                "points": 0}
 
-    sip_df["S"] = sip_df["measurement"].map(sat_map).astype(float)
+    # Choose saturation block by overlap with SIP measurement IDs (ignore Excel Sample names)
+    sat_map, used_sheet, overlap_cnt, block_rows = read_logbook_bestblock_by_overlap(
+        log_xlsx, sip_df["measurement_norm"].tolist()
+    )
+
+    # Map saturations by normalized measurement id
+    sip_df["S"] = sip_df["measurement_norm"].map(sat_map).astype(float)
     sip_df["logS"]    = sip_df["S"].apply(safe_log10)
     sip_df["logRho"]  = sip_df["rho"].apply(safe_log10)
     sip_df["logImag"] = sip_df["sigma_imag"].apply(safe_log10)
 
-    sip_df = sip_df[np.isfinite(sip_df["logS"]) & np.isfinite(sip_df["logRho"]) & np.isfinite(sip_df["logImag"])]
+    # Save dropped rows (missing S or bad logs) for debugging
+    dbg_all = sip_df.copy()
+    dbg_all.to_csv(results_dir / f"debug_before_filter_{tag}Hz.csv", index=False)
+
+    mask = np.isfinite(sip_df["logS"]) & np.isfinite(sip_df["logRho"]) & np.isfinite(sip_df["logImag"])
+    dropped = sip_df.loc[~mask, ["measurement", "S", "rho", "sigma_imag"]].copy()
+    if len(dropped) > 0:
+        dropped.to_csv(results_dir / f"dropped_rows_{tag}Hz.csv", index=False)
+
+    sip_df = sip_df.loc[mask].copy()
 
     if len(sip_df) < min_points:
         return {"run": str(run_root), "status": "FAIL",
                 "reason": f"Not enough matched points (need >= {min_points})",
-                "points": int(len(sip_df)), "logbook_sheet": used_sheet}
+                "points": int(len(sip_df)),
+                "logbook_sheet": used_sheet,
+                "logbook_overlap": overlap_cnt,
+                "logbook_block_rows": block_rows,
+                "source": source_label}
 
     # Reference: max S
     iref = int(np.nanargmax(sip_df["S"].to_numpy(float)))
@@ -740,15 +854,13 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     sip_df["rho_idx"]   = sip_df["rho"] / rho_ref
     sip_df["logRhoIdx"] = sip_df["logRho"] - logRho_ref
 
-    # ICI index depends on mode (for GOAL plot only)
+    # ICI index depends on mode (GOAL plot only)
     if ici_mode == "sig_over_sigref":
         sip_df["imag_idx"]   = sip_df["sigma_imag"] / sig_ref
         sip_df["logImagIdx"] = sip_df["logImag"] - logSig_ref
     else:
         sip_df["imag_idx"]   = sig_ref / sip_df["sigma_imag"]
         sip_df["logImagIdx"] = logSig_ref - sip_df["logImag"]
-
-    sip_df = sip_df[np.isfinite(sip_df["logRhoIdx"]) & np.isfinite(sip_df["logImagIdx"])]
 
     # RAW fits (logRho and logImag vs logS)
     slope_r, intercept_r, r2_r, p_r, ss_res_lin_r, aic_lin_r = linear_fit(sip_df["logS"], sip_df["logRho"])
@@ -769,7 +881,7 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
         # logImagIdx = log(sigref/sig) => slope is -p
         p_idx = -a_ici
 
-    # ---- v27 TARGET (Van Nuys style): raw-like linear fits WITH intercept ----
+    # ---- TARGET (Van Nuys style): raw-like linear fits WITH intercept ----
     # Lock to VN definition always (independent of --ici-mode):
     sip_df["logRI_vn"]  = sip_df["logRhoIdx"]                 # log10(rho/rho_ref)
     sip_df["logICI_vn"] = logSig_ref - sip_df["logImag"]      # log10(sig_ref/sig_imag) => downtrend
@@ -823,13 +935,13 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     # Write CSV
     csv_path = results_dir / f"joined_{tag}Hz.csv"
     sip_df[[
-        "measurement","freq_hz","S","rho","sigma_imag",
+        "measurement","measurement_norm","freq_hz","S","rho","sigma_imag",
         "logS","logRho","logImag",
 
         "rho_idx","imag_idx",
         "logRhoIdx","logImagIdx",
 
-        # v27 TARGET VN columns
+        # TARGET VN columns
         "logRI_vn","logICI_vn","logRI_vn_fit","logICI_vn_fit",
 
         # diagnostics columns
@@ -840,6 +952,12 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
     report = results_dir / f"fit_report_{tag}Hz.txt"
     report.write_text(
         f"Run root: {run_root}\n"
+        f"Source (folder): {source_label}\n"
+        f"SIP file: {sip_xlsx}\n"
+        f"Logbook file: {log_xlsx}\n"
+        f"Logbook sheet used: {used_sheet}\n"
+        f"Logbook block rows (usable): {block_rows}\n"
+        f"Overlap with SIP measurement IDs: {overlap_cnt}\n\n"
         f"Matched points used: {len(sip_df)}\n"
         f"Reference point (max S): {sip_df.iloc[iref]['measurement']}  S_ref={sip_df.iloc[iref]['S']:.6g}\n"
         f"rho_ref={rho_ref:.6g}, sigma_ref={sig_ref:.6g}\n\n"
@@ -860,18 +978,25 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
 
     # Plot scripts + gnuplot
     write_plot_target(results_dir, csv_path.name, f"target_exponents_{tag}Hz.png", target_freq,
+                      source_label,
                       n_vn, r2_RI_vn, p_vn, r2_ICI_vn)
 
     write_plot_index(results_dir, csv_path.name, f"index_exponents_{tag}Hz.png", target_freq,
+                     source_label,
                      n_idx, r2_ri, p_idx, r2_ici)
 
     write_plot_raw(results_dir, csv_path.name, f"exponents_raw_{tag}Hz.png", target_freq,
+                   source_label,
                    lin_rho, lin_im, log_fit_acc)
 
-    write_plot_logistic_only(results_dir, csv_path.name, f"exponents_logistic_only_{tag}Hz.png", target_freq, log_fit_acc)
+    write_plot_logistic_only(results_dir, csv_path.name, f"exponents_logistic_only_{tag}Hz.png", target_freq,
+                             source_label,
+                             log_fit_acc)
 
     write_plot_logistic_diag(results_dir, csv_path.name, f"exponents_logistic_diagnostics_{tag}Hz.png",
-                             target_freq, has_log=(log_fit_acc is not None))
+                             target_freq,
+                             source_label,
+                             has_log=(log_fit_acc is not None))
 
     if not dry_run:
         _run_gnuplot("plot_target_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
@@ -882,8 +1007,12 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
 
     return {
         "run": str(run_root),
+        "source": source_label,
         "status": "OK",
         "points": int(len(sip_df)),
+        "logbook_sheet": used_sheet,
+        "logbook_overlap": overlap_cnt,
+        "logbook_block_rows": block_rows,
         "logistic_attempted": bool(log_fit is not None),
         "logistic_accepted": bool(log_fit_acc is not None),
         "logistic_status": log_status,
@@ -895,11 +1024,13 @@ def process_run(run_root: Path, target_freq: float, sample_filter: str|None,
         "p_idx": float(p_idx) if np.isfinite(p_idx) else p_idx,
     }
 
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("top")
     ap.add_argument("--freq", type=float, default=0.01)
-    ap.add_argument("--sample", type=str, default=None)
+    ap.add_argument("--sample", type=str, default=None,
+                    help="Optional filter on SIP sheet names (measurement names).")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--min-points", type=int, default=4)
     ap.add_argument("--max-df", type=float, default=0.0)
@@ -913,7 +1044,7 @@ def main():
     ap.add_argument("--ici-mode", type=str, default="sigref_over_sig",
                     choices=["sigref_over_sig","sig_over_sigref"],
                     help="GOAL/INDEX ICI definition: sigref_over_sig (default, ICI=sig_ref/sig) "
-                         "or sig_over_sigref (ICI=sig/sig_ref). TARGET is always Van Nuys style.")
+                         "or sig_over_sigref (ICI=sig/sig_ref). TARGET always uses sig_ref/sig.")
     args = ap.parse_args()
 
     base = Path(args.top).expanduser().resolve()
