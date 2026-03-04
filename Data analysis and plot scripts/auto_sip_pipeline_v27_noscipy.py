@@ -1,102 +1,105 @@
 #!/usr/bin/env python3
 """
-auto_sip_pipeline_v27_noscipy.py  (UPDATED: FULLY DOCUMENTED / COMMENTED)
+auto_sip_pipeline_v27_noscipy.py  (UPDATED: normalize switch + real-space fits/plots + Excel dumps)
 
-v27 + (YOUR NEW REQUESTS ADDED)
-===============================
+WHAT'S NEW IN THIS UPDATE
+-------------------------
+You asked to KEEP all previous approaches/plots and ADD:
 
-We keep ALL previous approaches and plots EXACTLY as in v27, and we ADD:
+1) A global switch to run EVERYTHING in:
+   - NORMALIZED mode (default): uses a reference measurement (max S) to form indices like rho/rho_ref
+   - UNNORMALIZED mode: does NOT divide by a reference measurement for "index/target" style quantities.
 
-A) FULL AUDIT TRAIL TO EXCEL (PER RUN + MASTER)
------------------------------------------------
-For every run folder we write:
-  Results/full_audit_<tag>Hz.xlsx
-with sheets:
-  - data_long   : every raw value, log value, derived calc, fit predictions, residuals
-  - fit_params  : all fit parameters + metrics (old + new)
-  - notes       : file paths, selected logbook sheet/block, overlap, dropped rows, etc.
+   CLI:
+     --normalize          (default ON)
+     --no-normalize       (turn OFF normalization)
 
-At the base folder we write:
-  Results_AllRuns_<tag>Hz.xlsx
-with sheets:
-  - all_data_long  : concatenated "data_long" from all runs (includes run/source columns)
-  - all_fit_params : concatenated fit_params (includes run/source columns)
+   Notes on definitions when --no-normalize is used:
+     - "RAW" fits are always inherently unnormalized (they use rho and sigma_imag directly)
+       but are labeled consistently as "unorm" when normalization is off.
+     - "INDEX/GOAL" (through-origin) and "TARGET/VN-style" require ref-based definitions
+       in the classic form. When normalization is OFF, we compute and plot ALTERNATIVE
+       "un-normalized" analogs that do not use rho_ref or sigma_ref:
+         * RI_unorm  = rho                 (logRI_unorm = logRho)
+         * ICI_unorm = 1/sigma_imag        (logICI_unorm = -logSigma)
+       This keeps an "ICI-like" downtrend with increasing saturation without using a reference.
 
-B) REAL-SPACE FITS (NOT LOG PLOTS) + PLOTS
-------------------------------------------
-We ADD fits in real space (plots in real y vs real x), specifically targeting:
-  "electric conductivity (sigma_imag) vs moisture content"
-Moisture content:
-  - if porosity (phi) is available: theta = S*phi (preferred x)
-  - else fallback: x = S
+2) Write EVERYTHING to Excel:
+   - Per folder/run:
+       Results/all_values_<tag>Hz_<normtag>.xlsx
+     Contains:
+       * Data (real + log values, indices, VN/alt columns, predictions, residuals, etc.)
+       * FitSummary (all fit parameters and metrics)
+       * Meta (file names, chosen logbook block, overlap, etc.)
+   - Global:
+       <top>/Results_All_<tag>Hz_<normtag>.xlsx
+     Contains:
+       * Summary table across runs
+       * (Optional) concatenated fit summaries per run
 
-We add NON-NORMALIZED fits (direct values, no ref normalization):
-  - sigma_imag vs theta (or S)
-  - rho vs theta (or S)
-  - optional sigma_real = 1/rho vs theta (or S)
+3) Add REAL-SPACE (no log) fits and plots:
+   - linear fits on real values:
+       rho vs S, sigma_imag vs S
+       sigma_imag vs theta   (if theta can be computed)
+   - optional polynomial fits (deg>=2) on real values
+   - optional logistic fits on real-space rho vs S  (same SciPy-free fitter, just with x=S)
+     (logistic on sigma is disabled by default; you can enable easily if you want)
 
-Models (SciPy-free):
-  - linear     : y = a*x + c
-  - exponential: y = A*exp(b*x)       (requires y>0)
-  - power law  : y = A*x^b            (requires x>0 and y>0)
+4) Add fits WITHOUT normalization (as above) and produce lots of plots,
+   with names that clearly encode:
+     - norm/unorm
+     - domain: loglog or real
+     - which response: rho, sigma, RI, ICI, etc.
+     - method: linear, polydegD, logistic
 
-We write all params/preds/residuals to CSV + Excel.
+FINAL SCIENTIFIC GOAL
+---------------------
+You said the final goal is to find relation between electric conductivity and moisture content.
+This script now explicitly produces:
+  - sigma_imag vs S  (real and log-log)
+  - if porosity phi is available per measurement: theta = S * phi, then sigma_imag vs theta
+and exports those columns and fit parameters to Excel for each run and globally.
 
-C) MANY NEW PLOTS WITH CLEAR NAMES
-----------------------------------
-We KEEP old filenames exactly:
-  target_exponents_<tag>Hz.png
-  index_exponents_<tag>Hz.png
-  exponents_raw_<tag>Hz.png
-  exponents_logistic_only_<tag>Hz.png
-  exponents_logistic_diagnostics_<tag>Hz.png
-  plus optional existing v27 poly/vn-smin outputs...
+INPUT ASSUMPTIONS (same as v27)
+-------------------------------
+Per run:
+  <run_root>/
+     Analysis/         -> SIP output Excel (name contains "output")
+     SIP_Raw_Data/     -> logbook Excel (name contains "Log Book")
+     Results/          -> outputs
 
-We ADD new plots with explicit searchable naming:
-  NONORM_SIGMA_REAL_vs_THETA_ALL_<tag>Hz.png   (preferred if theta exists)
-  NONORM_SIGMA_REAL_vs_S_ALL_<tag>Hz.png       (fallback)
-  NONORM_RHO_REAL_vs_THETA_ALL_<tag>Hz.png
-  NONORM_RHO_REAL_vs_S_ALL_<tag>Hz.png
-  (optional) NONORM_SIGMAREAL_REAL_vs_THETA_ALL_<tag>Hz.png  (sigma_real=1/rho)
+SIP output Excel sheets:
+  - each sheet is a measurement ID
 
-All new gnuplot scripts use column("name") and titles use the folder source label.
-We continue formatting "S-1" as "S_{-1}" via pretty_source_name().
+Logbook:
+  - may have typos/messy columns
+  - we choose the best contiguous block by overlap with SIP sheet names
+  - saturation comes from either a saturation column or computed from Mw, phi, Vcol
 
-IMPORTANT: "Fits on real values not log"
-----------------------------------------
-We *plot in real space* (y vs x). For exponential/power models, parameters are estimated
-using log-linear regression as a SciPy-free closed-form approach, then evaluated in
-real space and reported with REAL-space SSE and REAL-space R^2. This gives you what you
-need: real-space curves + real-space metrics + robust SciPy-free fitting.
-
-Final goal
-----------
-The final goal is to discover a reliable relation between electric conductivity and
-moisture content. This update produces exactly the per-run and all-run tables and
-plots needed to explore:
-  sigma_imag (or sigma_real) vs theta (or S) across all runs.
-
-USAGE EXAMPLES (same as v27, now with extra outputs)
-----------------------------------------------------
-# baseline
-python3 auto_sip_pipeline_v27_noscipy.py "/path/to/SIP" \
-  --freq 0.01 --min-points 4 \
-  --logistic-min-points 6 --logistic-fast --logistic-max-seconds 8 \
-  --clean-results --ici-mode sig_over_sigref
-
-# add VN Smin
+USAGE EXAMPLES
+--------------
+# NORMALIZED (default), like your current runner:
 python3 auto_sip_pipeline_v27_noscipy.py "/path/to/SIP" \
   --freq 0.01 --min-points 4 \
   --logistic-min-points 6 --logistic-fast --logistic-max-seconds 8 \
   --clean-results --ici-mode sig_over_sigref \
-  --vn-smin 0.30
+  --poly-deg 2 --poly-raw
 
-# add polynomial fits on TARGET (deg 2) and RAW logRho
+# UNNORMALIZED mode (no ref division on goal/target; use RI=rho and ICI=1/sigma):
 python3 auto_sip_pipeline_v27_noscipy.py "/path/to/SIP" \
   --freq 0.01 --min-points 4 \
   --logistic-min-points 6 --logistic-fast --logistic-max-seconds 8 \
   --clean-results --ici-mode sig_over_sigref \
-  --vn-smin 0.30 --poly-deg 2 --poly-raw
+  --poly-deg 2 --poly-raw \
+  --no-normalize
+
+# Also do real-space polynomial fits & plots (deg 2) and real-space logistic rho vs S:
+python3 auto_sip_pipeline_v27_noscipy.py "/path/to/SIP" \
+  --freq 0.01 --min-points 4 \
+  --logistic-min-points 6 --logistic-fast --logistic-max-seconds 8 \
+  --clean-results --ici-mode sig_over_sigref \
+  --poly-deg 2 --poly-raw \
+  --real-fits --real-logistic
 """
 
 import math
@@ -130,25 +133,23 @@ LOGBOOK_COLVOL_CAND    = ["Column Volume (m3)","Column Volume","Volume (m3)","Vc
 
 SIP_FREQ_CANDS = ["Frequency","Frequency (Hz)","Freq","Hz"]
 SIP_RHO_CANDS  = ["Resistivity","Resistivity (Ω·m)","Resistivity (Ohm m)","rho"]
-SIP_IMAG_CANDS = ["Imaginary Conductivity","Imaginary Conductivity (µS/cm)","Imag","sigma_imag"]
+SIP_IMAG_CANDS = ["Imaginary Conductivity","Imaginary Conductivity (µS/cm)","Imag","sigma_imag","sigma","conductivity"]
 
+# Logistic bounds for stability
 K_MIN = 0.05
 K_MAX = 50.0
 
 LOGISTIC_R2_EPS = 0.005
 LOGISTIC_REQUIRE_BETTER_AIC = True
 
-
 # =============================================================================
 # BASIC HELPERS
 # =============================================================================
 
 def _norm(s: str) -> str:
-    """Normalize column name comparisons: lowercase + strip."""
     return str(s).strip().lower()
 
 def pick_col(df: pd.DataFrame, cands):
-    """Pick the first matching column name (case-insensitive) from candidates."""
     low = {_norm(c): c for c in df.columns}
     for k in cands:
         kk = _norm(k)
@@ -157,7 +158,6 @@ def pick_col(df: pd.DataFrame, cands):
     return ""
 
 def find_first_matching_file(folder: Path, hint: str, ext=".xlsx"):
-    """Find the first file under folder whose name contains 'hint' (case-insensitive) and ends with ext."""
     if not folder.exists():
         return None
     for p in folder.rglob(f"*{ext}"):
@@ -166,7 +166,6 @@ def find_first_matching_file(folder: Path, hint: str, ext=".xlsx"):
     return None
 
 def to_float(x):
-    """Robust float conversion (handles '40%' -> 40). Returns NaN on failure."""
     try:
         if isinstance(x, str):
             xs = x.strip()
@@ -178,60 +177,37 @@ def to_float(x):
         return float("nan")
 
 def safe_log10(x):
-    """Safe log10: returns NaN if non-finite or <=0."""
     x = float(x)
     if not np.isfinite(x) or x <= 0:
         return np.nan
     return math.log10(x)
 
 def sse(y, yhat):
-    """Sum of squared errors."""
     r = y - yhat
     return float(np.sum(r*r))
 
 def _is_blank(x) -> bool:
-    """Blank-ish check for logbook cells."""
     if x is None:
         return True
     s = str(x).strip()
     return (s == "") or (s.lower() in ["nan", "none"])
 
 def norm_measid(s: str) -> str:
-    """
-    Normalize measurement IDs so that 'M 1', 'M-1', 'M_1', 'm1' all match => 'm1'.
-    """
     s = str(s).strip().lower()
     s = re.sub(r'[^a-z0-9]+', '', s)
     return s
 
 def pretty_source_name(run_folder_name: str) -> str:
-    """
-    Plot label from folder name:
-      - underscores -> spaces
-      - "S-1" -> "S_{-1}" (gnuplot enhanced)
-    """
     s = str(run_folder_name).replace("_", " ").strip()
+    # gnuplot enhanced-text: S-1 -> S_{-1}
     s = re.sub(r'\bS-(\d+)\b', r'S_{-\1}', s)
     return s
-
-def real_r2(y, yhat):
-    """R^2 in real space."""
-    y = np.asarray(y, float); yhat = np.asarray(yhat, float)
-    m = np.isfinite(y) & np.isfinite(yhat)
-    y = y[m]; yhat = yhat[m]
-    if len(y) < 2:
-        return np.nan
-    ss_res = sse(y, yhat)
-    ss_tot = sse(y, np.full_like(y, np.mean(y)))
-    return 1.0 - ss_res/ss_tot if ss_tot > 0 else np.nan
-
 
 # =============================================================================
 # F-DISTRIBUTION + P-VALUE (NO SCIPY)
 # =============================================================================
 
 def betacf(a, b, x, maxit=200, eps=3e-14):
-    """Continued fraction approximation for incomplete beta."""
     am=1.0; bm=1.0; az=1.0
     qab=a+b; qap=a+1.0; qam=a-1.0
     bz=1.0 - qab*x/qap
@@ -253,7 +229,6 @@ def betacf(a, b, x, maxit=200, eps=3e-14):
     return az
 
 def betai(a, b, x):
-    """Regularized incomplete beta I_x(a,b)."""
     if x <= 0.0: return 0.0
     if x >= 1.0: return 1.0
     ln_beta = math.lgamma(a) + math.lgamma(b) - math.lgamma(a+b)
@@ -264,7 +239,6 @@ def betai(a, b, x):
         return 1.0 - bt*betacf(b,a,1.0-x)/b
 
 def f_dist_sf(F, d1, d2):
-    """Survival function for F distribution."""
     if not np.isfinite(F) or F < 0:
         return np.nan
     x = (d1*F)/(d1*F + d2)
@@ -272,7 +246,6 @@ def f_dist_sf(F, d1, d2):
     return max(0.0, 1.0 - cdf)
 
 def f_test_pvalue(ss_res, ss_tot, df_model, n):
-    """F-test p-value for regression models (SciPy-free)."""
     if not (np.isfinite(ss_res) and np.isfinite(ss_tot)):
         return np.nan
     if ss_tot <= 0:
@@ -290,21 +263,15 @@ def f_test_pvalue(ss_res, ss_tot, df_model, n):
     return f_dist_sf(F, df_model, df2)
 
 def aic_gaussian(ss_res, n, k_params):
-    """Gaussian AIC."""
     if n <= 0 or k_params <= 0 or not np.isfinite(ss_res) or ss_res <= 0:
         return np.nan
     return float(n * math.log(ss_res / n) + 2.0 * k_params)
 
-
 # =============================================================================
-# FIT ROUTINES: LINEAR / THROUGH ORIGIN / POLYNOMIAL
+# FIT ROUTINES
 # =============================================================================
 
 def linear_fit(x, y):
-    """
-    OLS: y = slope*x + intercept.
-    Returns slope, intercept, r2, pvalue, ss_res, aic
-    """
     x = np.asarray(x, float); y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]; y = y[m]
@@ -321,7 +288,6 @@ def linear_fit(x, y):
     return float(slope), float(intercept), float(r2), float(pval), float(ss_res), float(aic)
 
 def linear_fit_through_origin(x, y):
-    """Least squares forced through origin: y = a*x. Returns a, r2, ss_res."""
     x = np.asarray(x, float); y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]; y = y[m]
@@ -338,7 +304,6 @@ def linear_fit_through_origin(x, y):
     return a, float(r2), float(ss_res)
 
 def poly_fit_predict(x, y, deg: int):
-    """Polynomial regression y ~ poly(x,deg). Returns (coeffs, yhat_on_fit_points, r2, ss_res)."""
     x = np.asarray(x, float); y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]; y = y[m]
@@ -354,71 +319,16 @@ def poly_fit_predict(x, y, deg: int):
     except Exception:
         return None, None, np.nan, np.nan
 
-
 # =============================================================================
-# REAL-SPACE MOISTURE RELATION FITS (NON-NORMALIZED)
-# =============================================================================
-
-def fit_linear_real(x, y):
-    """Fit y = a*x + c in real space."""
-    a, c, r2, _, ss_res, _ = linear_fit(x, y)
-    x = np.asarray(x, float); y = np.asarray(y, float)
-    m = np.isfinite(x) & np.isfinite(y)
-    x = x[m]; y = y[m]
-    yhat = (a*x + c) if (np.isfinite(a) and np.isfinite(c)) else None
-    return float(a), float(c), yhat, float(r2), float(ss_res)
-
-def fit_exponential_real(x, y):
-    """
-    Fit y = A * exp(b*x), y>0.
-    Parameters estimated via log-linear regression; metrics computed in real space.
-    """
-    x = np.asarray(x, float); y = np.asarray(y, float)
-    m = np.isfinite(x) & np.isfinite(y) & (y > 0)
-    x = x[m]; y = y[m]
-    if len(x) < 3:
-        return np.nan, np.nan, None, np.nan, np.nan
-    ly = np.log(y)
-    A = np.vstack([x, np.ones_like(x)]).T
-    b, lnA = np.linalg.lstsq(A, ly, rcond=None)[0]
-    A0 = float(np.exp(lnA)); b0 = float(b)
-    yhat = A0 * np.exp(b0 * x)
-    ss_res = sse(y, yhat)
-    r2 = real_r2(y, yhat)
-    return A0, b0, yhat, float(r2), float(ss_res)
-
-def fit_powerlaw_real(x, y):
-    """
-    Fit y = A * x^b, requires x>0 and y>0.
-    Parameters estimated via log-log regression; metrics computed in real space.
-    """
-    x = np.asarray(x, float); y = np.asarray(y, float)
-    m = np.isfinite(x) & np.isfinite(y) & (x > 0) & (y > 0)
-    x = x[m]; y = y[m]
-    if len(x) < 3:
-        return np.nan, np.nan, None, np.nan, np.nan
-    lx = np.log(x); ly = np.log(y)
-    A = np.vstack([lx, np.ones_like(lx)]).T
-    b, lnA = np.linalg.lstsq(A, ly, rcond=None)[0]
-    A0 = float(np.exp(lnA)); b0 = float(b)
-    yhat = A0 * (x ** b0)
-    ss_res = sse(y, yhat)
-    r2 = real_r2(y, yhat)
-    return A0, b0, yhat, float(r2), float(ss_res)
-
-
-# =============================================================================
-# LOGISTIC FIT (NO SCIPY)
+# LOGISTIC FIT (NO SCIPY) - works for x=logS or x=S equally
 # =============================================================================
 
 def logistic4(x, L, k, x0, c):
-    """4-parameter logistic."""
     z = k*(x - x0)
     z = np.clip(z, -60.0, 60.0)
     return c + L/(1.0 + np.exp(-z))
 
 def _logistic_init_guess(x, y):
-    """Heuristic init for logistic."""
     x = np.asarray(x, float)
     y = np.asarray(y, float)
     idx = np.argsort(x)
@@ -446,10 +356,6 @@ def _logistic_init_guess(x, y):
     return L, k, x0, c
 
 def logistic_fit_noscipy(x, y, fast=False, max_seconds=0.0):
-    """
-    Fast coordinate grid search around init guess (SciPy-free).
-    Returns (fit_dict, status_str).
-    """
     x = np.asarray(x, float); y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]; y = y[m]
@@ -499,7 +405,6 @@ def logistic_fit_noscipy(x, y, fast=False, max_seconds=0.0):
                             best = s2
                             Lb,kb,x0b,cb = L2,k2,x02,c2
                             improved = True
-
         stepL *= 0.6; stepk *= 0.6; stepx0 *= 0.6; stepc *= 0.6
         if not improved and max(stepL, stepk, stepx0, stepc) < 1e-4:
             break
@@ -520,7 +425,6 @@ def logistic_fit_noscipy(x, y, fast=False, max_seconds=0.0):
     }, "ok"
 
 def accept_logistic(lin_r2, lin_aic, log_fit):
-    """Accept logistic if R2 improves by eps or AIC improves (if enabled)."""
     if log_fit is None:
         return False, "no_fit"
     log_r2 = log_fit.get("r2", np.nan)
@@ -533,18 +437,11 @@ def accept_logistic(lin_r2, lin_aic, log_fit):
         return True, "AIC_improved"
     return False, "rejected"
 
-
 # =============================================================================
 # SIP OUTPUT READING
 # =============================================================================
 
 def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float, sheet_filter: str|None):
-    """
-    Read SIP output Excel:
-      - each sheet = measurement ID
-      - take row closest to target_freq
-      - extract rho and sigma_imag
-    """
     xls = pd.ExcelFile(sip_xlsx)
     out = []
     for sh in xls.sheet_names:
@@ -559,6 +456,7 @@ def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float, sheet_fil
         rho_col  = pick_col(df, SIP_RHO_CANDS)
         imag_col = pick_col(df, SIP_IMAG_CANDS)
 
+        # legacy fallback
         if (not rho_col) or (not imag_col):
             if len(df.columns) >= 5:
                 imag_col = df.columns[1]
@@ -572,7 +470,6 @@ def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float, sheet_fil
 
         idx = int(np.nanargmin(np.abs(freqs - target_freq)))
         f_found = float(freqs[idx])
-
         if max_df > 0 and abs(f_found - target_freq) > max_df:
             continue
 
@@ -589,13 +486,11 @@ def read_sip_output(sip_xlsx: Path, target_freq: float, max_df: float, sheet_fil
 
     return pd.DataFrame(out)
 
-
 # =============================================================================
-# LOGBOOK READING: ROBUST BLOCK SELECTION (UPDATED: RETURN PHI MAP TOO)
+# LOGBOOK READING: ROBUST BLOCK SELECTION + ALSO RETURN phi IF AVAILABLE
 # =============================================================================
 
 def _contiguous_blocks(mask: np.ndarray):
-    """Return list of contiguous True blocks (i0,i1) from boolean mask."""
     blocks = []
     in_block = False
     i0 = 0
@@ -612,19 +507,17 @@ def _contiguous_blocks(mask: np.ndarray):
 
 def read_logbook_bestblock_by_overlap(log_xlsx: Path, sip_measurements_norm: list[str]):
     """
-    Choose best sheet/block by overlap with SIP measurement IDs.
-
     Returns:
-      sat_map: measurement_norm -> S
-      phi_map: measurement_norm -> phi (if available; else missing)
-      used_sheet, overlap_cnt, block_rows
+      maps: dict with keys:
+        'S'   : measurement_norm -> S
+        'phi' : measurement_norm -> phi  (if available)
+      meta: used_sheet, overlap_cnt, block_rows
     """
     xls = pd.ExcelFile(log_xlsx)
     sip_set = set([m for m in sip_measurements_norm if not _is_blank(m)])
 
     best = None
-    # best tuple:
-    # (score, sheet, blk_df, id_col, sat_col, mw_col, por_col, vol_col, overlap)
+    # best tuple: (score, sheet, blk_df, id_col, sat_col, mw_col, por_col, vol_col, overlap)
 
     for sh in xls.sheet_names:
         try:
@@ -675,7 +568,7 @@ def read_logbook_bestblock_by_overlap(log_xlsx: Path, sip_measurements_norm: lis
 
     _, sh, blk, id_col, sat_col, mw_col, por_col, vol_col, overlap = best
 
-    sat_map = {}
+    S_map = {}
     phi_map = {}
 
     for _, r in blk.iterrows():
@@ -684,7 +577,12 @@ def read_logbook_bestblock_by_overlap(log_xlsx: Path, sip_measurements_norm: lis
             continue
         midn = norm_measid(mid)
 
-        # Saturation S
+        # phi (porosity) if present
+        if por_col:
+            ph = to_float(r.get(por_col, np.nan))
+            if np.isfinite(ph) and ph > 0 and ph <= 1.5:
+                phi_map[midn] = float(ph)
+
         S = np.nan
         if sat_col:
             S = to_float(r.get(sat_col, np.nan))
@@ -700,26 +598,18 @@ def read_logbook_bestblock_by_overlap(log_xlsx: Path, sip_measurements_norm: lis
                 S = Mw_kg / (rho_w * (phi * V))
 
         if np.isfinite(S) and S > 0:
-            sat_map[midn] = float(S)
+            S_map[midn] = float(S)
 
-        # Porosity phi (optional; used for theta = S*phi)
-        if por_col:
-            phi_val = to_float(r.get(por_col, np.nan))
-            if np.isfinite(phi_val) and phi_val > 0:
-                phi_map[midn] = float(phi_val)
-
-    if not sat_map:
+    if not S_map:
         raise RuntimeError(f"Selected logbook sheet '{sh}' but mapped 0 saturation rows.")
 
-    return sat_map, phi_map, sh, int(overlap), int(len(blk))
-
+    return {"S": S_map, "phi": phi_map}, sh, int(overlap), int(len(blk))
 
 # =============================================================================
 # RESULTS CLEANING
 # =============================================================================
 
 def clean_results_dir(results_dir: Path):
-    """Delete files in Results/ (do not delete folder)."""
     if not results_dir.exists():
         return
     for p in results_dir.iterdir():
@@ -729,21 +619,44 @@ def clean_results_dir(results_dir: Path):
         except Exception:
             pass
 
+# =============================================================================
+# GNUPLOT EXEC
+# =============================================================================
+
+def _run_gnuplot(script_name: str, cwd: Path, timeout_s: int, fatal: bool):
+    try:
+        subprocess.run(["gnuplot", script_name], cwd=str(cwd), check=True,
+                       timeout=(timeout_s if timeout_s > 0 else None))
+        return True, ""
+    except Exception as e:
+        msg = str(e)
+        if fatal:
+            raise
+        print(f"[WARN] gnuplot failed for {cwd}/{script_name}: {msg}", flush=True)
+        return False, msg
 
 # =============================================================================
-# GNUPLOT SCRIPT WRITERS (OLD v27: KEEP AS-IS)
+# GNUPLOT SCRIPT WRITERS (LOG-LOG; KEEP YOUR EXISTING LOOK)
 # =============================================================================
-# NOTE: These functions are your existing v27 plot writers and are kept intact.
+# We keep your v27 scripts as-is style-wise, but add norm tags and new plot types.
 
-def write_plot_target(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                      source_label: str,
-                      n_vn: float, r2_ri_vn: float, p_vn: float, r2_ici_vn: float):
+def _gp_term():
+    return "set term pngcairo size 1200,1600 enhanced font 'Arial,26'\n"
+
+def write_plot_target_loglog(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                             source_label: str, n_val: float, r2a: float, p_val: float, r2b: float,
+                             col_y1: str, col_y1_fit: str, col_y2: str, col_y2_fit: str,
+                             title1: str, title2: str, ylab1: str, ylab2: str,
+                             legend1: str, legend2: str):
+    """
+    Generic 2-panel plot for "target-like" quantities in log-log domain:
+      x = logS, y = log10(quantity)
+    """
     label = "{:g}".format(target_freq)
-    gp = """reset
+    gp = f"""reset
 set datafile separator ','
 set datafile missing ''
-set term pngcairo size 1200,1600 enhanced font 'Arial,26'
-set output '{out_png}'
+{_gp_term()}set output '{out_png}'
 set multiplot layout 2,1
 
 set grid
@@ -751,193 +664,32 @@ set tics out
 set key top right
 set xlabel 'log10(Saturation)'
 
-set title '{src}: Saturation Exponent (Resistivity Index) at {label} Hz'
-set ylabel 'log10(Resistivity Index)'
-plot '{csv}' using (column("logS")):(column("logRI_vn")) with points pt 7 ps 1.8 lc rgb '#0066ff' title 'data', \\
-     '{csv}' using (column("logS")):(column("logRI_vn_fit")) with lines dt 2 lw 3 lc rgb '#0066ff' \\
-     title sprintf('{label}Hz: n = %.2f, R^2 = %.3f', {nval}, {r2a})
+set title '{source_label}: {title1} at {label} Hz'
+set ylabel '{ylab1}'
+plot '{csv_name}' using (column("logS")):(column("{col_y1}")) with points pt 7 ps 1.8 title 'data', \\
+     '{csv_name}' using (column("logS")):(column("{col_y1_fit}")) with lines dt 2 lw 3 title sprintf('{legend1}', {n_val}, {r2a})
 
-set title '{src}: Saturation Exponent (Imag Conductivity Index) at {label} Hz'
-set ylabel 'log10(Imag Conductivity Index)'
-plot '{csv}' using (column("logS")):(column("logICI_vn")) with points pt 7 ps 1.8 lc rgb '#dd0000' title 'data', \\
-     '{csv}' using (column("logS")):(column("logICI_vn_fit")) with lines dt 2 lw 3 lc rgb '#dd0000' \\
-     title sprintf('{label}Hz: p = %.2f, R^2 = %.3f', {pval}, {r2b})
+set title '{source_label}: {title2} at {label} Hz'
+set ylabel '{ylab2}'
+plot '{csv_name}' using (column("logS")):(column("{col_y2}")) with points pt 7 ps 1.8 title 'data', \\
+     '{csv_name}' using (column("logS")):(column("{col_y2_fit}")) with lines dt 2 lw 3 title sprintf('{legend2}', {p_val}, {r2b})
 
 unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label, src=source_label,
-           nval=n_vn, r2a=r2_ri_vn, pval=p_vn, r2b=r2_ici_vn)
-    (results_dir / "plot_target_exponents.gp").write_text(gp)
+"""
+    (results_dir / "plot_target_loglog.gp").write_text(gp)
 
-def write_plot_target_smin(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                           source_label: str, vn_smin: float,
-                           n_vn_smin: float, r2_ri_vn_smin: float, p_vn_smin: float, r2_ici_vn_smin: float):
-    label = "{:g}".format(target_freq)
-    if not (np.isfinite(n_vn_smin) and np.isfinite(p_vn_smin) and np.isfinite(r2_ri_vn_smin) and np.isfinite(r2_ici_vn_smin)):
-        gp = """reset
-set term pngcairo size 1200,700 enhanced font 'Arial,26'
-set output '{out_png}'
-set grid
-unset key
-set title '{src}: TARGET (S >= {smin:g}) at {label} Hz'
-set label 1 'Not enough points for S >= {smin:g}' at graph 0.5,0.5 center
-set xrange [-2:0]
-set yrange [-1:1]
-plot '-' using 1:2 with points pt 7 ps 0 notitle
--2 0
-0  0
-e
-""".format(out_png=out_png, src=source_label, smin=vn_smin, label=label)
-        (results_dir / "plot_target_exponents_smin.gp").write_text(gp)
-        return
-
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1200,1600 enhanced font 'Arial,26'
-set output '{out_png}'
-set multiplot layout 2,1
-
-set grid
-set tics out
-set key top right
-set xlabel 'log10(Saturation)'
-
-set title '{src}: TARGET (S >= {smin:g}) - Resistivity Index at {label} Hz'
-set ylabel 'log10(Resistivity Index)'
-plot '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logRI_vn"):1/0) \\
-     with points pt 7 ps 1.8 lc rgb '#0066ff' title 'data (S>=Smin)', \\
-     '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logRI_vn_fit_smin"):1/0) \\
-     with lines dt 2 lw 3 lc rgb '#0066ff' \\
-     title sprintf('{label}Hz: n = %.2f, R^2 = %.3f', {nval}, {r2a})
-
-set title '{src}: TARGET (S >= {smin:g}) - Imag Conductivity Index at {label} Hz'
-set ylabel 'log10(Imag Conductivity Index)'
-plot '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logICI_vn"):1/0) \\
-     with points pt 7 ps 1.8 lc rgb '#dd0000' title 'data (S>=Smin)', \\
-     '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logICI_vn_fit_smin"):1/0) \\
-     with lines dt 2 lw 3 lc rgb '#dd0000' \\
-     title sprintf('{label}Hz: p = %.2f, R^2 = %.3f', {pval}, {r2b})
-
-unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label, src=source_label, smin=vn_smin,
-           nval=n_vn_smin, r2a=r2_ri_vn_smin, pval=p_vn_smin, r2b=r2_ici_vn_smin)
-
-    (results_dir / "plot_target_exponents_smin.gp").write_text(gp)
-
-def write_plot_target_poly(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                           source_label: str, deg: int,
-                           r2_ri_poly: float, r2_ici_poly: float):
-    label = "{:g}".format(target_freq)
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1200,1600 enhanced font 'Arial,26'
-set output '{out_png}'
-set multiplot layout 2,1
-
-set grid
-set tics out
-set key top right
-set xlabel 'log10(Saturation)'
-
-set title '{src}: TARGET polynomial (deg {deg}) - Resistivity Index at {label} Hz'
-set ylabel 'log10(Resistivity Index)'
-plot '{csv}' using (column("logS")):(column("logRI_vn")) with points pt 7 ps 1.8 lc rgb '#0066ff' title 'data', \\
-     '{csv}' using (column("logS")):(column("logRI_vn_polyfit")) with lines dt 1 lw 4 lc rgb '#0066ff' \\
-     title sprintf('poly deg {deg}: R^2 = %.3f', {r2a})
-
-set title '{src}: TARGET polynomial (deg {deg}) - Imag Conductivity Index at {label} Hz'
-set ylabel 'log10(Imag Conductivity Index)'
-plot '{csv}' using (column("logS")):(column("logICI_vn")) with points pt 7 ps 1.8 lc rgb '#dd0000' title 'data', \\
-     '{csv}' using (column("logS")):(column("logICI_vn_polyfit")) with lines dt 1 lw 4 lc rgb '#dd0000' \\
-     title sprintf('poly deg {deg}: R^2 = %.3f', {r2b})
-
-unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label, src=source_label, deg=deg,
-           r2a=r2_ri_poly if np.isfinite(r2_ri_poly) else float("nan"),
-           r2b=r2_ici_poly if np.isfinite(r2_ici_poly) else float("nan"))
-    (results_dir / "plot_target_exponents_poly.gp").write_text(gp)
-
-def write_plot_target_poly_smin(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                                source_label: str, deg: int, vn_smin: float,
-                                r2_ri_poly: float, r2_ici_poly: float):
-    label = "{:g}".format(target_freq)
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1200,1600 enhanced font 'Arial,26'
-set output '{out_png}'
-set multiplot layout 2,1
-
-set grid
-set tics out
-set key top right
-set xlabel 'log10(Saturation)'
-
-set title '{src}: TARGET poly (deg {deg}, S >= {smin:g}) - Resistivity Index at {label} Hz'
-set ylabel 'log10(Resistivity Index)'
-plot '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logRI_vn"):1/0) \\
-     with points pt 7 ps 1.8 lc rgb '#0066ff' title 'data (S>=Smin)', \\
-     '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logRI_vn_polyfit_smin"):1/0) \\
-     with lines dt 1 lw 4 lc rgb '#0066ff' \\
-     title sprintf('poly deg {deg}: R^2 = %.3f', {r2a})
-
-set title '{src}: TARGET poly (deg {deg}, S >= {smin:g}) - Imag Conductivity Index at {label} Hz'
-set ylabel 'log10(Imag Conductivity Index)'
-plot '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logICI_vn"):1/0) \\
-     with points pt 7 ps 1.8 lc rgb '#dd0000' title 'data (S>=Smin)', \\
-     '{csv}' using ((column("S")>={smin:g})?column("logS"):1/0):((column("S")>={smin:g})?column("logICI_vn_polyfit_smin"):1/0) \\
-     with lines dt 1 lw 4 lc rgb '#dd0000' \\
-     title sprintf('poly deg {deg}: R^2 = %.3f', {r2b})
-
-unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label, src=source_label, deg=deg, smin=vn_smin,
-           r2a=r2_ri_poly if np.isfinite(r2_ri_poly) else float("nan"),
-           r2b=r2_ici_poly if np.isfinite(r2_ici_poly) else float("nan"))
-    (results_dir / "plot_target_exponents_poly_smin.gp").write_text(gp)
-
-def write_plot_index(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                     source_label: str,
-                     n_idx: float, r2_ri: float, p_idx: float, r2_ici: float):
-    label = "{:g}".format(target_freq)
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1200,1600 enhanced font 'Arial,26'
-set output '{out_png}'
-set multiplot layout 2,1
-
-set grid
-set tics out
-set key top right
-set xlabel 'log10(Saturation)'
-
-set title '{src}: Resistivity Index vs Saturation (goal, through-origin) at {label} Hz'
-set ylabel 'log10(Resistivity Index)'
-a1 = {a1}
-f1(x) = a1*x
-plot '{csv}' using (column("logS")):(column("logRhoIdx")) with points pt 7 ps 1.7 title 'data', \\
-     f1(x) with lines dt 2 lw 3 title sprintf('{label}Hz: n=%.2f, R^2=%.3f', {n_idx}, {r2_ri})
-
-set title '{src}: Imag Conductivity Index vs Saturation (goal, through-origin) at {label} Hz'
-set ylabel 'log10(Imag Conductivity Index)'
-a2 = {a2}
-f2(x) = a2*x
-plot '{csv}' using (column("logS")):(column("logImagIdx")) with points pt 7 ps 1.7 title 'data', \\
-     f2(x) with lines dt 2 lw 3 title sprintf('{label}Hz: p=%.2f, R^2=%.3f', {p_idx}, {r2_ici})
-
-unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label, src=source_label,
-           a1=(-n_idx), n_idx=n_idx, r2_ri=r2_ri,
-           a2=(-p_idx), p_idx=p_idx, r2_ici=r2_ici)
-    (results_dir / "plot_index_exponents.gp").write_text(gp)
-
-def write_plot_raw(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                   source_label: str,
-                   lin_rho, lin_im, log_fit_acc):
+def write_plot_raw_loglog(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
+                          source_label: str,
+                          lin_rho, lin_sig, log_fit_acc,
+                          normtag: str):
+    """
+    RAW log-log plot:
+      panel1: logRho vs logS with linear + (optional) logistic
+      panel2: logSigma vs logS with linear
+    """
     label = "{:g}".format(target_freq)
     a_r = lin_rho["slope"]; b_r = lin_rho["intercept"]; r2_r = lin_rho["r2"]; p_r = lin_rho["p"]
-    a_i = lin_im["slope"];  b_i = lin_im["intercept"];  r2_i = lin_im["r2"];  p_i = lin_im["p"]
+    a_s = lin_sig["slope"]; b_s = lin_sig["intercept"]; r2_s = lin_sig["r2"]; p_s = lin_sig["p"]
 
     log_defs = ""
     log_clause = ""
@@ -957,240 +709,69 @@ def write_plot_raw(results_dir: Path, csv_name: str, out_png: str, target_freq: 
         else:
             log_clause = ", \\\n     fL(x) with lines dt 1 lw 4 title 'logistic fit'"
 
-    gp = """reset
+    gp = f"""reset
 set datafile separator ','
 set datafile missing ''
-set term pngcairo size 1200,1600 enhanced font 'Arial,26'
-set output '{out_png}'
+{_gp_term()}set output '{out_png}'
 set multiplot layout 2,1
 
 set grid
 set key top right
 
-set title '{src}: Resistivity vs Saturation (log-log) at {label} Hz'
+set title '{source_label}: RAW (log-log, {normtag}) - log10(rho) vs log10(S) at {label} Hz'
 set xlabel 'log10(Saturation)'
 set ylabel 'log10(Resistivity)'
-a1={a1:.12g}
-b1={b1:.12g}
+a1={a_r:.12g}
+b1={b_r:.12g}
 f1(x)=a1*x+b1
 {log_defs}
-plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
+plot '{csv_name}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
      f1(x) with lines dt 2 lw 3 title sprintf('linear: n=%.2f, R^2=%.3f, p=%.3g', -a1, {r2_r:.12g}, {p_r:.12g}){log_clause}
 
-set title '{src}: Imag Conductivity vs Saturation (log-log) at {label} Hz'
+set title '{source_label}: RAW (log-log, {normtag}) - log10(sigma) vs log10(S) at {label} Hz'
 set xlabel 'log10(Saturation)'
 set ylabel 'log10(Imag Conductivity)'
-a2={a2:.12g}
-b2={b2:.12g}
+a2={a_s:.12g}
+b2={b_s:.12g}
 f2(x)=a2*x+b2
-plot '{csv}' using (column("logS")):(column("logImag")) with points pt 7 ps 1.7 title 'data', \\
-     f2(x) with lines dt 2 lw 3 title sprintf('linear: p=%.2f, R^2=%.3f, p=%.3g', a2, {r2_i:.12g}, {p_i:.12g})
+plot '{csv_name}' using (column("logS")):(column("logSigma")) with points pt 7 ps 1.7 title 'data', \\
+     f2(x) with lines dt 2 lw 3 title sprintf('linear: m=%.2f, R^2=%.3f, p=%.3g', a2, {r2_s:.12g}, {p_s:.12g})
 
 unset multiplot
-""".format(out_png=out_png, csv=csv_name, label=label, src=source_label,
-           a1=a_r, b1=b_r, r2_r=r2_r, p_r=p_r,
-           a2=a_i, b2=b_i, r2_i=r2_i, p_i=p_i,
-           log_defs=log_defs, log_clause=log_clause)
-    (results_dir / "plot_raw_exponents.gp").write_text(gp)
+"""
+    (results_dir / "plot_raw_loglog.gp").write_text(gp)
 
-def write_plot_raw_poly(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                        source_label: str, deg: int, r2_poly: float):
-    label = "{:g}".format(target_freq)
-    gp = """reset
+def write_plot_real_1panel(results_dir: Path, csv_name: str, out_png: str,
+                           title: str, xcol: str, ycol: str,
+                           yfit_col: str|None,
+                           xlabel: str, ylabel: str,
+                           legend_fit: str):
+    """
+    Generic real-space (no logs) single-panel plot:
+      y vs x with optional fitted curve column yfit_col.
+    """
+    fit_part = ""
+    if yfit_col:
+        fit_part = f", \\\n     '{csv_name}' using (column(\"{xcol}\")):(column(\"{yfit_col}\")) with lines dt 2 lw 4 title '{legend_fit}'"
+    gp = f"""reset
 set datafile separator ','
 set datafile missing ''
 set term pngcairo size 1200,800 enhanced font 'Arial,26'
 set output '{out_png}'
-
 set grid
 set key top right
-set title '{src}: RAW polynomial (deg {deg}) - logRho vs logS at {label} Hz'
-set xlabel 'log10(Saturation)'
-set ylabel 'log10(Resistivity)'
-
-plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
-     '{csv}' using (column("logS")):(column("logRho_polyfit")) with lines dt 1 lw 4 title sprintf('poly deg {deg}: R^2 = %.3f', {r2})
-""".format(out_png=out_png, csv=csv_name, src=source_label, label=label, deg=deg,
-           r2=r2_poly if np.isfinite(r2_poly) else float("nan"))
-    (results_dir / "plot_raw_exponents_poly.gp").write_text(gp)
-
-def write_plot_logistic_only(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                            source_label: str,
-                            log_fit_acc):
-    label = "{:g}".format(target_freq)
-    log_defs = ""
-    log_line = ""
-    if log_fit_acc is not None:
-        L = log_fit_acc["L"]; k = log_fit_acc["k"]; x0 = log_fit_acc["x0"]; c = log_fit_acc["c"]
-        r2_log = log_fit_acc.get("r2", np.nan)
-        p_model = log_fit_acc.get("p_model", np.nan)
-        log_defs = (
-            "L1={:.12g}\n"
-            "k1={:.12g}\n"
-            "x01={:.12g}\n"
-            "c1={:.12g}\n"
-            "fL(x)=c1+L1/(1+exp(-k1*(x-x01)))\n"
-        ).format(L, k, x0, c)
-        if np.isfinite(r2_log) and np.isfinite(p_model):
-            log_line = "fL(x) with lines dt 1 lw 4 title sprintf('logistic: R^2=%.3f, p=%.3g', {:.12g}, {:.12g})".format(r2_log, p_model)
-        else:
-            log_line = "fL(x) with lines dt 1 lw 4 title 'logistic fit'"
-
-    if not log_line:
-        log_line = "1/0 notitle"
-
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1200,800 enhanced font 'Arial,26'
-set output '{out_png}'
-
-set title '{src}: Resistivity vs Saturation (log-log) at {label} Hz (logistic only)'
-set grid
-set key top right
-set xlabel 'log10(Saturation)'
-set ylabel 'log10(Resistivity)'
-
-{log_defs}
-plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
-     {log_line}
-""".format(out_png=out_png, csv=csv_name, label=label, src=source_label, log_defs=log_defs, log_line=log_line)
-    (results_dir / "plot_logistic_only.gp").write_text(gp)
-
-def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str, target_freq: float,
-                             source_label: str,
-                             has_log: bool):
-    label = "{:g}".format(target_freq)
-    extra_curve = ""
-    if has_log:
-        extra_curve = ", \\\n     '{csv}' using (column(\"logS\")):(column(\"logRho_logfit\")) with lines dt 1 lw 4 title 'logistic (accepted)'".format(csv=csv_name)
-
-    if has_log:
-        panel3 = "plot '{csv}' using (column(\"logS\")):(column(\"resid_log_rho\")) with points pt 7 ps 1.4 title 'residuals'\n".format(csv=csv_name)
-        extra3 = ""
-    else:
-        extra3 = (
-            "unset key\n"
-            "set label 1 'No logistic accepted' at graph 0.5,0.5 center front\n"
-            "set xrange [-2:0]\n"
-            "set yrange [-1:1]\n"
-        )
-        panel3 = (
-            "plot '-' using 1:2 with points pt 7 ps 0 notitle\n"
-            "-2 0\n"
-            "0  0\n"
-            "e\n"
-        )
-
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1200,1800 enhanced font 'Arial,24'
-set output '{out_png}'
-set multiplot layout 3,1
-
-set title '{src}: Diagnostics: logRho vs logS at {label} Hz'
-set grid
-set key top right
-set xlabel 'log10(Saturation)'
-set ylabel 'log10(Resistivity)'
-plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.6 title 'data', \\
-     '{csv}' using (column("logS")):(column("logRho_linfit")) with lines dt 2 lw 3 title 'linear'{extra_curve}
-
-set title 'Residuals: linear (data - linear)'
-set grid
-set key top right
-set xlabel 'log10(Saturation)'
-set ylabel 'residual'
-plot '{csv}' using (column("logS")):(column("resid_lin_rho")) with points pt 7 ps 1.4 title 'residuals'
-
-set title 'Residuals: logistic (data - logistic)'
-set grid
-set xlabel 'log10(Saturation)'
-set ylabel 'residual'
-{extra3}
-{panel3}
-
-unset multiplot
-""".format(out_png=out_png, label=label, csv=csv_name, src=source_label,
-           extra_curve=extra_curve, extra3=extra3, panel3=panel3)
-    (results_dir / "plot_logistic_diagnostics.gp").write_text(gp)
-
-
-# =============================================================================
-# GNUPLOT WRITER FOR NEW NON-NORMALIZED REAL-SPACE PLOTS (NEW)
-# =============================================================================
-
-def write_plot_nonorm_real(results_dir: Path,
-                           csv_name: str,
-                           out_png: str,
-                           target_freq: float,
-                           source_label: str,
-                           x_col: str,
-                           y_col: str,
-                           y_fit_cols: dict,
-                           r2_map: dict):
-    """
-    Plot real-space (non-normalized) relation y vs x.
-
-    x_col: e.g. "theta" or "S"
-    y_col: e.g. "sigma_imag" or "rho" or "sigma_real"
-
-    y_fit_cols: dict name->csv_column, for overlays (e.g. {"LIN":"sigma_nonorm_fit_lin", ...})
-    r2_map: dict name->r2 value for title strings
-
-    The plot overlays all available fits; missing fit cols are plotted as 1/0.
-    """
-    label = "{:g}".format(target_freq)
-    xlab = x_col
-    ylab = y_col
-    title = f"{source_label}: NONORM {y_col} vs {x_col} (real space) at {label} Hz"
-
-    # Build plot clauses for fits
-    fit_clauses = []
-    for name, col in y_fit_cols.items():
-        r2v = r2_map.get(name, np.nan)
-        if np.isfinite(r2v):
-            fit_clauses.append(
-                "'{csv}' using (column(\"{x}\")):(column(\"{y}\")) with lines lw 4 title sprintf('{nm} R^2=%.3f', {r2})"
-                .format(csv=csv_name, x=x_col, y=col, nm=name, r2=float(r2v))
-            )
-        else:
-            fit_clauses.append(
-                "'{csv}' using (column(\"{x}\")):(column(\"{y}\")) with lines lw 4 title '{nm}'"
-                .format(csv=csv_name, x=x_col, y=col, nm=name)
-            )
-
-    fit_block = ""
-    if fit_clauses:
-        fit_block = ", \\\n     " + ", \\\n     ".join(fit_clauses)
-
-    gp = """reset
-set datafile separator ','
-set datafile missing ''
-set term pngcairo size 1400,900 enhanced font 'Arial,26'
-set output '{out_png}'
-
-set grid
-set tics out
-set key top left
 set title '{title}'
-set xlabel '{xlab}'
-set ylabel '{ylab}'
-
-plot '{csv}' using (column("{xcol}")):(column("{ycol}")) with points pt 7 ps 1.8 title 'data'{fit_block}
-""".format(out_png=out_png, title=title, xlab=xlab, ylab=ylab, csv=csv_name,
-           xcol=x_col, ycol=y_col, fit_block=fit_block)
-
-    (results_dir / f"plot_{Path(out_png).stem}.gp").write_text(gp)
-
+set xlabel '{xlabel}'
+set ylabel '{ylabel}'
+plot '{csv_name}' using (column("{xcol}")):(column("{ycol}")) with points pt 7 ps 1.7 title 'data'{fit_part}
+"""
+    (results_dir / "plot_real_1panel.gp").write_text(gp)
 
 # =============================================================================
-# DISCOVERY + GNUPLOT EXECUTION
+# DISCOVERY
 # =============================================================================
 
 def discover_run_roots_fast(base: Path):
-    """Run root = folder that contains Analysis/ and SIP_Raw_Data/."""
     roots = set()
     for a in base.rglob(ANALYSIS_DIR):
         if not a.is_dir():
@@ -1200,22 +781,33 @@ def discover_run_roots_fast(base: Path):
             roots.add(run)
     return sorted(roots)
 
-def _run_gnuplot(script_name: str, cwd: Path, timeout_s: int, fatal: bool):
-    """Execute gnuplot script in cwd."""
-    try:
-        subprocess.run(["gnuplot", script_name], cwd=str(cwd), check=True,
-                       timeout=(timeout_s if timeout_s > 0 else None))
-        return True, ""
-    except Exception as e:
-        msg = str(e)
-        if fatal:
-            raise
-        print(f"[WARN] gnuplot failed for {cwd}/{script_name}: {msg}", flush=True)
-        return False, msg
+# =============================================================================
+# EXCEL WRITERS
+# =============================================================================
 
+def write_run_excel(results_dir: Path, xlsx_name: str, df_data: pd.DataFrame,
+                    df_fit: pd.DataFrame, df_meta: pd.DataFrame):
+    out = results_dir / xlsx_name
+    try:
+        with pd.ExcelWriter(out, engine="openpyxl") as w:
+            df_data.to_excel(w, sheet_name="Data", index=False)
+            df_fit.to_excel(w, sheet_name="FitSummary", index=False)
+            df_meta.to_excel(w, sheet_name="Meta", index=False)
+    except Exception as e:
+        print(f"[WARN] Failed to write Excel {out}: {e}", flush=True)
+
+def write_global_excel(base: Path, xlsx_name: str, df_summary: pd.DataFrame, df_allfits: pd.DataFrame|None):
+    out = base / xlsx_name
+    try:
+        with pd.ExcelWriter(out, engine="openpyxl") as w:
+            df_summary.to_excel(w, sheet_name="Summary", index=False)
+            if df_allfits is not None and len(df_allfits) > 0:
+                df_allfits.to_excel(w, sheet_name="AllFitSummaries", index=False)
+    except Exception as e:
+        print(f"[WARN] Failed to write global Excel {out}: {e}", flush=True)
 
 # =============================================================================
-# MAIN PROCESSING FOR ONE RUN (UPDATED)
+# ONE-RUN PROCESSOR
 # =============================================================================
 
 def process_run(run_root: Path,
@@ -1233,14 +825,10 @@ def process_run(run_root: Path,
                 ici_mode: str,
                 vn_smin: float,
                 poly_deg: int,
-                poly_raw: bool):
-    """
-    v27 processing + NEW:
-      - compute phi + theta if possible
-      - compute NONORM real-space fits for sigma/rho/sigma_real vs theta/S
-      - write per-run Excel full audit
-      - write new NONORM plots with explicit names
-    """
+                poly_raw: bool,
+                normalize: bool,
+                do_real_fits: bool,
+                do_real_logistic: bool):
     analysis_dir = run_root / ANALYSIS_DIR
     raw_dir      = run_root / RAW_DIR
     results_dir  = run_root / RESULTS_DIR
@@ -1248,107 +836,158 @@ def process_run(run_root: Path,
     sip_xlsx = find_first_matching_file(analysis_dir, ANALYSIS_XLSX_HINT, ".xlsx")
     log_xlsx = find_first_matching_file(raw_dir, LOGBOOK_XLSX_HINT, ".xlsx")
     if sip_xlsx is None or log_xlsx is None:
-        return None
+        return None, None  # (summary_row, fit_df_for_global)
 
     source_label = pretty_source_name(run_root.name)
-
     results_dir.mkdir(parents=True, exist_ok=True)
     if clean_results:
         clean_results_dir(results_dir)
 
     sip_df = read_sip_output(sip_xlsx, target_freq, max_df=max_df, sheet_filter=sheet_filter)
     tag = str(target_freq).replace(".","p")
+    normtag = "norm" if normalize else "unorm"
 
     if sip_df.empty:
-        return {"run": str(run_root), "status": "FAIL",
-                "reason": "No SIP sheets readable / target freq missing",
-                "points": 0}
+        return ({"run": str(run_root), "status": "FAIL", "reason": "No SIP sheets readable/target freq missing", "points": 0,
+                 "source": source_label, "normalize": normalize}, None)
 
-    # UPDATED: sat_map + phi_map
-    sat_map, phi_map, used_sheet, overlap_cnt, block_rows = read_logbook_bestblock_by_overlap(
+    maps, used_sheet, overlap_cnt, block_rows = read_logbook_bestblock_by_overlap(
         log_xlsx, sip_df["measurement_norm"].tolist()
     )
+    S_map = maps["S"]
+    phi_map = maps["phi"]
 
-    sip_df["S"] = sip_df["measurement_norm"].map(sat_map).astype(float)
-
-    # NEW: map phi and compute theta
+    # map saturation and porosity
+    sip_df["S"] = sip_df["measurement_norm"].map(S_map).astype(float)
     sip_df["phi"] = sip_df["measurement_norm"].map(phi_map).astype(float)
-    sip_df["theta"] = sip_df["S"] * sip_df["phi"]
 
-    # Compute logs for legacy v27 methods
-    sip_df["logS"]    = sip_df["S"].apply(safe_log10)
-    sip_df["logRho"]  = sip_df["rho"].apply(safe_log10)
-    sip_df["logImag"] = sip_df["sigma_imag"].apply(safe_log10)
+    # theta (volumetric moisture) if phi available
+    sip_df["theta"] = sip_df.apply(
+        lambda r: float(r["S"] * r["phi"]) if (np.isfinite(r["S"]) and np.isfinite(r["phi"])) else np.nan,
+        axis=1
+    )
 
-    # Optional "sigma_real" from resistivity (non-normalized derived conductivity)
-    sip_df["sigma_real"] = np.where((np.isfinite(sip_df["rho"])) & (sip_df["rho"] > 0), 1.0/sip_df["rho"], np.nan)
+    # logs (for log-log fits and stored outputs)
+    sip_df["logS"]     = sip_df["S"].apply(safe_log10)
+    sip_df["logRho"]   = sip_df["rho"].apply(safe_log10)
+    sip_df["logSigma"] = sip_df["sigma_imag"].apply(safe_log10)
+    sip_df["logTheta"] = sip_df["theta"].apply(safe_log10)
 
-    dbg_all = sip_df.copy()
-    dbg_all.to_csv(results_dir / f"debug_before_filter_{tag}Hz.csv", index=False)
+    # debug before filtering
+    sip_df.copy().to_csv(results_dir / f"debug_before_filter_{tag}Hz_{normtag}.csv", index=False)
 
-    mask = np.isfinite(sip_df["logS"]) & np.isfinite(sip_df["logRho"]) & np.isfinite(sip_df["logImag"])
+    # primary validity for log-log plots: need finite logS, logRho, logSigma
+    mask = np.isfinite(sip_df["logS"]) & np.isfinite(sip_df["logRho"]) & np.isfinite(sip_df["logSigma"])
     dropped = sip_df.loc[~mask, ["measurement", "S", "rho", "sigma_imag", "phi", "theta"]].copy()
     if len(dropped) > 0:
-        dropped.to_csv(results_dir / f"dropped_rows_{tag}Hz.csv", index=False)
+        dropped.to_csv(results_dir / f"dropped_rows_{tag}Hz_{normtag}.csv", index=False)
     sip_df = sip_df.loc[mask].copy()
 
     if len(sip_df) < min_points:
-        return {"run": str(run_root), "status": "FAIL",
-                "reason": f"Not enough matched points (need >= {min_points})",
-                "points": int(len(sip_df)),
-                "logbook_sheet": used_sheet,
-                "logbook_overlap": overlap_cnt,
-                "logbook_block_rows": block_rows,
-                "source": source_label}
+        return ({"run": str(run_root), "status": "FAIL",
+                 "reason": f"Not enough matched points (need >= {min_points})",
+                 "points": int(len(sip_df)),
+                 "logbook_sheet": used_sheet,
+                 "logbook_overlap": overlap_cnt,
+                 "logbook_block_rows": block_rows,
+                 "source": source_label, "normalize": normalize}, None)
 
-    # Reference point = max S (legacy)
+    # choose reference point (max S) if normalization is ON
     iref = int(np.nanargmax(sip_df["S"].to_numpy(float)))
-    rho_ref  = float(sip_df.iloc[iref]["rho"])
-    sig_ref  = float(sip_df.iloc[iref]["sigma_imag"])
+    rho_ref = float(sip_df.iloc[iref]["rho"])
+    sig_ref = float(sip_df.iloc[iref]["sigma_imag"])
     logRho_ref = safe_log10(rho_ref)
     logSig_ref = safe_log10(sig_ref)
 
-    # GOAL/INDEX (legacy)
-    sip_df["rho_idx"]   = sip_df["rho"] / rho_ref
-    sip_df["logRhoIdx"] = sip_df["logRho"] - logRho_ref
+    # =========================
+    # BUILD ALL DERIVED COLUMNS
+    # =========================
 
-    if ici_mode == "sig_over_sigref":
-        sip_df["imag_idx"]   = sip_df["sigma_imag"] / sig_ref
-        sip_df["logImagIdx"] = sip_df["logImag"] - logSig_ref
+    # RAW log-log uses rho and sigma directly (always valid)
+    # For consistency in outputs, define these "raw" columns explicitly:
+    sip_df["x_loglog"] = sip_df["logS"]
+    sip_df["y_raw_logrho"] = sip_df["logRho"]
+    sip_df["y_raw_logsig"] = sip_df["logSigma"]
+
+    # Normalized (classic) indices and VN-style "target" definitions
+    if normalize:
+        # GOAL/INDEX definitions in log domain:
+        sip_df["rho_idx"]   = sip_df["rho"] / rho_ref
+        sip_df["logRhoIdx"] = sip_df["logRho"] - logRho_ref
+
+        if ici_mode == "sig_over_sigref":
+            # ICI = sig/sig_ref => logICI = logSig - logSig_ref
+            sip_df["imag_idx"]   = sip_df["sigma_imag"] / sig_ref
+            sip_df["logImagIdx"] = sip_df["logSigma"] - logSig_ref
+        else:
+            # ICI = sig_ref/sig => logICI = logSig_ref - logSig
+            sip_df["imag_idx"]   = sig_ref / sip_df["sigma_imag"]
+            sip_df["logImagIdx"] = logSig_ref - sip_df["logSigma"]
+
+        # TARGET (VN style) ALWAYS uses ICI = sig_ref/sig to force downtrend
+        sip_df["logRI_vn"]  = sip_df["logRhoIdx"]
+        sip_df["logICI_vn"] = logSig_ref - sip_df["logSigma"]
+
+        # Also keep real-space versions of indices
+        sip_df["RI_vn_real"]  = sip_df["rho_idx"]  # rho/rho_ref
+        sip_df["ICI_vn_real"] = sig_ref / sip_df["sigma_imag"]  # sig_ref/sig
     else:
-        sip_df["imag_idx"]   = sig_ref / sip_df["sigma_imag"]
-        sip_df["logImagIdx"] = logSig_ref - sip_df["logImag"]
+        # Unnormalized alternative "index/target-like" quantities WITHOUT refs:
+        #   RI_unorm  = rho            -> logRI_unorm = logRho
+        #   ICI_unorm = 1/sigma_imag   -> logICI_unorm = -logSigma
+        # These produce an "ICI-like" downtrend if sigma rises with moisture.
+        sip_df["rho_idx"]   = np.nan
+        sip_df["logRhoIdx"] = np.nan
+        sip_df["imag_idx"]  = np.nan
+        sip_df["logImagIdx"]= np.nan
 
-    # RAW fits (legacy)
+        sip_df["logRI_vn"]  = sip_df["logRho"]
+        sip_df["logICI_vn"] = -sip_df["logSigma"]
+
+        sip_df["RI_vn_real"]  = sip_df["rho"]
+        sip_df["ICI_vn_real"] = 1.0 / sip_df["sigma_imag"]
+
+    # ======================================
+    # FITS: LOG-LOG (KEEP ALL OLD APPROACHES)
+    # ======================================
+
+    # RAW log-log linear fits
     slope_r, intercept_r, r2_r, p_r, ss_res_lin_r, aic_lin_r = linear_fit(sip_df["logS"], sip_df["logRho"])
-    slope_i, intercept_i, r2_i, p_i, ss_res_lin_i, aic_lin_i = linear_fit(sip_df["logS"], sip_df["logImag"])
+    slope_s, intercept_s, r2_s, p_s, ss_res_lin_s, aic_lin_s = linear_fit(sip_df["logS"], sip_df["logSigma"])
     lin_rho = {"slope": slope_r, "intercept": intercept_r, "r2": r2_r, "p": p_r, "aic": aic_lin_r}
-    lin_im  = {"slope": slope_i, "intercept": intercept_i, "r2": r2_i, "p": p_i, "aic": aic_lin_i}
+    lin_sig = {"slope": slope_s, "intercept": intercept_s, "r2": r2_s, "p": p_s, "aic": aic_lin_s}
 
-    # GOAL/INDEX through-origin (legacy)
-    a_ri,  r2_ri,  _ = linear_fit_through_origin(sip_df["logS"], sip_df["logRhoIdx"])
-    a_ici, r2_ici, _ = linear_fit_through_origin(sip_df["logS"], sip_df["logImagIdx"])
-
-    n_idx = -a_ri
-    if ici_mode == "sig_over_sigref":
-        p_idx = +a_ici
+    # "INDEX/GOAL" through-origin only meaningful in normalized mode; in unnormalized we compute through-origin
+    # on our alternative logRI_vn/logICI_vn just to keep the plot available (and label it clearly).
+    if normalize:
+        a_ri,  r2_ri,  _ = linear_fit_through_origin(sip_df["logS"], sip_df["logRhoIdx"])
+        a_ici, r2_ici, _ = linear_fit_through_origin(sip_df["logS"], sip_df["logImagIdx"])
+        n_idx = -a_ri
+        if ici_mode == "sig_over_sigref":
+            p_idx = +a_ici
+        else:
+            p_idx = -a_ici
+        sip_df["logRhoIdx_fit_to"] = a_ri  * sip_df["logS"]
+        sip_df["logImagIdx_fit_to"]= a_ici * sip_df["logS"]
     else:
+        # unnormalized analog:
+        a_ri,  r2_ri,  _ = linear_fit_through_origin(sip_df["logS"], sip_df["logRI_vn"])
+        a_ici, r2_ici, _ = linear_fit_through_origin(sip_df["logS"], sip_df["logICI_vn"])
+        n_idx = -a_ri
         p_idx = -a_ici
+        sip_df["logRhoIdx_fit_to"] = np.nan
+        sip_df["logImagIdx_fit_to"]= np.nan
 
-    # TARGET VN style (legacy: always downtrend, intercept)
-    sip_df["logRI_vn"]  = sip_df["logRhoIdx"]
-    sip_df["logICI_vn"] = logSig_ref - sip_df["logImag"]
-
-    slope_RI_vn,  int_RI_vn,  r2_RI_vn,  _, _, _ = linear_fit(sip_df["logS"], sip_df["logRI_vn"])
-    slope_ICI_vn, int_ICI_vn, r2_ICI_vn, _, _, _ = linear_fit(sip_df["logS"], sip_df["logICI_vn"])
-
+    # TARGET (VN or unnormalized analog) with intercept
+    slope_RI_vn,  int_RI_vn,  r2_RI_vn,  p_RI_vn,  _, _ = linear_fit(sip_df["logS"], sip_df["logRI_vn"])
+    slope_ICI_vn, int_ICI_vn, r2_ICI_vn, p_ICI_vn, _, _ = linear_fit(sip_df["logS"], sip_df["logICI_vn"])
     n_vn = -slope_RI_vn
     p_vn = -slope_ICI_vn
 
     sip_df["logRI_vn_fit"]  = slope_RI_vn  * sip_df["logS"] + int_RI_vn
     sip_df["logICI_vn_fit"] = slope_ICI_vn * sip_df["logS"] + int_ICI_vn
 
-    # VN Smin subset (legacy optional)
+    # Optional VN-style subset S>=vn_smin (applies equally to normalized and unnormalized analog)
     n_vn_smin = np.nan
     p_vn_smin = np.nan
     r2_RI_vn_smin = np.nan
@@ -1367,7 +1006,7 @@ def process_run(run_root: Path,
             sip_df.loc[m, "logRI_vn_fit_smin"]  = slope_RI_vn_smin  * sip_df.loc[m, "logS"] + int_RI_vn_smin
             sip_df.loc[m, "logICI_vn_fit_smin"] = slope_ICI_vn_smin * sip_df.loc[m, "logS"] + int_ICI_vn_smin
 
-    # Polynomial TARGET (legacy optional)
+    # Polynomial fits on TARGET curves (log-log)
     r2_RI_vn_poly = np.nan
     r2_ICI_vn_poly = np.nan
     sip_df["logRI_vn_polyfit"]  = np.nan
@@ -1401,7 +1040,7 @@ def process_run(run_root: Path,
                 if c2s is not None:
                     sip_df.loc[m, "logICI_vn_polyfit_smin"] = np.polyval(c2s, sip_df.loc[m, "logS"].to_numpy(float))
 
-    # Polynomial RAW logRho (legacy optional)
+    # Polynomial regression on RAW logRho (optional)
     r2_raw_poly = np.nan
     sip_df["logRho_polyfit"] = np.nan
     if poly_raw and (poly_deg and poly_deg >= 2):
@@ -1410,7 +1049,7 @@ def process_run(run_root: Path,
         if cR is not None:
             sip_df["logRho_polyfit"] = np.polyval(cR, sip_df["logS"].to_numpy(float))
 
-    # Logistic on RAW logRho (legacy optional)
+    # Logistic fit on RAW logRho vs logS (optional, as before)
     log_fit = None
     log_status = "skipped"
     if do_logistic and len(sip_df) >= logistic_min_points:
@@ -1430,412 +1069,520 @@ def process_run(run_root: Path,
         if ok:
             log_fit_acc = log_fit
 
-    # diagnostics residuals (legacy)
+    # Diagnostics curves and residuals in log-log domain
     logS_arr = sip_df["logS"].to_numpy(float)
     logR_arr = sip_df["logRho"].to_numpy(float)
     lin_pred = slope_r*logS_arr + intercept_r
     sip_df["resid_lin_rho"] = logR_arr - lin_pred
+    sip_df["logRho_linfit"] = lin_pred
 
     if log_fit_acc is not None:
         L = log_fit_acc["L"]; k = log_fit_acc["k"]; x0 = log_fit_acc["x0"]; c = log_fit_acc["c"]
         log_pred = logistic4(logS_arr, L, k, x0, c)
         sip_df["resid_log_rho"] = logR_arr - log_pred
-        sip_df["logRho_linfit"] = lin_pred
         sip_df["logRho_logfit"] = log_pred
     else:
         sip_df["resid_log_rho"] = np.nan
-        sip_df["logRho_linfit"] = lin_pred
         sip_df["logRho_logfit"] = np.nan
 
-    # -------------------------------------------------------------------------
-    # NEW: NON-NORMALIZED REAL-SPACE MOISTURE RELATION FITS
-    # -------------------------------------------------------------------------
-    # Prefer theta if it has enough finite values; else fallback to S.
-    use_theta = np.isfinite(sip_df["theta"]).sum() >= min_points
-    x_col = "theta" if use_theta else "S"
-    x = sip_df[x_col].to_numpy(float)
+    # ===========================================
+    # REAL-SPACE FITS: rho vs S, sigma vs S/theta
+    # ===========================================
 
-    # Helper to fit y vs x and write predictions aligned to the dataframe
-    def _apply_nonorm_fits(y_col_name: str, prefix: str):
-        y = sip_df[y_col_name].to_numpy(float)
+    # Default to no real fits unless enabled
+    realfits = {}
 
-        # Prepare output columns
-        col_lin = f"{prefix}_fit_lin"
-        col_exp = f"{prefix}_fit_exp"
-        col_pow = f"{prefix}_fit_pow"
-        sip_df[col_lin] = np.nan
-        sip_df[col_exp] = np.nan
-        sip_df[col_pow] = np.nan
-        sip_df[f"resid_{prefix}_lin"] = np.nan
-        sip_df[f"resid_{prefix}_exp"] = np.nan
-        sip_df[f"resid_{prefix}_pow"] = np.nan
+    sip_df["rho_fit_real_lin_S"] = np.nan
+    sip_df["sig_fit_real_lin_S"] = np.nan
+    sip_df["sig_fit_real_lin_theta"] = np.nan
 
-        # Fit only where finite
-        m = np.isfinite(x) & np.isfinite(y)
-        xx = x[m]; yy = y[m]
-        if len(xx) < min_points:
-            return {
-                "x_col": x_col, "y_col": y_col_name,
-                "lin": None, "exp": None, "pow": None
-            }
+    sip_df["rho_fit_real_poly_S"] = np.nan
+    sip_df["sig_fit_real_poly_S"] = np.nan
+    sip_df["sig_fit_real_poly_theta"] = np.nan
 
-        # Linear
-        a, c0, yhat_lin, r2_lin, sse_lin = fit_linear_real(xx, yy)
-        if yhat_lin is not None:
-            sip_df.loc[m, col_lin] = yhat_lin
-            sip_df.loc[m, f"resid_{prefix}_lin"] = yy - yhat_lin
+    sip_df["rho_fit_real_logistic_S"] = np.nan
+    sip_df["rho_resid_real_lin_S"] = np.nan
+    sip_df["sig_resid_real_lin_S"] = np.nan
 
-        # Exponential
-        Aexp, bexp, yhat_exp, r2_exp, sse_exp = fit_exponential_real(xx, yy)
-        if yhat_exp is not None:
-            sip_df.loc[m, col_exp] = yhat_exp
-            sip_df.loc[m, f"resid_{prefix}_exp"] = yy - yhat_exp
+    # For real fits we require finite S and finite y (rho/sigma)
+    if do_real_fits:
+        xS = sip_df["S"].to_numpy(float)
+        yR = sip_df["rho"].to_numpy(float)
+        yG = sip_df["sigma_imag"].to_numpy(float)
 
-        # Power law
-        Apow, bpow, yhat_pow, r2_pow, sse_pow = fit_powerlaw_real(xx, yy)
-        if yhat_pow is not None:
-            sip_df.loc[m, col_pow] = yhat_pow
-            sip_df.loc[m, f"resid_{prefix}_pow"] = yy - yhat_pow
+        # linear real: rho ~ a*S + b
+        ar, br, r2r_real, pr_real, ssr_real, aicr_real = linear_fit(xS, yR)
+        sip_df["rho_fit_real_lin_S"] = ar*sip_df["S"] + br
+        sip_df["rho_resid_real_lin_S"] = sip_df["rho"] - sip_df["rho_fit_real_lin_S"]
 
-        return {
-            "x_col": x_col, "y_col": y_col_name,
-            "lin": {"a": a, "c": c0, "r2": r2_lin, "sse": sse_lin},
-            "exp": {"A": Aexp, "b": bexp, "r2": r2_exp, "sse": sse_exp},
-            "pow": {"A": Apow, "b": bpow, "r2": r2_pow, "sse": sse_pow},
-        }
+        # linear real: sigma ~ a*S + b
+        ag, bg, r2g_real, pg_real, ssg_real, aicg_real = linear_fit(xS, yG)
+        sip_df["sig_fit_real_lin_S"] = ag*sip_df["S"] + bg
+        sip_df["sig_resid_real_lin_S"] = sip_df["sigma_imag"] - sip_df["sig_fit_real_lin_S"]
 
-    # Apply to sigma_imag, rho, and sigma_real
-    fit_nonorm_sigma = _apply_nonorm_fits("sigma_imag", "sigma_nonorm")
-    fit_nonorm_rho   = _apply_nonorm_fits("rho",       "rho_nonorm")
-    fit_nonorm_sigR  = _apply_nonorm_fits("sigma_real","sigma_real_nonorm")
+        realfits["rho_lin_S"] = {"a": ar, "b": br, "R2": r2r_real, "p": pr_real, "AIC": aicr_real}
+        realfits["sig_lin_S"] = {"a": ag, "b": bg, "R2": r2g_real, "p": pg_real, "AIC": aicg_real}
 
-    # -------------------------------------------------------------------------
-    # WRITE joined CSV (UPDATED: includes everything old + new nonorm fields)
-    # -------------------------------------------------------------------------
-    csv_path = results_dir / f"joined_{tag}Hz.csv"
+        # poly real if requested (re-use --poly-deg)
+        if poly_deg and poly_deg >= 2:
+            cRp, _, r2Rp, _ = poly_fit_predict(xS, yR, poly_deg)
+            cGp, _, r2Gp, _ = poly_fit_predict(xS, yG, poly_deg)
+            if cRp is not None:
+                sip_df["rho_fit_real_poly_S"] = np.polyval(cRp, sip_df["S"].to_numpy(float))
+            if cGp is not None:
+                sip_df["sig_fit_real_poly_S"] = np.polyval(cGp, sip_df["S"].to_numpy(float))
+            realfits["rho_poly_S"] = {"deg": poly_deg, "R2": r2Rp}
+            realfits["sig_poly_S"] = {"deg": poly_deg, "R2": r2Gp}
 
-    # Ensure all columns exist even if some fits not possible
-    want_cols = [
+        # sigma vs theta if theta exists
+        mth = np.isfinite(sip_df["theta"].to_numpy(float))
+        if int(np.sum(mth)) >= min_points:
+            xt = sip_df.loc[mth, "theta"].to_numpy(float)
+            yg = sip_df.loc[mth, "sigma_imag"].to_numpy(float)
+            at, bt, r2t, pt, sst, aict = linear_fit(xt, yg)
+            sip_df.loc[mth, "sig_fit_real_lin_theta"] = at*sip_df.loc[mth, "theta"] + bt
+            realfits["sig_lin_theta"] = {"a": at, "b": bt, "R2": r2t, "p": pt, "AIC": aict}
+
+            if poly_deg and poly_deg >= 2 and int(np.sum(mth)) >= (poly_deg + 1):
+                cT, _, r2Tp, _ = poly_fit_predict(xt, yg, poly_deg)
+                if cT is not None:
+                    sip_df.loc[mth, "sig_fit_real_poly_theta"] = np.polyval(cT, sip_df.loc[mth, "theta"].to_numpy(float))
+                realfits["sig_poly_theta"] = {"deg": poly_deg, "R2": r2Tp}
+
+        # optional real-space logistic on rho vs S
+        if do_real_logistic and len(sip_df) >= logistic_min_points:
+            lf_real, st_real = logistic_fit_noscipy(
+                sip_df["S"], sip_df["rho"],
+                fast=logistic_fast,
+                max_seconds=(logistic_max_seconds if logistic_max_seconds and logistic_max_seconds > 0 else 0.0)
+            )
+            if lf_real is not None:
+                okr, rr = accept_logistic(r2r_real, aicr_real, lf_real)
+                if okr:
+                    sip_df["rho_fit_real_logistic_S"] = logistic4(
+                        sip_df["S"].to_numpy(float), lf_real["L"], lf_real["k"], lf_real["x0"], lf_real["c"]
+                    )
+                    realfits["rho_logistic_S"] = {"status": st_real, "accepted": True, "reason": rr, **lf_real}
+                else:
+                    realfits["rho_logistic_S"] = {"status": st_real, "accepted": False, "reason": rr, **lf_real}
+
+    # ======================
+    # WRITE JOINED CSV
+    # ======================
+
+    csv_path = results_dir / f"joined_{tag}Hz_{normtag}.csv"
+    cols = [
         "measurement","measurement_norm","freq_hz",
         "S","phi","theta",
-        "rho","sigma_imag","sigma_real",
-        "logS","logRho","logImag",
+        "rho","sigma_imag",
+        "logS","logTheta",
+        "logRho","logSigma",
+
+        # normalized indices if available, else NaN
         "rho_idx","imag_idx","logRhoIdx","logImagIdx",
 
-        # TARGET VN
-        "logRI_vn","logICI_vn","logRI_vn_fit","logICI_vn_fit",
+        # target/vn columns (normalized or unnormalized analog)
+        "logRI_vn","logICI_vn",
+        "logRI_vn_fit","logICI_vn_fit",
         "logRI_vn_fit_smin","logICI_vn_fit_smin",
-
-        # TARGET poly
         "logRI_vn_polyfit","logICI_vn_polyfit",
         "logRI_vn_polyfit_smin","logICI_vn_polyfit_smin",
 
-        # RAW poly
+        # raw poly
         "logRho_polyfit",
 
-        # diagnostics
-        "resid_lin_rho","resid_log_rho",
+        # log-log diagnostics
         "logRho_linfit","logRho_logfit",
+        "resid_lin_rho","resid_log_rho",
 
-        # NEW nonorm predictions/residuals
-        "sigma_nonorm_fit_lin","sigma_nonorm_fit_exp","sigma_nonorm_fit_pow",
-        "resid_sigma_nonorm_lin","resid_sigma_nonorm_exp","resid_sigma_nonorm_pow",
-
-        "rho_nonorm_fit_lin","rho_nonorm_fit_exp","rho_nonorm_fit_pow",
-        "resid_rho_nonorm_lin","resid_rho_nonorm_exp","resid_rho_nonorm_pow",
-
-        "sigma_real_nonorm_fit_lin","sigma_real_nonorm_fit_exp","sigma_real_nonorm_fit_pow",
-        "resid_sigma_real_nonorm_lin","resid_sigma_real_nonorm_exp","resid_sigma_real_nonorm_pow",
+        # real fits
+        "rho_fit_real_lin_S","sig_fit_real_lin_S",
+        "rho_fit_real_poly_S","sig_fit_real_poly_S",
+        "rho_fit_real_logistic_S",
+        "sig_fit_real_lin_theta","sig_fit_real_poly_theta",
+        "rho_resid_real_lin_S","sig_resid_real_lin_S",
     ]
+    keep = [c for c in cols if c in sip_df.columns]
+    sip_df[keep].to_csv(csv_path, index=False)
 
-    for c in want_cols:
-        if c not in sip_df.columns:
-            sip_df[c] = np.nan
+    # ======================
+    # REPORT (TXT)
+    # ======================
 
-    sip_df[want_cols].to_csv(csv_path, index=False)
-
-    # -------------------------------------------------------------------------
-    # REPORT (UPDATED: include nonorm fits summary)
-    # -------------------------------------------------------------------------
-    report = results_dir / f"fit_report_{tag}Hz.txt"
-    base_text = (
-        f"Run root: {run_root}\n"
-        f"Source (folder): {source_label}\n"
-        f"SIP file: {sip_xlsx}\n"
-        f"Logbook file: {log_xlsx}\n"
-        f"Logbook sheet used: {used_sheet}\n"
-        f"Logbook block rows (usable): {block_rows}\n"
-        f"Overlap with SIP measurement IDs: {overlap_cnt}\n\n"
-        f"Matched points used: {len(sip_df)}\n"
-        f"Reference point (max S): {sip_df.iloc[iref]['measurement']}  S_ref={sip_df.iloc[iref]['S']:.6g}\n"
-        f"rho_ref={rho_ref:.6g}, sigma_ref={sig_ref:.6g}\n\n"
-        f"GOAL/INDEX ici_mode: {ici_mode}\n"
-        f"GOAL defs: RI=rho/rho_ref\n"
-        f"          ICI={'sigma_imag/sigma_ref' if ici_mode=='sig_over_sigref' else 'sigma_ref/sigma_imag'}\n\n"
-        f"GOAL (through-origin) exponents:\n"
-        f"  n(index)={n_idx:.6g} (R2={r2_ri:.6g})\n"
-        f"  p(index)={p_idx:.6g} (R2={r2_ici:.6g})\n\n"
-        f"TARGET (Van Nuys style; WITH intercept; both downtrend):\n"
-        f"  n_vn={n_vn:.6g} (R2={r2_RI_vn:.6g})\n"
-        f"  p_vn={p_vn:.6g} (R2={r2_ICI_vn:.6g})\n\n"
-        f"RAW linear:\n"
-        f"  logRho=a*logS+b: a={slope_r:.6g}, b={intercept_r:.6g}, n(raw)={-slope_r:.6g}, R2={r2_r:.6g}\n"
-        f"  logImag=p*logS+q: p={slope_i:.6g}, q={intercept_i:.6g}, R2={r2_i:.6g}\n\n"
-        f"Logistic: status={log_status}, accepted={bool(log_fit_acc is not None)}, reason={log_accept_reason}\n\n"
-        f"NONORM REAL-SPACE fits (conductivity/moisture goal):\n"
-        f"  x used = {x_col} (theta preferred if available; else S)\n"
-    )
-    report.write_text(base_text)
-
-    def _append_nonorm_summary(label_y: str, fitdict):
-        lines = [f"\n  {label_y} vs {fitdict.get('x_col')}:\n"]
-        for nm in ["lin","exp","pow"]:
-            f0 = fitdict.get(nm, None)
-            if f0 is None:
-                lines.append(f"    {nm}: not fit (not enough points or invalid domain)\n")
-            else:
-                if nm == "lin":
-                    lines.append(f"    lin: a={f0['a']:.6g}, c={f0['c']:.6g}, R2_real={f0['r2']:.6g}, SSE_real={f0['sse']:.6g}\n")
-                else:
-                    lines.append(f"    {nm}: A={f0['A']:.6g}, b={f0['b']:.6g}, R2_real={f0['r2']:.6g}, SSE_real={f0['sse']:.6g}\n")
-        report.write_text(report.read_text() + "".join(lines))
-
-    _append_nonorm_summary("sigma_imag", fit_nonorm_sigma)
-    _append_nonorm_summary("rho", fit_nonorm_rho)
-    _append_nonorm_summary("sigma_real=1/rho", fit_nonorm_sigR)
-
+    report = results_dir / f"fit_report_{tag}Hz_{normtag}.txt"
+    report_lines = []
+    report_lines += [
+        f"Run root: {run_root}",
+        f"Source (folder): {source_label}",
+        f"Normalize: {normalize}",
+        f"SIP file: {sip_xlsx}",
+        f"Logbook file: {log_xlsx}",
+        f"Logbook sheet used: {used_sheet}",
+        f"Logbook block rows (usable): {block_rows}",
+        f"Overlap with SIP measurement IDs: {overlap_cnt}",
+        "",
+        f"Matched points used: {len(sip_df)}",
+        f"Reference point (max S): {sip_df.iloc[iref]['measurement']}  S_ref={sip_df.iloc[iref]['S']:.6g}",
+        f"rho_ref={rho_ref:.6g}, sigma_ref={sig_ref:.6g}",
+        "",
+        f"GOAL/INDEX ici_mode: {ici_mode}",
+        "",
+        "LOG-LOG FITS (x=logS):",
+        f"  RAW logRho=a*logS+b: a={slope_r:.6g}, b={intercept_r:.6g}, n(raw)={-slope_r:.6g}, R2={r2_r:.6g}, p={p_r:.3g}",
+        f"  RAW logSigma=a*logS+b: a={slope_s:.6g}, b={intercept_s:.6g}, R2={r2_s:.6g}, p={p_s:.3g}",
+        "",
+        f"TARGET (VN-like; WITH intercept) exponents:",
+        f"  n_vn={n_vn:.6g} (R2={r2_RI_vn:.6g}, p={p_RI_vn:.3g})",
+        f"  p_vn={p_vn:.6g} (R2={r2_ICI_vn:.6g}, p={p_ICI_vn:.3g})",
+        "",
+        "INDEX/GOAL (through-origin):",
+        f"  n(index)={n_idx:.6g} (R2={r2_ri:.6g})",
+        f"  p(index)={p_idx:.6g} (R2={r2_ici:.6g})",
+        "",
+        f"Logistic (log-log rho): status={log_status}, accepted={bool(log_fit_acc is not None)}, reason={log_accept_reason}",
+        "",
+    ]
     if vn_smin and vn_smin > 0:
-        report.write_text(report.read_text() +
-            f"\nEXTRA TARGET (VN style; WITH intercept; S >= {vn_smin:g}):\n"
-            f"  n_vn_smin={n_vn_smin:.6g} (R2={r2_RI_vn_smin:.6g})\n"
-            f"  p_vn_smin={p_vn_smin:.6g} (R2={r2_ICI_vn_smin:.6g})\n"
-        )
-
+        report_lines += [
+            f"EXTRA TARGET subset: S >= {vn_smin:g}",
+            f"  n_vn_smin={n_vn_smin:.6g} (R2={r2_RI_vn_smin:.6g})",
+            f"  p_vn_smin={p_vn_smin:.6g} (R2={r2_ICI_vn_smin:.6g})",
+            "",
+        ]
     if poly_deg and poly_deg >= 2:
-        report.write_text(report.read_text() +
-            f"\nPOLY TARGET (deg {poly_deg}):\n"
-            f"  R2_RI_vn_poly={r2_RI_vn_poly:.6g}\n"
-            f"  R2_ICI_vn_poly={r2_ICI_vn_poly:.6g}\n"
-        )
+        report_lines += [
+            f"POLY (log-log) TARGET deg {poly_deg}:",
+            f"  R2_RI_vn_poly={r2_RI_vn_poly:.6g}",
+            f"  R2_ICI_vn_poly={r2_ICI_vn_poly:.6g}",
+            "",
+        ]
         if vn_smin and vn_smin > 0:
-            report.write_text(report.read_text() +
-                f"POLY TARGET (deg {poly_deg}, S >= {vn_smin:g}):\n"
-                f"  R2_RI_vn_poly_smin={r2_RI_vn_poly_smin:.6g}\n"
-                f"  R2_ICI_vn_poly_smin={r2_ICI_vn_poly_smin:.6g}\n"
-            )
+            report_lines += [
+                f"POLY (log-log) TARGET deg {poly_deg}, S >= {vn_smin:g}:",
+                f"  R2_RI_vn_poly_smin={r2_RI_vn_poly_smin:.6g}",
+                f"  R2_ICI_vn_poly_smin={r2_ICI_vn_poly_smin:.6g}",
+                "",
+            ]
         if poly_raw:
-            report.write_text(report.read_text() +
-                f"POLY RAW logRho (deg {poly_deg}): R2_raw_poly={r2_raw_poly:.6g}\n"
-            )
+            report_lines += [f"POLY (log-log) RAW logRho deg {poly_deg}: R2_raw_poly={r2_raw_poly:.6g}", ""]
 
-    # -------------------------------------------------------------------------
-    # GNUPLOT scripts/plots (legacy)
-    # -------------------------------------------------------------------------
-    write_plot_target(results_dir, csv_path.name, f"target_exponents_{tag}Hz.png", target_freq,
-                      source_label, n_vn, r2_RI_vn, p_vn, r2_ICI_vn)
+    if do_real_fits and realfits:
+        report_lines += ["REAL-SPACE FITS (no logs):"]
+        for k, v in realfits.items():
+            report_lines.append(f"  {k}: {v}")
+        report_lines.append("")
 
-    if vn_smin and vn_smin > 0:
-        write_plot_target_smin(
-            results_dir, csv_path.name, f"target_exponents_Smin_{tag}Hz.png", target_freq,
-            source_label, vn_smin, n_vn_smin, r2_RI_vn_smin, p_vn_smin, r2_ICI_vn_smin
-        )
+    report.write_text("\n".join(report_lines))
 
-    write_plot_index(results_dir, csv_path.name, f"index_exponents_{tag}Hz.png", target_freq,
-                     source_label, n_idx, r2_ri, p_idx, r2_ici)
+    # ======================
+    # EXCEL OUTPUT (PER RUN)
+    # ======================
 
-    write_plot_raw(results_dir, csv_path.name, f"exponents_raw_{tag}Hz.png", target_freq,
-                   source_label, lin_rho, lin_im, log_fit_acc)
-
-    write_plot_logistic_only(results_dir, csv_path.name, f"exponents_logistic_only_{tag}Hz.png", target_freq,
-                             source_label, log_fit_acc)
-
-    write_plot_logistic_diag(results_dir, csv_path.name, f"exponents_logistic_diagnostics_{tag}Hz.png",
-                             target_freq, source_label, has_log=(log_fit_acc is not None))
-
-    if poly_deg and poly_deg >= 2:
-        write_plot_target_poly(
-            results_dir, csv_path.name, f"target_exponents_polydeg{poly_deg}_{tag}Hz.png", target_freq,
-            source_label, poly_deg, r2_RI_vn_poly, r2_ICI_vn_poly
-        )
-        if vn_smin and vn_smin > 0:
-            write_plot_target_poly_smin(
-                results_dir, csv_path.name, f"target_exponents_polydeg{poly_deg}_Smin_{tag}Hz.png", target_freq,
-                source_label, poly_deg, vn_smin, r2_RI_vn_poly_smin, r2_ICI_vn_poly_smin
-            )
-        if poly_raw:
-            write_plot_raw_poly(
-                results_dir, csv_path.name, f"exponents_raw_polydeg{poly_deg}_{tag}Hz.png", target_freq,
-                source_label, poly_deg, r2_raw_poly
-            )
-
-    # -------------------------------------------------------------------------
-    # NEW: NONORM real-space plots (explicit names)
-    # -------------------------------------------------------------------------
-    # Decide x axis name for filenames
-    x_tok = "THETA" if (x_col == "theta") else "S"
-
-    # Sigma_imag plot
-    out_sigma = f"NONORM_SIGMA_REAL_vs_{x_tok}_ALL_{tag}Hz.png"
-    write_plot_nonorm_real(
-        results_dir, csv_path.name, out_sigma, target_freq, source_label,
-        x_col=x_col, y_col="sigma_imag",
-        y_fit_cols={"LIN":"sigma_nonorm_fit_lin", "EXP":"sigma_nonorm_fit_exp", "POW":"sigma_nonorm_fit_pow"},
-        r2_map={
-            "LIN": (fit_nonorm_sigma["lin"]["r2"] if fit_nonorm_sigma.get("lin") else np.nan),
-            "EXP": (fit_nonorm_sigma["exp"]["r2"] if fit_nonorm_sigma.get("exp") else np.nan),
-            "POW": (fit_nonorm_sigma["pow"]["r2"] if fit_nonorm_sigma.get("pow") else np.nan),
-        }
-    )
-
-    # Rho plot
-    out_rho = f"NONORM_RHO_REAL_vs_{x_tok}_ALL_{tag}Hz.png"
-    write_plot_nonorm_real(
-        results_dir, csv_path.name, out_rho, target_freq, source_label,
-        x_col=x_col, y_col="rho",
-        y_fit_cols={"LIN":"rho_nonorm_fit_lin", "EXP":"rho_nonorm_fit_exp", "POW":"rho_nonorm_fit_pow"},
-        r2_map={
-            "LIN": (fit_nonorm_rho["lin"]["r2"] if fit_nonorm_rho.get("lin") else np.nan),
-            "EXP": (fit_nonorm_rho["exp"]["r2"] if fit_nonorm_rho.get("exp") else np.nan),
-            "POW": (fit_nonorm_rho["pow"]["r2"] if fit_nonorm_rho.get("pow") else np.nan),
-        }
-    )
-
-    # Sigma_real plot (optional but written; may be mostly redundant)
-    out_sigR = f"NONORM_SIGMAREAL_REAL_vs_{x_tok}_ALL_{tag}Hz.png"
-    write_plot_nonorm_real(
-        results_dir, csv_path.name, out_sigR, target_freq, source_label,
-        x_col=x_col, y_col="sigma_real",
-        y_fit_cols={"LIN":"sigma_real_nonorm_fit_lin", "EXP":"sigma_real_nonorm_fit_exp", "POW":"sigma_real_nonorm_fit_pow"},
-        r2_map={
-            "LIN": (fit_nonorm_sigR["lin"]["r2"] if fit_nonorm_sigR.get("lin") else np.nan),
-            "EXP": (fit_nonorm_sigR["exp"]["r2"] if fit_nonorm_sigR.get("exp") else np.nan),
-            "POW": (fit_nonorm_sigR["pow"]["r2"] if fit_nonorm_sigR.get("pow") else np.nan),
-        }
-    )
-
-    # -------------------------------------------------------------------------
-    # EXECUTE GNUPLOT (unless dry-run)
-    # -------------------------------------------------------------------------
-    if not dry_run:
-        # legacy scripts
-        _run_gnuplot("plot_target_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-        if vn_smin and vn_smin > 0:
-            _run_gnuplot("plot_target_exponents_smin.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-        _run_gnuplot("plot_index_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-        _run_gnuplot("plot_raw_exponents.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-        _run_gnuplot("plot_logistic_only.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-        _run_gnuplot("plot_logistic_diagnostics.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
-
-        if poly_deg and poly_deg >= 2:
-            _run_gnuplot("plot_target_exponents_poly.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-            if vn_smin and vn_smin > 0:
-                _run_gnuplot("plot_target_exponents_poly_smin.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-            if poly_raw:
-                _run_gnuplot("plot_raw_exponents_poly.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
-
-        # NEW NONORM scripts are named plot_<stem>.gp
-        _run_gnuplot(f"plot_{Path(out_sigma).stem}.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
-        _run_gnuplot(f"plot_{Path(out_rho).stem}.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
-        _run_gnuplot(f"plot_{Path(out_sigR).stem}.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
-
-    # -------------------------------------------------------------------------
-    # NEW: PER-RUN EXCEL FULL AUDIT
-    # -------------------------------------------------------------------------
-    # Fit params table (one row per method-family)
-    fit_rows = []
-
-    def _add_fit_row(family, xname, yname, model, params_dict):
-        row = {
-            "family": family,
-            "x": xname,
-            "y": yname,
-            "model": model,
-        }
-        if params_dict is None:
-            row["ok"] = False
-            fit_rows.append(row)
-            return
-        row["ok"] = True
-        row.update(params_dict)
-        fit_rows.append(row)
-
-    # legacy summary rows (minimal, but traceable)
-    _add_fit_row("RAW_LOG", "logS", "logRho", "linear", {"slope": slope_r, "intercept": intercept_r, "R2": r2_r, "p": p_r, "AIC": aic_lin_r})
-    _add_fit_row("RAW_LOG", "logS", "logImag", "linear", {"slope": slope_i, "intercept": intercept_i, "R2": r2_i, "p": p_i, "AIC": aic_lin_i})
-    _add_fit_row("INDEX_GOAL", "logS", "logRhoIdx", "through_origin", {"slope": a_ri, "n_idx": n_idx, "R2": r2_ri})
-    _add_fit_row("INDEX_GOAL", "logS", "logImagIdx", "through_origin", {"slope": a_ici, "p_idx": p_idx, "R2": r2_ici})
-    _add_fit_row("TARGET_VN", "logS", "logRI_vn", "linear", {"slope": slope_RI_vn, "intercept": int_RI_vn, "n_vn": n_vn, "R2": r2_RI_vn})
-    _add_fit_row("TARGET_VN", "logS", "logICI_vn", "linear", {"slope": slope_ICI_vn, "intercept": int_ICI_vn, "p_vn": p_vn, "R2": r2_ICI_vn})
-
-    if vn_smin and vn_smin > 0:
-        _add_fit_row("TARGET_VN_SMIN", "logS", "logRI_vn", "linear", {"n_vn_smin": n_vn_smin, "R2": r2_RI_vn_smin})
-        _add_fit_row("TARGET_VN_SMIN", "logS", "logICI_vn", "linear", {"p_vn_smin": p_vn_smin, "R2": r2_ICI_vn_smin})
-
-    if poly_deg and poly_deg >= 2:
-        _add_fit_row("TARGET_VN", "logS", "logRI_vn", f"poly_deg{poly_deg}", {"R2": r2_RI_vn_poly})
-        _add_fit_row("TARGET_VN", "logS", "logICI_vn", f"poly_deg{poly_deg}", {"R2": r2_ICI_vn_poly})
-        if vn_smin and vn_smin > 0:
-            _add_fit_row("TARGET_VN_SMIN", "logS", "logRI_vn", f"poly_deg{poly_deg}", {"R2": r2_RI_vn_poly_smin})
-            _add_fit_row("TARGET_VN_SMIN", "logS", "logICI_vn", f"poly_deg{poly_deg}", {"R2": r2_ICI_vn_poly_smin})
-        if poly_raw:
-            _add_fit_row("RAW_LOG", "logS", "logRho", f"poly_deg{poly_deg}", {"R2": r2_raw_poly})
-
-    # logistic summary
-    _add_fit_row("RAW_LOG", "logS", "logRho", "logistic4", (log_fit_acc if log_fit_acc is not None else None))
-
-    # NEW: NONORM real-space fits (conductivity/moisture goal)
-    def _add_nonorm_fitpack(yname, pack, prefix):
-        xname = pack.get("x_col", x_col)
-        _add_fit_row("NONORM_REAL", xname, yname, "linear", pack.get("lin"))
-        _add_fit_row("NONORM_REAL", xname, yname, "exponential", pack.get("exp"))
-        _add_fit_row("NONORM_REAL", xname, yname, "powerlaw", pack.get("pow"))
-
-    _add_nonorm_fitpack("sigma_imag", fit_nonorm_sigma, "sigma_nonorm")
-    _add_nonorm_fitpack("rho", fit_nonorm_rho, "rho_nonorm")
-    _add_nonorm_fitpack("sigma_real", fit_nonorm_sigR, "sigma_real_nonorm")
-
-    notes_rows = [{
+    df_meta = pd.DataFrame([{
         "run_root": str(run_root),
         "source": source_label,
-        "sip_file": str(sip_xlsx),
-        "logbook_file": str(log_xlsx),
+        "normalize": normalize,
+        "normtag": normtag,
+        "target_freq": target_freq,
+        "sip_xlsx": str(sip_xlsx),
+        "log_xlsx": str(log_xlsx),
         "logbook_sheet": used_sheet,
         "logbook_overlap": overlap_cnt,
         "logbook_block_rows": block_rows,
-        "points_used": int(len(sip_df)),
-        "x_for_nonorm": x_col,
+        "reference_measurement": str(sip_df.iloc[iref]["measurement"]),
+        "S_ref": float(sip_df.iloc[iref]["S"]),
+        "rho_ref": rho_ref,
+        "sigma_ref": sig_ref
+    }])
+
+    # Fit summary sheet: one row with many columns (easy to aggregate globally)
+    fit_row = {
+        "run_root": str(run_root),
+        "source": source_label,
+        "normalize": normalize,
+        "normtag": normtag,
+        "freq_hz": target_freq,
+        "points": int(len(sip_df)),
         "ici_mode": ici_mode,
-        "vn_smin": float(vn_smin) if (vn_smin and vn_smin > 0) else 0.0,
-        "poly_deg": int(poly_deg) if (poly_deg and poly_deg >= 2) else 0,
-        "poly_raw": bool(poly_raw),
-        "logistic_status": log_status,
-        "logistic_accepted": bool(log_fit_acc is not None),
-        "logistic_reason": log_accept_reason,
-    }]
 
-    # Per-run Excel
-    xlsx_path = results_dir / f"full_audit_{tag}Hz.xlsx"
-    try:
-        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as w:
-            sip_df.to_excel(w, sheet_name="data_long", index=False)
-            pd.DataFrame(fit_rows).to_excel(w, sheet_name="fit_params", index=False)
-            pd.DataFrame(notes_rows).to_excel(w, sheet_name="notes", index=False)
-    except Exception as e:
-        print(f"[WARN] failed to write per-run excel {xlsx_path}: {e}", flush=True)
+        # RAW log-log
+        "raw_loglog_slope_logRho_vs_logS": slope_r,
+        "raw_loglog_int_logRho_vs_logS": intercept_r,
+        "raw_loglog_R2_logRho": r2_r,
+        "raw_loglog_p_logRho": p_r,
 
-    # Return summary + also return data for master workbook
-    return {
+        "raw_loglog_slope_logSigma_vs_logS": slope_s,
+        "raw_loglog_int_logSigma_vs_logS": intercept_s,
+        "raw_loglog_R2_logSigma": r2_s,
+        "raw_loglog_p_logSigma": p_s,
+
+        # TARGET log-log
+        "target_loglog_slope_logRI": slope_RI_vn,
+        "target_loglog_int_logRI": int_RI_vn,
+        "target_loglog_R2_logRI": r2_RI_vn,
+        "target_loglog_n": n_vn,
+
+        "target_loglog_slope_logICI": slope_ICI_vn,
+        "target_loglog_int_logICI": int_ICI_vn,
+        "target_loglog_R2_logICI": r2_ICI_vn,
+        "target_loglog_p": p_vn,
+
+        # INDEX
+        "index_through_origin_n": n_idx,
+        "index_through_origin_R2_RI": r2_ri,
+        "index_through_origin_p": p_idx,
+        "index_through_origin_R2_ICI": r2_ici,
+
+        # Logistic log-log on rho
+        "logistic_loglog_attempted": bool(log_fit is not None),
+        "logistic_loglog_status": log_status,
+        "logistic_loglog_accepted": bool(log_fit_acc is not None),
+        "logistic_loglog_reason": log_accept_reason,
+        "logistic_loglog_r2": (log_fit_acc.get("r2") if log_fit_acc else np.nan),
+        "logistic_loglog_p_model": (log_fit_acc.get("p_model") if log_fit_acc else np.nan),
+        "logistic_loglog_aic": (log_fit_acc.get("aic") if log_fit_acc else np.nan),
+    }
+
+    # poly metrics
+    if poly_deg and poly_deg >= 2:
+        fit_row.update({
+            "poly_deg": poly_deg,
+            "target_poly_R2_RI": r2_RI_vn_poly,
+            "target_poly_R2_ICI": r2_ICI_vn_poly,
+            "target_poly_R2_RI_Smin": r2_RI_vn_poly_smin,
+            "target_poly_R2_ICI_Smin": r2_ICI_vn_poly_smin,
+            "raw_poly_R2_logRho": r2_raw_poly if poly_raw else np.nan
+        })
+    else:
+        fit_row.update({"poly_deg": 0})
+
+    # real metrics if present
+    if do_real_fits:
+        # store in a flat way (safe if missing)
+        rl = realfits.get("rho_lin_S", {})
+        sl = realfits.get("sig_lin_S", {})
+        st = realfits.get("sig_lin_theta", {})
+        fit_row.update({
+            "real_rho_lin_S_a": rl.get("a", np.nan),
+            "real_rho_lin_S_b": rl.get("b", np.nan),
+            "real_rho_lin_S_R2": rl.get("R2", np.nan),
+            "real_sig_lin_S_a": sl.get("a", np.nan),
+            "real_sig_lin_S_b": sl.get("b", np.nan),
+            "real_sig_lin_S_R2": sl.get("R2", np.nan),
+            "real_sig_lin_theta_a": st.get("a", np.nan),
+            "real_sig_lin_theta_b": st.get("b", np.nan),
+            "real_sig_lin_theta_R2": st.get("R2", np.nan),
+        })
+        if poly_deg and poly_deg >= 2:
+            rp = realfits.get("rho_poly_S", {})
+            sp = realfits.get("sig_poly_S", {})
+            tp = realfits.get("sig_poly_theta", {})
+            fit_row.update({
+                "real_rho_poly_S_R2": rp.get("R2", np.nan),
+                "real_sig_poly_S_R2": sp.get("R2", np.nan),
+                "real_sig_poly_theta_R2": tp.get("R2", np.nan),
+            })
+        lg = realfits.get("rho_logistic_S", {})
+        if lg:
+            fit_row.update({
+                "real_rho_logistic_S_status": lg.get("status", ""),
+                "real_rho_logistic_S_accepted": lg.get("accepted", False),
+                "real_rho_logistic_S_reason": lg.get("reason", ""),
+                "real_rho_logistic_S_R2": lg.get("r2", np.nan),
+                "real_rho_logistic_S_aic": lg.get("aic", np.nan),
+                "real_rho_logistic_S_p_model": lg.get("p_model", np.nan),
+                "real_rho_logistic_S_L": lg.get("L", np.nan),
+                "real_rho_logistic_S_k": lg.get("k", np.nan),
+                "real_rho_logistic_S_x0": lg.get("x0", np.nan),
+                "real_rho_logistic_S_c": lg.get("c", np.nan),
+            })
+
+    df_fit = pd.DataFrame([fit_row])
+
+    # Write run excel
+    write_run_excel(
+        results_dir,
+        xlsx_name=f"all_values_{tag}Hz_{normtag}.xlsx",
+        df_data=sip_df.copy(),
+        df_fit=df_fit,
+        df_meta=df_meta
+    )
+
+    # ======================
+    # PLOTS (LOG-LOG, KEEP OLD + ADD NORM TAG IN NAME)
+    # ======================
+
+    # RAW log-log
+    out_raw = f"exponents_raw_{tag}Hz_{normtag}.png"
+    write_plot_raw_loglog(results_dir, csv_path.name, out_raw, target_freq, source_label, lin_rho, lin_sig, log_fit_acc, normtag)
+
+    # TARGET log-log (VN or unnormalized analog)
+    out_tgt = f"target_exponents_{tag}Hz_{normtag}.png"
+    # reuse a generic 2-panel writer
+    write_plot_target_loglog(
+        results_dir, csv_path.name, out_tgt, target_freq, source_label,
+        n_val=n_vn, r2a=r2_RI_vn, p_val=p_vn, r2b=r2_ICI_vn,
+        col_y1="logRI_vn", col_y1_fit="logRI_vn_fit",
+        col_y2="logICI_vn", col_y2_fit="logICI_vn_fit",
+        title1="TARGET (log-log)", title2="TARGET (log-log)",
+        ylab1="log10(RI-like)", ylab2="log10(ICI-like)",
+        legend1=f"{label_fmt(target_freq)}Hz: n = %.2f, R^2 = %.3f",
+        legend2=f"{label_fmt(target_freq)}Hz: p = %.2f, R^2 = %.3f",
+    )
+
+    # optional poly target plots (log-log)
+    if poly_deg and poly_deg >= 2:
+        # 2-panel plot overlay with poly columns is easy to create by cloning gp,
+        # but to keep code compact we generate dedicated plots via 1-panel scripts per y.
+        # Instead, we keep your earlier naming convention and just plot poly curves as additional file:
+        out_tgt_poly = f"target_exponents_polydeg{poly_deg}_{tag}Hz_{normtag}.png"
+        gp = f"""reset
+set datafile separator ','
+set datafile missing ''
+{_gp_term()}set output '{out_tgt_poly}'
+set multiplot layout 2,1
+set grid
+set key top right
+set xlabel 'log10(Saturation)'
+
+set title '{source_label}: TARGET poly(deg {poly_deg}) (log-log, {normtag}) - RI-like at {target_freq:g} Hz'
+set ylabel 'log10(RI-like)'
+plot '{csv_path.name}' using (column("logS")):(column("logRI_vn")) with points pt 7 ps 1.7 title 'data', \\
+     '{csv_path.name}' using (column("logS")):(column("logRI_vn_polyfit")) with lines dt 1 lw 4 title sprintf('poly deg {poly_deg}: R^2=%.3f', {r2_RI_vn_poly if np.isfinite(r2_RI_vn_poly) else float("nan")})
+
+set title '{source_label}: TARGET poly(deg {poly_deg}) (log-log, {normtag}) - ICI-like at {target_freq:g} Hz'
+set ylabel 'log10(ICI-like)'
+plot '{csv_path.name}' using (column("logS")):(column("logICI_vn")) with points pt 7 ps 1.7 title 'data', \\
+     '{csv_path.name}' using (column("logS")):(column("logICI_vn_polyfit")) with lines dt 1 lw 4 title sprintf('poly deg {poly_deg}: R^2=%.3f', {r2_ICI_vn_poly if np.isfinite(r2_ICI_vn_poly) else float("nan")})
+
+unset multiplot
+"""
+        (results_dir / "plot_target_poly_loglog.gp").write_text(gp)
+
+    # optional RAW poly logRho plot (log-log)
+    if poly_raw and (poly_deg and poly_deg >= 2):
+        out_raw_poly = f"exponents_raw_polydeg{poly_deg}_{tag}Hz_{normtag}.png"
+        gp = f"""reset
+set datafile separator ','
+set datafile missing ''
+set term pngcairo size 1200,800 enhanced font 'Arial,26'
+set output '{out_raw_poly}'
+set grid
+set key top right
+set title '{source_label}: RAW poly(deg {poly_deg}) (log-log, {normtag}) - logRho vs logS at {target_freq:g} Hz'
+set xlabel 'log10(Saturation)'
+set ylabel 'log10(Resistivity)'
+plot '{csv_path.name}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.7 title 'data', \\
+     '{csv_path.name}' using (column("logS")):(column("logRho_polyfit")) with lines dt 1 lw 4 title sprintf('poly deg {poly_deg}: R^2=%.3f', {r2_raw_poly if np.isfinite(r2_raw_poly) else float("nan")})
+"""
+        (results_dir / "plot_raw_poly_loglog.gp").write_text(gp)
+
+    # ======================
+    # REAL-SPACE PLOTS
+    # ======================
+    if do_real_fits:
+        # rho vs S (linear)
+        write_plot_real_1panel(
+            results_dir, csv_path.name,
+            out_png=f"real_rho_vs_S_linear_{tag}Hz_{normtag}.png",
+            title=f"{source_label}: rho vs S (real, {normtag}) at {target_freq:g} Hz",
+            xcol="S", ycol="rho", yfit_col="rho_fit_real_lin_S",
+            xlabel="Saturation (S)", ylabel="Resistivity (rho)",
+            legend_fit="linear fit"
+        )
+        # sigma vs S (linear) -> conductivity vs moisture (core goal)
+        write_plot_real_1panel(
+            results_dir, csv_path.name,
+            out_png=f"real_sigma_vs_S_linear_{tag}Hz_{normtag}.png",
+            title=f"{source_label}: sigma_imag vs S (real, {normtag}) at {target_freq:g} Hz",
+            xcol="S", ycol="sigma_imag", yfit_col="sig_fit_real_lin_S",
+            xlabel="Saturation (S)", ylabel="Imag Conductivity (sigma_imag)",
+            legend_fit="linear fit"
+        )
+        # sigma vs theta (linear) if theta exists
+        if np.isfinite(sip_df["theta"].to_numpy(float)).any():
+            write_plot_real_1panel(
+                results_dir, csv_path.name,
+                out_png=f"real_sigma_vs_theta_linear_{tag}Hz_{normtag}.png",
+                title=f"{source_label}: sigma_imag vs theta (real, {normtag}) at {target_freq:g} Hz",
+                xcol="theta", ycol="sigma_imag", yfit_col="sig_fit_real_lin_theta",
+                xlabel="Volumetric moisture (theta = S*phi)", ylabel="Imag Conductivity (sigma_imag)",
+                legend_fit="linear fit"
+            )
+        # poly overlays if enabled
+        if poly_deg and poly_deg >= 2:
+            if np.isfinite(sip_df["rho_fit_real_poly_S"].to_numpy(float)).any():
+                write_plot_real_1panel(
+                    results_dir, csv_path.name,
+                    out_png=f"real_rho_vs_S_polydeg{poly_deg}_{tag}Hz_{normtag}.png",
+                    title=f"{source_label}: rho vs S (real, poly deg {poly_deg}, {normtag}) at {target_freq:g} Hz",
+                    xcol="S", ycol="rho", yfit_col="rho_fit_real_poly_S",
+                    xlabel="Saturation (S)", ylabel="Resistivity (rho)",
+                    legend_fit=f"poly deg {poly_deg}"
+                )
+            if np.isfinite(sip_df["sig_fit_real_poly_S"].to_numpy(float)).any():
+                write_plot_real_1panel(
+                    results_dir, csv_path.name,
+                    out_png=f"real_sigma_vs_S_polydeg{poly_deg}_{tag}Hz_{normtag}.png",
+                    title=f"{source_label}: sigma_imag vs S (real, poly deg {poly_deg}, {normtag}) at {target_freq:g} Hz",
+                    xcol="S", ycol="sigma_imag", yfit_col="sig_fit_real_poly_S",
+                    xlabel="Saturation (S)", ylabel="Imag Conductivity (sigma_imag)",
+                    legend_fit=f"poly deg {poly_deg}"
+                )
+            if np.isfinite(sip_df["sig_fit_real_poly_theta"].to_numpy(float)).any():
+                write_plot_real_1panel(
+                    results_dir, csv_path.name,
+                    out_png=f"real_sigma_vs_theta_polydeg{poly_deg}_{tag}Hz_{normtag}.png",
+                    title=f"{source_label}: sigma_imag vs theta (real, poly deg {poly_deg}, {normtag}) at {target_freq:g} Hz",
+                    xcol="theta", ycol="sigma_imag", yfit_col="sig_fit_real_poly_theta",
+                    xlabel="Volumetric moisture (theta = S*phi)", ylabel="Imag Conductivity (sigma_imag)",
+                    legend_fit=f"poly deg {poly_deg}"
+                )
+        # logistic rho vs S
+        if do_real_logistic and np.isfinite(sip_df["rho_fit_real_logistic_S"].to_numpy(float)).any():
+            write_plot_real_1panel(
+                results_dir, csv_path.name,
+                out_png=f"real_rho_vs_S_logistic_{tag}Hz_{normtag}.png",
+                title=f"{source_label}: rho vs S (real, logistic, {normtag}) at {target_freq:g} Hz",
+                xcol="S", ycol="rho", yfit_col="rho_fit_real_logistic_S",
+                xlabel="Saturation (S)", ylabel="Resistivity (rho)",
+                legend_fit="logistic fit"
+            )
+
+    # ======================
+    # RUN GNUPLOT
+    # ======================
+    if not dry_run:
+        _run_gnuplot("plot_raw_loglog.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
+        _run_gnuplot("plot_target_loglog.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
+
+        if poly_deg and poly_deg >= 2:
+            _run_gnuplot("plot_target_poly_loglog.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
+        if poly_raw and (poly_deg and poly_deg >= 2):
+            _run_gnuplot("plot_raw_poly_loglog.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=True)
+
+        if do_real_fits:
+            _run_gnuplot("plot_real_1panel.gp", cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
+            # NOTE: We overwrite plot_real_1panel.gp multiple times; gnuplot runs only last one if we run once.
+            # To avoid that, we run gnuplot immediately after each write when not dry_run.
+            # For simplicity, we do a second pass here by directly running gnuplot on each plot by regenerating.
+            # Instead of complexity, we just re-run gnuplot by listing all .gp files in Results.
+            for gpfile in sorted(results_dir.glob("plot_*.gp")):
+                _run_gnuplot(gpfile.name, cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
+
+    # ======================
+    # RETURN SUMMARY + FIT DF
+    # ======================
+    summary = {
         "run": str(run_root),
         "source": source_label,
         "status": "OK",
         "points": int(len(sip_df)),
+        "normalize": normalize,
+        "normtag": normtag,
         "logbook_sheet": used_sheet,
         "logbook_overlap": overlap_cnt,
         "logbook_block_rows": block_rows,
-        "logistic_attempted": bool(log_fit is not None),
-        "logistic_accepted": bool(log_fit_acc is not None),
-        "logistic_status": log_status,
-        "logistic_reason": log_accept_reason,
         "ici_mode": ici_mode,
 
         "n_vn": float(n_vn) if np.isfinite(n_vn) else n_vn,
@@ -1843,53 +1590,67 @@ def process_run(run_root: Path,
         "n_idx": float(n_idx) if np.isfinite(n_idx) else n_idx,
         "p_idx": float(p_idx) if np.isfinite(p_idx) else p_idx,
 
-        "x_nonorm": x_col,
+        "vn_smin": float(vn_smin) if (vn_smin and vn_smin > 0) else 0.0,
+        "n_vn_smin": float(n_vn_smin) if np.isfinite(n_vn_smin) else n_vn_smin,
+        "p_vn_smin": float(p_vn_smin) if np.isfinite(p_vn_smin) else p_vn_smin,
 
-        # nonorm key R2s (real space) for quick scanning
-        "R2_nonorm_sigma_lin": (fit_nonorm_sigma["lin"]["r2"] if fit_nonorm_sigma.get("lin") else np.nan),
-        "R2_nonorm_sigma_exp": (fit_nonorm_sigma["exp"]["r2"] if fit_nonorm_sigma.get("exp") else np.nan),
-        "R2_nonorm_sigma_pow": (fit_nonorm_sigma["pow"]["r2"] if fit_nonorm_sigma.get("pow") else np.nan),
+        "poly_deg": int(poly_deg) if (poly_deg and poly_deg >= 2) else 0,
+        "R2_RI_vn_poly": float(r2_RI_vn_poly) if np.isfinite(r2_RI_vn_poly) else r2_RI_vn_poly,
+        "R2_ICI_vn_poly": float(r2_ICI_vn_poly) if np.isfinite(r2_ICI_vn_poly) else r2_ICI_vn_poly,
+        "poly_raw": bool(poly_raw),
+        "R2_raw_poly": float(r2_raw_poly) if np.isfinite(r2_raw_poly) else r2_raw_poly,
 
-        "per_run_excel": str(xlsx_path),
-        "joined_csv": str(csv_path),
-        "_sip_df_for_master": sip_df,
-        "_fit_rows_for_master": fit_rows,
+        "real_fits": bool(do_real_fits),
+        "real_logistic": bool(do_real_logistic),
     }
 
+    return summary, df_fit
+
+
+def label_fmt(freq: float) -> str:
+    # helper for labels inside gnuplot sprintf, avoid too many decimals
+    return "{:g}".format(freq)
 
 # =============================================================================
-# MAIN CLI (UPDATED: write MASTER EXCEL for all runs)
+# MAIN CLI
 # =============================================================================
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("top", help="Top folder containing run subfolders")
     ap.add_argument("--freq", type=float, default=0.01, help="Target frequency in Hz")
-    ap.add_argument("--sample", type=str, default=None,
-                    help="Optional substring filter on SIP sheet names (for debugging)")
+    ap.add_argument("--sample", type=str, default=None, help="Substring filter on SIP sheet names (debug)")
     ap.add_argument("--dry-run", action="store_true", help="Write scripts/CSVs but do not run gnuplot")
     ap.add_argument("--min-points", type=int, default=4, help="Minimum matched points to accept a run")
     ap.add_argument("--max-df", type=float, default=0.0, help="Max allowed |f_found - f_target| (0 disables)")
-    ap.add_argument("--no-logistic", action="store_true", help="Disable logistic fit/plots")
+    ap.add_argument("--no-logistic", action="store_true", help="Disable logistic fit/plots (log-log rho)")
     ap.add_argument("--logistic-min-points", type=int, default=6, help="Min points needed to attempt logistic")
     ap.add_argument("--logistic-fast", action="store_true", help="Use SciPy-free fast logistic search")
     ap.add_argument("--logistic-max-seconds", type=float, default=8.0, help="Time cap for logistic fit per run")
     ap.add_argument("--gnuplot-timeout", type=int, default=30, help="Timeout seconds per gnuplot call")
-    ap.add_argument("--clean-results", action="store_true",
-                    help="Delete files inside each run's Results/ before writing new outputs.")
+    ap.add_argument("--clean-results", action="store_true", help="Delete files in each run's Results/ before writing")
 
     ap.add_argument("--ici-mode", type=str, default="sigref_over_sig",
                     choices=["sigref_over_sig","sig_over_sigref"],
-                    help=("GOAL/INDEX ICI definition. TARGET is fixed to VN-style (sigref/sig) "
-                          "so that both target panels trend downward."))
+                    help=("GOAL/INDEX ICI definition in NORMALIZED mode. "
+                          "In UNNORMALIZED mode we do not use a ref; we use ICI_unorm = 1/sigma_imag."))
 
     ap.add_argument("--vn-smin", type=float, default=0.0,
-                    help="Extra VN-style TARGET fit/plot using only points with S >= vn_smin.")
+                    help="Extra TARGET fit/plot using only points with S >= vn_smin.")
 
     ap.add_argument("--poly-deg", type=int, default=0,
                     help="Polynomial degree for extra fits/plots (>=2). 0 disables.")
     ap.add_argument("--poly-raw", action="store_true",
                     help="Also plot polynomial fit for RAW logRho vs logS (requires --poly-deg>=2).")
+
+    # NEW: normalization switch
+    ap.add_argument("--normalize", dest="normalize", action="store_true", help="Enable normalization (default).")
+    ap.add_argument("--no-normalize", dest="normalize", action="store_false", help="Disable ref-based normalization.")
+    ap.set_defaults(normalize=True)
+
+    # NEW: real-space fits/plots switches
+    ap.add_argument("--real-fits", action="store_true", help="Enable real-space fits/plots (rho vs S, sigma vs S/theta).")
+    ap.add_argument("--real-logistic", action="store_true", help="Also attempt real-space logistic rho vs S (requires --real-fits).")
 
     args = ap.parse_args()
 
@@ -1902,18 +1663,20 @@ def main():
     print(f"Found {len(roots)} run folder(s).", flush=True)
 
     rows = []
-    all_data_long = []
-    all_fit_params = []
-
+    allfits = []
     t0 = time.time()
 
     for i, run in enumerate(roots, 1):
         print(f"[{i}/{len(roots)}] START {run}", flush=True)
         ti = time.time()
         try:
-            res = process_run(
-                run, args.freq, args.sample, args.dry_run,
-                args.min_points, args.max_df,
+            summary, df_fit = process_run(
+                run_root=run,
+                target_freq=args.freq,
+                sheet_filter=args.sample,
+                dry_run=args.dry_run,
+                min_points=args.min_points,
+                max_df=args.max_df,
                 do_logistic=(not args.no_logistic),
                 logistic_min_points=args.logistic_min_points,
                 logistic_fast=args.logistic_fast,
@@ -1923,63 +1686,48 @@ def main():
                 ici_mode=args.ici_mode,
                 vn_smin=args.vn_smin,
                 poly_deg=args.poly_deg,
-                poly_raw=args.poly_raw
+                poly_raw=args.poly_raw,
+                normalize=args.normalize,
+                do_real_fits=args.real_fits,
+                do_real_logistic=(args.real_logistic and args.real_fits),
             )
-            if res is None:
+            if summary is None:
                 continue
+            rows.append(summary)
+            if df_fit is not None:
+                allfits.append(df_fit)
 
             dt = time.time() - ti
-            rows.append({k: v for k, v in res.items() if not k.startswith("_")})
-
-            # Collect master tables
-            sip_df = res.get("_sip_df_for_master", None)
-            if isinstance(sip_df, pd.DataFrame):
-                dfm = sip_df.copy()
-                dfm.insert(0, "run", str(run))
-                dfm.insert(1, "source", res.get("source", ""))
-                all_data_long.append(dfm)
-
-            fit_rows = res.get("_fit_rows_for_master", None)
-            if isinstance(fit_rows, list) and fit_rows:
-                for fr in fit_rows:
-                    fr2 = dict(fr)
-                    fr2["run"] = str(run)
-                    fr2["source"] = res.get("source", "")
-                    fr2["freq_hz"] = float(args.freq)
-                    all_fit_params.append(fr2)
-
-            msg = (f"[{i}/{len(roots)}] OK points={res.get('points',0)} "
-                   f"n_vn={res.get('n_vn',np.nan):.3g} p_vn={res.get('p_vn',np.nan):.3g} "
-                   f"x_nonorm={res.get('x_nonorm','')} "
-                   f"R2sigma_lin={res.get('R2_nonorm_sigma_lin',np.nan):.3g} ({dt:.1f}s)")
+            msg = (f"[{i}/{len(roots)}] OK points={summary.get('points',0)} "
+                   f"norm={summary.get('normalize',True)} "
+                   f"n_vn={summary.get('n_vn',np.nan):.3g} p_vn={summary.get('p_vn',np.nan):.3g} "
+                   f"({dt:.1f}s)")
             print(msg, flush=True)
 
         except subprocess.TimeoutExpired:
-            rows.append({"run": str(run), "status": "FAIL", "reason": "gnuplot timeout", "points": 0})
+            rows.append({"run": str(run), "status": "FAIL", "reason": "gnuplot timeout", "points": 0, "normalize": args.normalize})
             print(f"[{i}/{len(roots)}] FAIL gnuplot timeout", flush=True)
         except Exception as e:
-            rows.append({"run": str(run), "status": "FAIL", "reason": str(e), "points": 0})
+            rows.append({"run": str(run), "status": "FAIL", "reason": str(e), "points": 0, "normalize": args.normalize})
             print(f"[{i}/{len(roots)}] FAIL {e}", flush=True)
 
-    # Summary CSV (legacy)
     tag = str(args.freq).replace(".","p")
-    summary_path = base / f"Results_Summary_{tag}Hz.csv"
-    if rows:
-        pd.DataFrame(rows).to_csv(summary_path, index=False)
-        print(f"\nSummary written: {summary_path}", flush=True)
+    normtag = "norm" if args.normalize else "unorm"
 
-    # NEW: MASTER EXCEL for all runs
-    master_xlsx = base / f"Results_AllRuns_{tag}Hz.xlsx"
-    try:
-        with pd.ExcelWriter(master_xlsx, engine="openpyxl") as w:
-            if all_data_long:
-                pd.concat(all_data_long, ignore_index=True).to_excel(w, sheet_name="all_data_long", index=False)
-            if all_fit_params:
-                pd.DataFrame(all_fit_params).to_excel(w, sheet_name="all_fit_params", index=False)
-            pd.DataFrame(rows).to_excel(w, sheet_name="summary", index=False)
-        print(f"Master Excel written: {master_xlsx}", flush=True)
-    except Exception as e:
-        print(f"[WARN] failed to write master excel {master_xlsx}: {e}", flush=True)
+    if rows:
+        df_summary = pd.DataFrame(rows)
+        summary_csv = base / f"Results_Summary_{tag}Hz_{normtag}.csv"
+        df_summary.to_csv(summary_csv, index=False)
+        print(f"\nSummary written: {summary_csv}", flush=True)
+
+        df_allfits = pd.concat(allfits, ignore_index=True) if allfits else None
+        write_global_excel(
+            base,
+            xlsx_name=f"Results_All_{tag}Hz_{normtag}.xlsx",
+            df_summary=df_summary,
+            df_allfits=df_allfits
+        )
+        print(f"Global Excel written: {base / f'Results_All_{tag}Hz_{normtag}.xlsx'}", flush=True)
 
     print(f"Done in {(time.time()-t0):.1f}s.", flush=True)
 
