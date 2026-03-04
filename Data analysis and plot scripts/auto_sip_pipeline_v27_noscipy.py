@@ -15,6 +15,12 @@ Keeps ALL prior v27 approaches/plots/outputs and adds/keeps:
   - FIX: gnuplot warnings in diagnostics when logistic columns are all-NaN
          (we now only plot logistic in diagnostics if there are finite points)
 
+NEW (your request):
+-------------------
+  - Logistic4 should run with >=4 points (instead of >=5/6).
+    * logistic_fit_noscipy now allows n >= 4
+    * both "log-space logistic4" and "real-space logistic4" now trigger at len>=4
+
 Main goal:
 ----------
 Ultimately you want a reliable relationship between electrical conductivity and moisture content.
@@ -29,7 +35,6 @@ Directory assumptions (unchanged):
   Analysis/         -> SIP output Excel (filename contains "output" usually)
   SIP_Raw_Data/     -> logbook Excel (filename contains "Log Book")
   Results/          -> created and filled with csv + plots + reports + excel
-
 """
 
 import math
@@ -333,12 +338,18 @@ def logistic_fit_noscipy(x, y, fast=False, max_seconds=0.0):
     """
     Coarse coordinate search around init guess (SciPy-free).
     Returns (fit_dict, status_str).
+
+    NOTE (updated):
+      - Allows logistic4 with >=4 points (your request).
+        Previously required >=5.
     """
     x = np.asarray(x, float); y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]; y = y[m]
     n = len(x)
-    if n < 5:
+
+    # UPDATED: allow >=4 points
+    if n < 4:
         return None, "not_enough_points"
     if not fast:
         return None, "disabled"
@@ -391,6 +402,8 @@ def logistic_fit_noscipy(x, y, fast=False, max_seconds=0.0):
     ss_res = sse(y, yhat)
     ss_tot = sse(y, np.full_like(y, np.mean(y)))
     r2 = 1.0 - ss_res/ss_tot if ss_tot > 0 else np.nan
+
+    # For very small n, df2 can go <=0; f_test_pvalue will return NaN in that case.
     p_model = f_test_pvalue(ss_res, ss_tot, df_model=3, n=n)
     aic = aic_gaussian(ss_res, n, k_params=4)
 
@@ -557,6 +570,7 @@ def read_logbook_bestblock_by_overlap(log_xlsx: Path, sip_measurements_norm: lis
         S = np.nan
         if sat_col:
             S = to_float(r.get(sat_col, np.nan))
+            # if the logbook uses percent (e.g., 40), convert to 0.40
             if np.isfinite(S) and S > 1.0 and S <= 100.0:
                 S = S/100.0
         else:
@@ -701,11 +715,11 @@ def write_plot_xy_bundle(results_dir: Path, csv_name: str, out_png: str, out_gp:
     """
     Generic plotter for “data + linear + poly + log4” where fits are precomputed
     and stored in CSV columns. This avoids gnuplot "fit" and uses column("name").
-    If a fit column is all NaN, gnuplot may warn. We avoid by plotting that curve as 1/0 when missing.
+    If a fit column is all NaN, gnuplot may warn. We avoid by plotting that curve
+    only when there are finite points.
     """
     label = "{:g}".format(freq)
 
-    # Each curve line is enabled only if requested AND column exists AND has some finite values.
     df = None
     try:
         df = pd.read_csv(results_dir / csv_name)
@@ -713,33 +727,31 @@ def write_plot_xy_bundle(results_dir: Path, csv_name: str, out_png: str, out_gp:
         df = None
 
     def col_has_finite(colname: str) -> bool:
-        if df is None: return True
-        if colname not in df.columns: return False
+        if df is None:
+            return True
+        if colname not in df.columns:
+            return False
         v = pd.to_numeric(df[colname], errors="coerce").to_numpy(float)
         return bool(np.isfinite(v).any())
 
     lines = []
-    # data
     lines.append(
         "'{csv}' using ({x}):({y}) with points pt 7 ps 1.7 title 'data'".format(
             csv=csv_name, x=x_expr, y=y_expr
         )
     )
-    # linear
     if do_linear and y_lin_col and col_has_finite(y_lin_col):
         lines.append(
             "'{csv}' using ({x}):(column(\"{ylin}\")) with lines dt 2 lw 3 title 'linear'".format(
                 csv=csv_name, x=x_expr, ylin=y_lin_col
             )
         )
-    # poly
     if do_poly and poly_deg >= 2 and y_poly_col and col_has_finite(y_poly_col):
         lines.append(
             "'{csv}' using ({x}):(column(\"{ypoly}\")) with lines dt 1 lw 4 title 'poly deg {deg}'".format(
                 csv=csv_name, x=x_expr, ypoly=y_poly_col, deg=poly_deg
             )
         )
-    # log4
     if do_log4 and y_log4_col and col_has_finite(y_log4_col):
         lines.append(
             "'{csv}' using ({x}):(column(\"{ylog4}\")) with lines dt 3 lw 4 title 'logistic4'".format(
@@ -801,10 +813,10 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
       mode = "NORM" or "UNORM"
 
     Produces:
-      joined_<mode>_<tag>Hz.csv  (and legacy joined_<tag>Hz.csv when mode=NORM for compatibility)
+      joined__<mode>_<tag>Hz.csv  (and legacy joined_<tag>Hz.csv when mode=NORM for compatibility)
       plots including:
-        - legacy v27 plots (target/index/raw/logistic-only/logistic-diag) for NORM
-        - new cond_vs_S / rho_vs_S plots in REAL + LOGLOG for this mode
+        - legacy v27 plots (diagnostic) for NORM
+        - rho vs S and conductivity vs S plots in REAL + LOGLOG for this mode
 
     Also appends detailed rows for all-values Excel.
     """
@@ -820,7 +832,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     source_label = pretty_source_name(run_root.name)
     results_dir.mkdir(parents=True, exist_ok=True)
     if clean_results and mode == "NORM":
-        # clean once before doing both modes (user: first clean then do both)
         clean_results_dir(results_dir)
 
     tag = tag_from_freq(target_freq)
@@ -840,8 +851,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["logSig"]  = sip_df["sigma_imag"].apply(safe_log10)  # conductivity log
 
     # debug before filter
-    dbg = sip_df.copy()
-    dbg.to_csv(results_dir / f"debug_before_filter_{tag}Hz__{mode}.csv", index=False)
+    sip_df.copy().to_csv(results_dir / f"debug_before_filter_{tag}Hz__{mode}.csv", index=False)
 
     # filter valid rows
     mask = np.isfinite(sip_df["logS"]) & np.isfinite(sip_df["logRho"]) & np.isfinite(sip_df["logSig"])
@@ -865,13 +875,10 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["logRho_ref"] = logRho_ref
     sip_df["logSig_ref"] = logSig_ref
 
-    # Mode-specific normalized/un-normalized definitions:
     if mode == "NORM":
-        # indices
         sip_df["rho_idx"]   = sip_df["rho"] / rho_ref
         sip_df["sig_idx"]   = sip_df["sigma_imag"] / sig_ref
 
-        # log indices (log-log)
         sip_df["logRhoIdx"] = sip_df["logRho"] - logRho_ref
 
         if ici_mode == "sig_over_sigref":
@@ -879,12 +886,10 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         else:
             sip_df["logSigIdx"] = logSig_ref - sip_df["logSig"]
 
-        # VN target fixed to downtrend: logICI_vn = logSig_ref - logSig
         sip_df["logRI_vn"]  = sip_df["logRhoIdx"]
         sip_df["logICI_vn"] = logSig_ref - sip_df["logSig"]
 
     else:
-        # UNORM: no normalization; still keep useful columns for plotting
         sip_df["rho_idx"]   = sip_df["rho"]
         sip_df["sig_idx"]   = sip_df["sigma_imag"]
         sip_df["logRhoIdx"] = sip_df["logRho"]
@@ -895,15 +900,12 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     # =========================
     # LOG-LOG FITS (x=logS)
     # =========================
-    # Resistivity in log space
     a_lr, b_lr, r2_lr, p_lr, ss_lr, aic_lr = linear_fit(sip_df["logS"], sip_df["logRho"])
-    # Conductivity in log space
     a_ls, b_ls, r2_ls, p_ls, ss_ls, aic_ls = linear_fit(sip_df["logS"], sip_df["logSig"])
 
     sip_df["logRho_lin"] = a_lr*sip_df["logS"] + b_lr
     sip_df["logSig_lin"] = a_ls*sip_df["logS"] + b_ls
 
-    # poly (log space)
     sip_df["logRho_poly"] = np.nan
     sip_df["logSig_poly"] = np.nan
     r2_logrho_poly = np.nan
@@ -923,13 +925,25 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["logSig_log4"] = np.nan
     log4R = None
     log4S = None
-    if do_log4 and len(sip_df) >= 6:
-        log4R, stR = logistic_fit_noscipy(sip_df["logS"], sip_df["logRho"], fast=logistic_fast, max_seconds=logistic_max_seconds)
-        log4S, stS = logistic_fit_noscipy(sip_df["logS"], sip_df["logSig"], fast=logistic_fast, max_seconds=logistic_max_seconds)
+
+    # UPDATED: allow logistic4 with >=4 points
+    if do_log4 and len(sip_df) >= 4:
+        log4R, stR = logistic_fit_noscipy(
+            sip_df["logS"], sip_df["logRho"],
+            fast=logistic_fast, max_seconds=logistic_max_seconds
+        )
+        log4S, stS = logistic_fit_noscipy(
+            sip_df["logS"], sip_df["logSig"],
+            fast=logistic_fast, max_seconds=logistic_max_seconds
+        )
         if log4R is not None:
-            sip_df["logRho_log4"] = logistic4(sip_df["logS"].to_numpy(float), log4R["L"], log4R["k"], log4R["x0"], log4R["c"])
+            sip_df["logRho_log4"] = logistic4(
+                sip_df["logS"].to_numpy(float), log4R["L"], log4R["k"], log4R["x0"], log4R["c"]
+            )
         if log4S is not None:
-            sip_df["logSig_log4"] = logistic4(sip_df["logS"].to_numpy(float), log4S["L"], log4S["k"], log4S["x0"], log4S["c"])
+            sip_df["logSig_log4"] = logistic4(
+                sip_df["logS"].to_numpy(float), log4S["L"], log4S["k"], log4S["x0"], log4S["c"]
+            )
 
     # residuals for (legacy) diagnostics on logRho
     sip_df["logRho_linfit"] = sip_df["logRho_lin"]
@@ -937,7 +951,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["logRho_logfit"] = sip_df["logRho_log4"]
     sip_df["resid_log_rho"] = sip_df["logRho"] - sip_df["logRho_logfit"]
 
-    # IMPORTANT FIX: determine if logistic columns have any finite points
     has_log_points = bool(np.isfinite(pd.to_numeric(sip_df["logRho_logfit"], errors="coerce").to_numpy(float)).any())
 
     # =========================
@@ -945,9 +958,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     # =========================
     sip_df["S_real"] = sip_df["S"].astype(float)
 
-    # For REAL fits:
-    # - If mode=NORM, y-values are normalized indices (rho/rho_ref, sig/sig_ref)
-    # - If mode=UNORM, y-values are raw rho and raw sig
     if mode == "NORM":
         y_rho_real = sip_df["rho_idx"].to_numpy(float)
         y_sig_real = sip_df["sig_idx"].to_numpy(float)
@@ -957,7 +967,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
 
     xS = sip_df["S_real"].to_numpy(float)
 
-    # linear real fits: y = m*S + c
     mr, cr, r2r, pr, ssr, aicr = linear_fit(xS, y_rho_real)
     ms, cs, r2s, ps, sss, aics = linear_fit(xS, y_sig_real)
 
@@ -966,7 +975,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["rho_lin_real"] = mr*sip_df["S_real"] + cr
     sip_df["sig_lin_real"] = ms*sip_df["S_real"] + cs
 
-    # poly real fits
     sip_df["rho_poly_real"] = np.nan
     sip_df["sig_poly_real"] = np.nan
     r2_rho_poly_real = np.nan
@@ -981,18 +989,28 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         if cps is not None:
             sip_df["sig_poly_real"] = np.polyval(cps, xS)
 
-    # log4 real fits (still logistic4 in x=S domain)
+    # log4 real fits (x=S domain)
     sip_df["rho_log4_real"] = np.nan
     sip_df["sig_log4_real"] = np.nan
     log4R_real = None
     log4S_real = None
-    if do_log4 and len(sip_df) >= 6:
-        log4R_real, stR2 = logistic_fit_noscipy(xS, y_rho_real, fast=logistic_fast, max_seconds=logistic_max_seconds)
-        log4S_real, stS2 = logistic_fit_noscipy(xS, y_sig_real, fast=logistic_fast, max_seconds=logistic_max_seconds)
+
+    # UPDATED: allow logistic4 with >=4 points
+    if do_log4 and len(sip_df) >= 4:
+        log4R_real, stR2 = logistic_fit_noscipy(
+            xS, y_rho_real, fast=logistic_fast, max_seconds=logistic_max_seconds
+        )
+        log4S_real, stS2 = logistic_fit_noscipy(
+            xS, y_sig_real, fast=logistic_fast, max_seconds=logistic_max_seconds
+        )
         if log4R_real is not None:
-            sip_df["rho_log4_real"] = logistic4(xS, log4R_real["L"], log4R_real["k"], log4R_real["x0"], log4R_real["c"])
+            sip_df["rho_log4_real"] = logistic4(
+                xS, log4R_real["L"], log4R_real["k"], log4R_real["x0"], log4R_real["c"]
+            )
         if log4S_real is not None:
-            sip_df["sig_log4_real"] = logistic4(xS, log4S_real["L"], log4S_real["k"], log4S_real["x0"], log4S_real["c"])
+            sip_df["sig_log4_real"] = logistic4(
+                xS, log4S_real["L"], log4S_real["k"], log4S_real["x0"], log4S_real["c"]
+            )
 
     # =========================
     # WRITE MODE-SPECIFIC JOINED CSV
@@ -1001,13 +1019,12 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     joined_path = results_dir / joined_name
     sip_df.to_csv(joined_path, index=False)
 
-    # Legacy compatibility: keep your old joined_<tag>Hz.csv name for NORM
+    # Legacy compatibility (NORM only)
     if mode == "NORM":
         (results_dir / f"joined_{tag}Hz.csv").write_text(joined_path.read_text())
 
     # =========================
     # PLOTS: REAL + LOGLOG for rho and conductivity
-    # naming includes variable, space, mode, methods, freq
     # =========================
     methods = "LINEAR"
     if poly_deg and poly_deg >= 2:
@@ -1015,8 +1032,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     if do_log4:
         methods += "+LOG4"
 
-    # LOGLOG: rho vs logS (y=logRho if UNORM, else still logRho; normalization affects "real" not logs)
-    # For conductivity in log space, y=logSig
     write_plot_xy_bundle(
         results_dir=results_dir,
         csv_name=joined_name,
@@ -1059,7 +1074,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         y_log4_col="logSig_log4"
     )
 
-    # REAL: y is rho_real/sig_real already mode-dependent
     write_plot_xy_bundle(
         results_dir=results_dir,
         csv_name=joined_name,
@@ -1102,7 +1116,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         y_log4_col="sig_log4_real"
     )
 
-    # Diagnostics plot (legacy name kept, but now robust):
+    # Diagnostics plot (legacy name kept, but now robust)
     if mode == "NORM":
         write_plot_logistic_diag(
             results_dir, f"joined_{tag}Hz.csv", f"exponents_logistic_diagnostics_{tag}Hz.png",
@@ -1110,8 +1124,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
             has_log_points=has_log_points
         )
 
-    # Run gnuplot for all scripts written in this mode
-    # (fatal=False for diagnostics; fatal=True for primary new plots)
     scripts = [
         f"rho_vs_S__LOGLOG__{mode}__{methods}_{tag}Hz.gp",
         f"cond_vs_S__LOGLOG__{mode}__{methods}_{tag}Hz.gp",
@@ -1141,7 +1153,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         all_rows_accum.append(row)
         per_run_excel_rows.append(row)
 
-    # summary for this mode
     return {
         "run": str(run_root),
         "source": source_label,
@@ -1218,8 +1229,6 @@ def main():
         try:
             modes = ["NORM", "UNORM"] if args.both_modes else ["NORM"]
 
-            # Clean once per run (before NORM+UNORM). Your ask: "first clean then do both"
-            # We implement clean inside process_one_mode only for NORM, but pass flag for NORM call.
             for mode in modes:
                 res = process_one_mode(
                     run_root=run,
@@ -1248,8 +1257,7 @@ def main():
             mode_txt = "+".join(modes)
             print(f"[{i}/{len(roots)}] OK modes={mode_txt} points={pts_txt} ({dt:.1f}s)", flush=True)
 
-            # Write per-run Excel of “every real/log/calcs/params” (requested)
-            # One file per folder:
+            # Write per-run Excel of “every real/log/calcs/params”
             if per_run_excel_rows:
                 df_run = pd.DataFrame(per_run_excel_rows)
                 out_xlsx = (run / RESULTS_DIR) / f"all_values_{tag}Hz.xlsx"
@@ -1274,7 +1282,7 @@ def main():
         print(f"\nSummary written: {sum_csv}", flush=True)
         print(f"Summary written: {sum_xlsx}", flush=True)
 
-    # Write global “all values” Excel containing EVERYTHING across all folders (requested)
+    # Write global “all values” Excel containing EVERYTHING across all folders
     if all_rows:
         df_all = pd.DataFrame(all_rows)
         all_xlsx = base / f"all_values_{tag}Hz.xlsx"
