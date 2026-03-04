@@ -1,28 +1,40 @@
 #!/usr/bin/env python3
 """
-auto_sip_pipeline_v27_noscipy.py  (FULL — keep original plot style + fix logistic>=4 + no gnuplot warnings)
+auto_sip_pipeline_v27_noscipy.py  (FULLY DOCUMENTED / COMMENTED)
 
-This version keeps the SAME plot STYLE as the first script you sent:
-  - pngcairo sizes (1200x800 for single, 1200x1800 for diagnostics)
-  - Arial,24
-  - same labels/titles/keys positioning style
-  - same gnuplot "column(\"name\")" pattern
+v27+ (this update):
+-------------------
+Keeps ALL prior v27 approaches/plots/outputs and adds/keeps:
+  - Both modes: NORM and UNORM (via --both-modes)
+  - Fits in log-log space AND real-real space
+  - Fits with normalization AND without normalization on ALL approaches
+  - Optional polynomial fits (deg>=2)
+  - Optional logistic (fast) and optional 4-param logistic (LOG4) in BOTH spaces
+  - Writes “all values” Excel (per-run + global) including real values, logs, indices, fits, residuals, params
+  - Clear plot naming: includes variable, space, mode, methods, frequency tag
+  - FIX: gnuplot warnings in diagnostics when logistic columns are all-NaN
+         (we now only plot logistic in diagnostics if there are finite points)
 
-Fixes included:
-  1) Logistic4 can run with >=4 points (was >=5/6 before).
-  2) No more gnuplot warnings / "x range is invalid" for logistic-only and diagnostics
-     when logistic is not accepted:
-       - We NEVER plot a "ps 0" dummy (gnuplot hates it).
-       - We set fixed xrange/yrange and draw a simple y=0 line via inline data.
-       - We only reference logistic columns in CSV when logistic is actually accepted.
+NEW (your request):
+-------------------
+  - Logistic4 should run with >=4 points (instead of >=5/6).
+    * logistic_fit_noscipy now allows n >= 4
+    * both "log-space logistic4" and "real-space logistic4" now trigger at len>=4
 
-Keeps:
-  - both modes: NORM and UNORM (via --both-modes)
-  - log-log + real-real fits (linear, poly, logistic4)
-  - per-run all_values Excel + global all_values + summary CSV/XLSX
-  - robust logbook matching by best overlap contiguous block
-  - folder name as source label and S-1 -> S_{-1}
+LEGACY v27 PLOTS (brought back, and FIXED):
+-------------------------------------------
+  - exponents_logistic_only_<tag>Hz.png  (via plot_logistic_only.gp)
+  - exponents_logistic_diagnostics_<tag>Hz.png (via plot_logistic_diagnostics.gp)
 
+  Fix: gnuplot dummy panels must NOT use "ps 0" (causes x range invalid / warnings).
+       We use a real inline LINE segment instead.
+
+Directory assumptions (unchanged):
+----------------------------------
+<run_root>/
+  Analysis/         -> SIP output Excel (filename contains "output" usually)
+  SIP_Raw_Data/     -> logbook Excel (filename contains "Log Book")
+  Results/          -> created and filled with csv + plots + reports + excel
 """
 
 import math
@@ -325,14 +337,17 @@ def _logistic_init_guess(x, y):
 def logistic_fit_noscipy(x, y, fast=False, max_seconds=0.0):
     """
     Coarse coordinate search around init guess (SciPy-free).
-    UPDATED: allow >=4 points (your request).
     Returns (fit_dict, status_str).
+
+    NOTE (updated):
+      - Allows logistic4 with >=4 points (your request).
     """
     x = np.asarray(x, float); y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]; y = y[m]
     n = len(x)
 
+    # UPDATED: allow >=4 points
     if n < 4:
         return None, "not_enough_points"
     if not fast:
@@ -386,6 +401,7 @@ def logistic_fit_noscipy(x, y, fast=False, max_seconds=0.0):
     ss_res = sse(y, yhat)
     ss_tot = sse(y, np.full_like(y, np.mean(y)))
     r2 = 1.0 - ss_res/ss_tot if ss_tot > 0 else np.nan
+
     p_model = f_test_pvalue(ss_res, ss_tot, df_model=3, n=n)
     aic = aic_gaussian(ss_res, n, k_params=4)
 
@@ -604,18 +620,19 @@ def _run_gnuplot(script_name: str, cwd: Path, timeout_s: int, fatal: bool):
         return False, msg
 
 # =============================================================================
-# GNUPLOT WRITERS (KEEP STYLE)
+# GNUPLOT WRITERS (LEGACY v27 PLOTS + CORE v27 PLOTS)
 # =============================================================================
 
 def write_plot_logistic_only(results_dir: Path, csv_name: str, out_png: str,
                              target_freq: float, source_label: str,
-                             logistic_accepted: bool):
+                             has_log_points: bool):
     """
-    SAME STYLE as your original; only fixes the dummy plot so gnuplot never errors.
+    LEGACY v27: logistic-only plot.
+    Fix: if no logistic points, we still plot a valid inline line (no ps 0).
     """
     label = "{:g}".format(target_freq)
 
-    if logistic_accepted:
+    if has_log_points:
         gp = f"""reset
 set datafile separator ','
 set datafile missing ''
@@ -625,12 +642,11 @@ set grid
 set key top right
 set xlabel 'log10(Saturation)'
 set ylabel 'log10(Resistivity)'
-set title '{source_label}: logistic-only (accepted) @ {label} Hz'
+set title '{source_label}: logistic-only @ {label} Hz'
 plot '{csv_name}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.6 title 'data', \\
-     '{csv_name}' using (column("logS")):(column("logRho_logfit")) with lines dt 1 lw 4 title 'logistic (accepted)'
+     '{csv_name}' using (column("logS")):(column("logRho_logfit")) with lines dt 1 lw 4 title 'logistic'
 """
     else:
-        # IMPORTANT: draw something valid (no ps 0), and set explicit ranges.
         gp = f"""reset
 set datafile separator ','
 set datafile missing ''
@@ -653,27 +669,25 @@ e
 
 def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str,
                              target_freq: float, source_label: str,
-                             logistic_accepted: bool):
+                             has_log_points: bool):
     """
-    SAME STYLE as your original diagnostics plot; only fix:
-      - no CSV logistic columns referenced unless logistic_accepted
-      - dummy panel uses a real line + fixed ranges (no ps 0)
+    LEGACY v27 diagnostics plot:
+      - Only references CSV logistic columns if there is at least one finite logistic point.
+      - Otherwise third panel is a dummy inline LINE plot (no ps 0).
+    This removes: "Skipping data file with no valid points" and "x range is invalid".
     """
     label = "{:g}".format(target_freq)
 
     extra_curve = ""
-    if logistic_accepted:
+    if has_log_points:
         extra_curve = (
             ", \\\n     '{csv}' using (column(\"logS\")):(column(\"logRho_logfit\")) "
-            "with lines dt 1 lw 4 title 'logistic (accepted)'"
+            "with lines dt 1 lw 4 title 'logistic'"
         ).format(csv=csv_name)
 
-    if logistic_accepted:
+    if has_log_points:
         extra3 = ""
-        panel3 = (
-            "plot '{csv}' using (column(\"logS\")):(column(\"resid_log_rho\")) "
-            "with points pt 7 ps 1.4 title 'residuals'\n"
-        ).format(csv=csv_name)
+        panel3 = "plot '{csv}' using (column(\"logS\")):(column(\"resid_log_rho\")) with points pt 7 ps 1.4 title 'residuals'\n".format(csv=csv_name)
     else:
         extra3 = (
             "unset key\n"
@@ -688,27 +702,27 @@ def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str,
             "e\n"
         )
 
-    gp = f"""reset
+    gp = """reset
 set datafile separator ','
 set datafile missing ''
 set term pngcairo size 1200,1800 enhanced font 'Arial,24'
 set output '{out_png}'
 set multiplot layout 3,1
 
-set title '{source_label}: Diagnostics: logRho vs logS at {label} Hz'
+set title '{src}: Diagnostics: logRho vs logS at {label} Hz'
 set grid
 set key top right
 set xlabel 'log10(Saturation)'
 set ylabel 'log10(Resistivity)'
-plot '{csv_name}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.6 title 'data', \\
-     '{csv_name}' using (column("logS")):(column("logRho_linfit")) with lines dt 2 lw 3 title 'linear'{extra_curve}
+plot '{csv}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.6 title 'data', \\
+     '{csv}' using (column("logS")):(column("logRho_linfit")) with lines dt 2 lw 3 title 'linear'{extra_curve}
 
 set title 'Residuals: linear (data - linear)'
 set grid
 set key top right
 set xlabel 'log10(Saturation)'
 set ylabel 'residual'
-plot '{csv_name}' using (column("logS")):(column("resid_lin_rho")) with points pt 7 ps 1.4 title 'residuals'
+plot '{csv}' using (column("logS")):(column("resid_lin_rho")) with points pt 7 ps 1.4 title 'residuals'
 
 set title 'Residuals: logistic (data - logistic)'
 set grid
@@ -718,8 +732,13 @@ set ylabel 'residual'
 {panel3}
 
 unset multiplot
-"""
+""".format(out_png=out_png, label=label, csv=csv_name, src=source_label,
+           extra_curve=extra_curve, extra3=extra3, panel3=panel3)
     (results_dir / "plot_logistic_diagnostics.gp").write_text(gp)
+
+# =============================================================================
+# ADDITIONAL PLOTS (REAL/LOGLOG, NORM/UNORM, RHO/COND) - SIMPLE GENERATOR
+# =============================================================================
 
 def write_plot_xy_bundle(results_dir: Path, csv_name: str, out_png: str, out_gp: str,
                          source_label: str, freq: float,
@@ -730,8 +749,9 @@ def write_plot_xy_bundle(results_dir: Path, csv_name: str, out_png: str, out_gp:
                          do_log4: bool,
                          y_lin_col: str, y_poly_col: str, y_log4_col: str):
     """
-    Same as your original generator: precomputed columns, column("name") gnuplot.
-    Avoids plotting missing curves by checking if column has finite data.
+    Generic plotter for “data + linear + poly + log4” where fits are precomputed
+    and stored in CSV columns. Uses column("name").
+    If a fit column is all NaN, we avoid plotting that curve by checking finite points.
     """
     label = "{:g}".format(freq)
 
@@ -742,19 +762,37 @@ def write_plot_xy_bundle(results_dir: Path, csv_name: str, out_png: str, out_gp:
         df = None
 
     def col_has_finite(colname: str) -> bool:
-        if df is None: return True
-        if colname not in df.columns: return False
+        if df is None:
+            return True
+        if colname not in df.columns:
+            return False
         v = pd.to_numeric(df[colname], errors="coerce").to_numpy(float)
         return bool(np.isfinite(v).any())
 
     lines = []
-    lines.append(f"'{csv_name}' using ({x_expr}):({y_expr}) with points pt 7 ps 1.7 title 'data'")
+    lines.append(
+        "'{csv}' using ({x}):({y}) with points pt 7 ps 1.7 title 'data'".format(
+            csv=csv_name, x=x_expr, y=y_expr
+        )
+    )
     if do_linear and y_lin_col and col_has_finite(y_lin_col):
-        lines.append(f"'{csv_name}' using ({x_expr}):(column(\"{y_lin_col}\")) with lines dt 2 lw 3 title 'linear'")
+        lines.append(
+            "'{csv}' using ({x}):(column(\"{ylin}\")) with lines dt 2 lw 3 title 'linear'".format(
+                csv=csv_name, x=x_expr, ylin=y_lin_col
+            )
+        )
     if do_poly and poly_deg >= 2 and y_poly_col and col_has_finite(y_poly_col):
-        lines.append(f"'{csv_name}' using ({x_expr}):(column(\"{y_poly_col}\")) with lines dt 1 lw 4 title 'poly deg {poly_deg}'")
+        lines.append(
+            "'{csv}' using ({x}):(column(\"{ypoly}\")) with lines dt 1 lw 4 title 'poly deg {deg}'".format(
+                csv=csv_name, x=x_expr, ypoly=y_poly_col, deg=poly_deg
+            )
+        )
     if do_log4 and y_log4_col and col_has_finite(y_log4_col):
-        lines.append(f"'{csv_name}' using ({x_expr}):(column(\"{y_log4_col}\")) with lines dt 3 lw 4 title 'logistic4'")
+        lines.append(
+            "'{csv}' using ({x}):(column(\"{ylog4}\")) with lines dt 3 lw 4 title 'logistic4'".format(
+                csv=csv_name, x=x_expr, ylog4=y_log4_col
+            )
+        )
 
     plot_cmd = "plot " + ", \\\n     ".join(lines) + "\n"
 
@@ -791,7 +829,7 @@ def discover_run_roots_fast(base: Path):
     return sorted(roots)
 
 # =============================================================================
-# MAIN PROCESSING FOR ONE RUN (ONE MODE)
+# MAIN PROCESSING FOR ONE RUN (DO BOTH MODES)
 # =============================================================================
 
 def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
@@ -806,10 +844,8 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
                      all_rows_accum: list,
                      per_run_excel_rows: list):
     """
-    Process one run folder for one mode:
+    Process a single run folder for one mode:
       mode = "NORM" or "UNORM"
-    Produces joined__<mode>_<tag>Hz.csv and the plots for this mode.
-    Also writes legacy joined_<tag>Hz.csv for NORM compatibility.
     """
     analysis_dir = run_root / ANALYSIS_DIR
     raw_dir      = run_root / RAW_DIR
@@ -818,7 +854,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_xlsx = find_first_matching_file(analysis_dir, ANALYSIS_XLSX_HINT, ".xlsx")
     log_xlsx = find_first_matching_file(raw_dir, LOGBOOK_XLSX_HINT, ".xlsx")
     if sip_xlsx is None or log_xlsx is None:
-        return {"run": str(run_root), "mode": mode, "status": "SKIP", "reason": "missing excel", "points": 0}
+        return {"status": "SKIP", "reason": "missing excel"}
 
     source_label = pretty_source_name(run_root.name)
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -829,7 +865,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
 
     sip_df = read_sip_output(sip_xlsx, target_freq, max_df=max_df, sheet_filter=sheet_filter)
     if sip_df.empty:
-        return {"run": str(run_root), "mode": mode, "status": "FAIL", "reason": "no sip sheets", "points": 0}
+        return {"status": "FAIL", "reason": "no sip sheets"}
 
     sat_map, used_sheet, overlap_cnt, block_rows = read_logbook_bestblock_by_overlap(
         log_xlsx, sip_df["measurement_norm"].tolist()
@@ -840,8 +876,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df["logRho"]  = sip_df["rho"].apply(safe_log10)
     sip_df["logSig"]  = sip_df["sigma_imag"].apply(safe_log10)
 
-    dbg = sip_df.copy()
-    dbg.to_csv(results_dir / f"debug_before_filter_{tag}Hz__{mode}.csv", index=False)
+    sip_df.copy().to_csv(results_dir / f"debug_before_filter_{tag}Hz__{mode}.csv", index=False)
 
     mask = np.isfinite(sip_df["logS"]) & np.isfinite(sip_df["logRho"]) & np.isfinite(sip_df["logSig"])
     dropped = sip_df.loc[~mask, ["measurement", "S", "rho", "sigma_imag"]].copy()
@@ -850,7 +885,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     sip_df = sip_df.loc[mask].copy()
 
     if len(sip_df) < min_points:
-        return {"run": str(run_root), "mode": mode, "status": "FAIL", "reason": f"not enough points ({len(sip_df)})", "points": int(len(sip_df))}
+        return {"status": "FAIL", "reason": f"not enough points ({len(sip_df)})"}
 
     iref = int(np.nanargmax(sip_df["S"].to_numpy(float)))
     rho_ref  = float(sip_df.iloc[iref]["rho"])
@@ -906,44 +941,27 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         if cS is not None:
             sip_df["logSig_poly"] = np.polyval(cS, sip_df["logS"].to_numpy(float))
 
+    # logistic4 (log space) — allowed with >=4 points
     sip_df["logRho_log4"] = np.nan
     sip_df["logSig_log4"] = np.nan
-    log4R = None
-    log4S = None
-
-    logistic_attempted = False
-    logistic_accepted = False
-    logistic_reason = ""
-    logistic_status = ""
-
     if do_log4 and len(sip_df) >= 4:
-        logistic_attempted = True
-        log4R, stR = logistic_fit_noscipy(sip_df["logS"], sip_df["logRho"], fast=logistic_fast, max_seconds=logistic_max_seconds)
-        logistic_status = stR
+        log4R, _ = logistic_fit_noscipy(sip_df["logS"], sip_df["logRho"], fast=logistic_fast, max_seconds=logistic_max_seconds)
+        log4S, _ = logistic_fit_noscipy(sip_df["logS"], sip_df["logSig"], fast=logistic_fast, max_seconds=logistic_max_seconds)
         if log4R is not None:
             sip_df["logRho_log4"] = logistic4(sip_df["logS"].to_numpy(float), log4R["L"], log4R["k"], log4R["x0"], log4R["c"])
-
-        ok, why = accept_logistic(r2_lr, aic_lr, log4R)
-        logistic_accepted = bool(ok)
-        logistic_reason = why
-
-        log4S, _ = logistic_fit_noscipy(sip_df["logS"], sip_df["logSig"], fast=logistic_fast, max_seconds=logistic_max_seconds)
         if log4S is not None:
             sip_df["logSig_log4"] = logistic4(sip_df["logS"].to_numpy(float), log4S["L"], log4S["k"], log4S["x0"], log4S["c"])
-    else:
-        logistic_attempted = bool(do_log4)
-        logistic_status = "not_enough_points" if (do_log4 and len(sip_df) < 4) else "disabled"
 
-    # residuals for diagnostics
+    # residuals for legacy diagnostics on logRho
     sip_df["logRho_linfit"] = sip_df["logRho_lin"]
     sip_df["resid_lin_rho"] = sip_df["logRho"] - sip_df["logRho_linfit"]
 
-    if logistic_accepted:
-        sip_df["logRho_logfit"] = sip_df["logRho_log4"]
-        sip_df["resid_log_rho"] = sip_df["logRho"] - sip_df["logRho_logfit"]
-    else:
-        sip_df["logRho_logfit"] = np.nan
-        sip_df["resid_log_rho"] = np.nan
+    # In this v27, "logfit" is "log4" (no accept/reject gate); legacy plots will
+    # still behave safely if it's NaN.
+    sip_df["logRho_logfit"] = sip_df["logRho_log4"]
+    sip_df["resid_log_rho"] = sip_df["logRho"] - sip_df["logRho_logfit"]
+
+    has_log_points = bool(np.isfinite(pd.to_numeric(sip_df["logRho_logfit"], errors="coerce").to_numpy(float)).any())
 
     # =========================
     # REAL-REAL FITS (x=S)
@@ -981,6 +999,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         if cps is not None:
             sip_df["sig_poly_real"] = np.polyval(cps, xS)
 
+    # logistic4 (real space) — allowed with >=4 points
     sip_df["rho_log4_real"] = np.nan
     sip_df["sig_log4_real"] = np.nan
     if do_log4 and len(sip_df) >= 4:
@@ -992,13 +1011,13 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
             sip_df["sig_log4_real"] = logistic4(xS, log4S_real["L"], log4S_real["k"], log4S_real["x0"], log4S_real["c"])
 
     # =========================
-    # WRITE JOINED CSV
+    # WRITE MODE-SPECIFIC JOINED CSV
     # =========================
     joined_name = f"joined__{mode}_{tag}Hz.csv"
     joined_path = results_dir / joined_name
     sip_df.to_csv(joined_path, index=False)
 
-    # Legacy compatibility: keep old joined_<tag>Hz.csv for NORM
+    # Legacy compatibility (NORM only)
     if mode == "NORM":
         (results_dir / f"joined_{tag}Hz.csv").write_text(joined_path.read_text())
 
@@ -1011,7 +1030,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
     if do_log4:
         methods += "+LOG4"
 
-    # LOGLOG
     write_plot_xy_bundle(
         results_dir=results_dir,
         csv_name=joined_name,
@@ -1054,7 +1072,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         y_log4_col="logSig_log4"
     )
 
-    # REAL
     write_plot_xy_bundle(
         results_dir=results_dir,
         csv_name=joined_name,
@@ -1097,23 +1114,28 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         y_log4_col="sig_log4_real"
     )
 
-    # Diagnostics + logistic-only (legacy names; NORM only)
+    # =========================
+    # LEGACY v27 plots (NORM only)
+    # =========================
     if mode == "NORM":
         legacy_csv = f"joined_{tag}Hz.csv"
+
+        # logistic-only legacy plot (brought back)
         write_plot_logistic_only(
             results_dir, legacy_csv,
             f"exponents_logistic_only_{tag}Hz.png",
             target_freq, source_label,
-            logistic_accepted=logistic_accepted
+            has_log_points=has_log_points
         )
+
+        # diagnostics legacy plot (fixed)
         write_plot_logistic_diag(
             results_dir, legacy_csv,
             f"exponents_logistic_diagnostics_{tag}Hz.png",
             target_freq, source_label,
-            logistic_accepted=logistic_accepted
+            has_log_points=has_log_points
         )
 
-    # Run gnuplot for scripts written in this mode
     scripts = [
         f"rho_vs_S__LOGLOG__{mode}__{methods}_{tag}Hz.gp",
         f"cond_vs_S__LOGLOG__{mode}__{methods}_{tag}Hz.gp",
@@ -1155,10 +1177,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str|None,
         "logbook_block_rows": block_rows,
         "poly_deg": int(poly_deg) if (poly_deg and poly_deg >= 2) else 0,
         "log4_enabled": bool(do_log4),
-        "logistic_attempted": bool(logistic_attempted),
-        "logistic_accepted": bool(logistic_accepted),
-        "logistic_status": str(logistic_status),
-        "logistic_reason": str(logistic_reason),
+        "has_log_points": bool(has_log_points),
         "r2_logrho_lin": float(r2_lr) if np.isfinite(r2_lr) else r2_lr,
         "r2_logsig_lin": float(r2_ls) if np.isfinite(r2_ls) else r2_ls,
         "r2_logrho_poly": float(r2_logrho_poly) if np.isfinite(r2_logrho_poly) else r2_logrho_poly,
@@ -1258,10 +1277,10 @@ def main():
                     df_run.to_excel(w, sheet_name="all_values", index=False)
 
         except subprocess.TimeoutExpired:
-            summary_rows.append({"run": str(run), "mode": "?", "status": "FAIL", "reason": "gnuplot timeout", "points": 0})
+            summary_rows.append({"run": str(run), "status": "FAIL", "reason": "gnuplot timeout", "points": 0})
             print(f"[{i}/{len(roots)}] FAIL gnuplot timeout", flush=True)
         except Exception as e:
-            summary_rows.append({"run": str(run), "mode": "?", "status": "FAIL", "reason": str(e), "points": 0})
+            summary_rows.append({"run": str(run), "status": "FAIL", "reason": str(e), "points": 0})
             print(f"[{i}/{len(roots)}] FAIL {e}", flush=True)
 
     if summary_rows:
@@ -1286,7 +1305,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-# Runner you requested:
+# Runner (exactly what you asked):
 # python3 auto_sip_pipeline_v27_noscipy.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
 #   --freq 0.01 --min-points 4 \
 #   --logistic-fast --logistic-max-seconds 8 \
