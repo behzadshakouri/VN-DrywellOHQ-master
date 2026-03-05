@@ -13,7 +13,7 @@ v27 (legacy-style restored) + your requested updates:
    - RAW: slope/intercept/R2/p
    - INDEX: slope/intercept/R2/p
    - TARGET (VN-style through-origin): exponent/R2/SSE
-   - Diagnostics: linear + (if accepted) logistic params
+   - Diagnostics: linear + logistic params/status
 4) --clean-results no longer "eats" old plots:
    - it backups Results/ to Results__backup_<timestamp>/ instead of deleting.
 5) Keeps v27 extra plots you added:
@@ -21,6 +21,14 @@ v27 (legacy-style restored) + your requested updates:
    - BOTH modes: NORM + UNORM (via --both-modes)
    - Poly fits (deg>=2) on the bundle plots and stored in CSV
    - LOG4 fits (real-space and log-space) stored in CSV
+
+v27 FIXES (THIS UPDATE):
+------------------------
+A) No more gnuplot spam: write CSVs with na_rep="" (blank instead of 'nan')
+B) Legacy logistic plots ALWAYS show logistic4 if it was computed
+   (even if "rejected" by AIC/R2 rule). We now *label* accepted/rejected
+   instead of hiding the curve.
+C) Diagnostics/logistic-only titles/labels show acceptance status + reason.
 
 Directory assumptions (unchanged):
 ----------------------------------
@@ -746,27 +754,31 @@ def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str,
                              freq: float, source_label: str,
                              lin_slope, lin_int, lin_r2,
                              has_log_points: bool,
-                             log4_params: dict | None):
+                             log4_params: dict | None,
+                             log4_accepted: bool,
+                             log4_reason: str):
     """
     Legacy diagnostics plot with robust logistic handling:
-      - if no logistic accepted, never references logistic columns
-      - prints params as labels (linear always; logistic only if present)
+      - if no logistic computed, never references logistic columns
+      - prints params + accepted/rejected status
     """
     tag = "{:g}".format(freq)
 
     extra_curve = ""
     log_label = ""
+
     if has_log_points:
+        status_txt = "accepted" if log4_accepted else "rejected"
         extra_curve = (
             ", \\\n     '{csv}' using (column(\"logS\")):(column(\"logRho_logfit\")) "
-            "with lines dt 1 lw 4 title 'logistic4 (accepted)'"
-        ).format(csv=csv_name)
+            "with lines dt 1 lw 4 title 'logistic4 ({status})'"
+        ).format(csv=csv_name, status=status_txt)
 
         if log4_params:
             log_label = (
-                f"set label 9 sprintf('log4: L={fmt(log4_params.get('L'))}  k={fmt(log4_params.get('k'))}  "
+                f"set label 9 sprintf('log4 ({status_txt}): L={fmt(log4_params.get('L'))}  k={fmt(log4_params.get('k'))}  "
                 f"x0={fmt(log4_params.get('x0'))}  c={fmt(log4_params.get('c'))}  "
-                f"R^2={fmt(log4_params.get('r2'))}  AIC={fmt(log4_params.get('aic'))}') at graph 0.02,0.86 front\n"
+                f"R^2={fmt(log4_params.get('r2'))}  AIC={fmt(log4_params.get('aic'))}  ({log4_reason})') at graph 0.02,0.86 front\n"
             )
 
     if has_log_points:
@@ -775,7 +787,7 @@ def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str,
     else:
         extra3 = (
             "unset key\n"
-            "set label 8 'No logistic accepted' at graph 0.5,0.5 center front\n"
+            "set label 8 'No logistic fit' at graph 0.5,0.5 center front\n"
             "set xrange [-2:0]\n"
             "set yrange [-1:1]\n"
         )
@@ -823,20 +835,22 @@ unset multiplot
     (results_dir / "plot_logistic_diagnostics.gp").write_text(gp)
 
 def write_plot_logistic_only(results_dir: Path, csv_name: str, out_png: str, freq: float,
-                             source_label: str, has_log_points: bool):
+                             source_label: str, has_log_points: bool,
+                             log4_accepted: bool, log4_reason: str):
     """
     Legacy logistic-only plot.
-    If no logistic accepted, show message but avoid invalid range warnings.
+    If no logistic computed, show message but avoid invalid range warnings.
     """
     tag = "{:g}".format(freq)
 
     if has_log_points:
+        status_txt = "accepted" if log4_accepted else "rejected"
         gp = f"""reset
 set datafile separator ','
 set datafile missing ''
 set term pngcairo size 1200,800 enhanced font 'Arial,24'
 set output '{out_png}'
-set title '{source_label}: Logistic-only (logRho vs logS) at {tag} Hz'
+set title '{source_label}: Logistic-only (logRho vs logS) at {tag} Hz  [log4: {status_txt} | {log4_reason}]'
 
 set grid
 set key top right
@@ -844,10 +858,9 @@ set xlabel 'log10(Saturation)'
 set ylabel 'log10(Resistivity)'
 
 plot '{csv_name}' using (column("logS")):(column("logRho")) with points pt 7 ps 1.6 title 'data', \\
-     '{csv_name}' using (column("logS")):(column("logRho_logfit")) with lines dt 1 lw 4 title 'logistic4 (accepted)'
+     '{csv_name}' using (column("logS")):(column("logRho_logfit")) with lines dt 1 lw 4 title 'logistic4 ({status_txt})'
 """
     else:
-        # IMPORTANT: no referencing CSV columns that are NaN; also set sane ranges
         gp = f"""reset
 set datafile separator ','
 set datafile missing ''
@@ -859,7 +872,7 @@ unset key
 set grid
 set xlabel 'log10(Saturation)'
 set ylabel 'log10(Resistivity)'
-set label 1 'No logistic accepted' at graph 0.5,0.5 center front
+set label 1 'No logistic fit' at graph 0.5,0.5 center front
 set xrange [-2:0]
 set yrange [0:1]
 plot '-' using 1:2 with points pt 7 ps 0 notitle
@@ -884,7 +897,7 @@ def write_plot_xy_bundle(results_dir: Path, csv_name: str, out_png: str, out_gp:
     """
     Generic plotter for “data + linear + poly + log4” where fits are precomputed
     and stored in CSV columns. Avoids gnuplot 'fit' and uses column("name").
-    If a fit column is all NaN, skip it.
+    If a fit column is all NaN/blank, skip it.
     """
     label = "{:g}".format(freq)
 
@@ -995,14 +1008,14 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
     sip_df["logRho"]  = sip_df["rho"].apply(safe_log10)
     sip_df["logSig"]  = sip_df["sigma_imag"].apply(safe_log10)
 
-    # debug before filter
-    sip_df.copy().to_csv(results_dir / f"debug_before_filter_{tag}Hz__{mode}.csv", index=False)
+    # debug before filter (write blank for NaN to keep gnuplot happy)
+    sip_df.copy().to_csv(results_dir / f"debug_before_filter_{tag}Hz__{mode}.csv", index=False, na_rep="")
 
     # filter valid
     mask = np.isfinite(sip_df["logS"]) & np.isfinite(sip_df["logRho"]) & np.isfinite(sip_df["logSig"])
     dropped = sip_df.loc[~mask, ["measurement", "S", "rho", "sigma_imag"]].copy()
     if len(dropped) > 0:
-        dropped.to_csv(results_dir / f"dropped_rows_{tag}Hz__{mode}.csv", index=False)
+        dropped.to_csv(results_dir / f"dropped_rows_{tag}Hz__{mode}.csv", index=False, na_rep="")
     sip_df = sip_df.loc[mask].copy()
 
     if len(sip_df) < min_points:
@@ -1090,34 +1103,44 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
 
     # =========================
     # LOGISTIC4 (diagnostics: logRho vs logS)
-    #   - compute, then accept/reject vs linear using R2/AIC rules
+    # v27 FIX: compute always; PLOT always if computed; label accepted/rejected
     # =========================
-    sip_df["logRho_log4"] = np.nan
-    sip_df["logRho_logfit"] = np.nan
-    sip_df["resid_log_rho"] = np.nan
+    sip_df["logRho_log4"]    = np.nan
+    sip_df["logRho_logfit"]  = np.nan
+    sip_df["resid_log_rho"]  = np.nan
 
     log4R = None
     has_log_points = False
     log_fit_used = None
 
+    log4_accepted = False
+    log4_reason = "not_run"
+
     if do_log4 and len(sip_df) >= 4:
-        log4R, _ = logistic_fit_noscipy(
+        log4R, st = logistic_fit_noscipy(
             sip_df["logS"], sip_df["logRho"],
             fast=logistic_fast, max_seconds=logistic_max_seconds
         )
+        log4_reason = st
 
         if log4R is not None:
-            # decide accept vs linear
-            ok, _why = accept_logistic(rho_r2, rho_aic, log4R)
-            if ok:
-                sip_df["logRho_log4"] = logistic4(
-                    sip_df["logS"].to_numpy(float), log4R["L"], log4R["k"], log4R["x0"], log4R["c"]
-                )
-                sip_df["logRho_logfit"] = sip_df["logRho_log4"]
-                sip_df["resid_log_rho"] = sip_df["logRho"] - sip_df["logRho_logfit"]
-                has_log_points = bool(np.isfinite(pd.to_numeric(sip_df["logRho_logfit"], errors="coerce").to_numpy(float)).any())
-                if has_log_points:
-                    log_fit_used = log4R
+            # Always store curve (even if rejected)
+            ylog4 = logistic4(
+                sip_df["logS"].to_numpy(float),
+                log4R["L"], log4R["k"], log4R["x0"], log4R["c"]
+            )
+            sip_df["logRho_log4"]   = ylog4
+            sip_df["logRho_logfit"] = ylog4
+            sip_df["resid_log_rho"] = sip_df["logRho"] - sip_df["logRho_logfit"]
+
+            has_log_points = bool(
+                np.isfinite(pd.to_numeric(sip_df["logRho_logfit"], errors="coerce").to_numpy(float)).any()
+            )
+
+            ok, why = accept_logistic(rho_r2, rho_aic, log4R)
+            log4_accepted = bool(ok)
+            log4_reason = why if ok else f"rejected:{why}"
+            log_fit_used = log4R
 
     # legacy diagnostic columns for linear residual
     sip_df["logRho_linfit"] = sip_df["logRho_lin"]
@@ -1171,11 +1194,11 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
             sip_df["sig_log4_real"] = logistic4(xS, log4S_real["L"], log4S_real["k"], log4S_real["x0"], log4S_real["c"])
 
     # =========================
-    # WRITE JOINED CSVs
+    # WRITE JOINED CSVs (write blanks for NaN to keep gnuplot happy)
     # =========================
     joined_name = f"joined__{mode}_{tag}Hz.csv"
     joined_path = results_dir / joined_name
-    sip_df.to_csv(joined_path, index=False)
+    sip_df.to_csv(joined_path, index=False, na_rep="")
 
     # Legacy compatibility (NORM only): joined_<tag>Hz.csv
     if mode == "NORM":
@@ -1209,12 +1232,16 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
             target_freq, source_label,
             rho_slope, rho_int, rho_r2,
             has_log_points=has_log_points,
-            log4_params=log_fit_used
+            log4_params=log_fit_used,
+            log4_accepted=log4_accepted,
+            log4_reason=log4_reason
         )
         write_plot_logistic_only(
             results_dir, legacy_csv, f"exponents_logistic_only_{tag}Hz.png",
             target_freq, source_label,
-            has_log_points=has_log_points
+            has_log_points=has_log_points,
+            log4_accepted=log4_accepted,
+            log4_reason=log4_reason
         )
 
         # Run the legacy scripts
@@ -1269,7 +1296,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         do_log4=do_log4,
         y_lin_col="logSig_lin",
         y_poly_col="logSig_poly",
-        y_log4_col="logSig_log4"  # may be NaN; bundle writer will skip if empty
+        y_log4_col="logSig_log4"
     )
     write_plot_xy_bundle(
         results_dir=results_dir,
@@ -1335,6 +1362,9 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         row["logbook_sheet"] = used_sheet
         row["logbook_overlap"] = overlap_cnt
         row["logbook_block_rows"] = block_rows
+        # include logistic status in all-values rows too
+        row["log4_diag_status"] = ("accepted" if log4_accepted else "rejected") if (log_fit_used is not None) else "no_fit"
+        row["log4_diag_reason"] = str(log4_reason)
         all_rows_accum.append(row)
         per_run_excel_rows.append(row)
 
@@ -1350,6 +1380,8 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         "poly_deg": int(poly_deg) if (poly_deg and poly_deg >= 2) else 0,
         "log4_enabled": bool(do_log4),
         "has_log_points": bool(has_log_points),
+        "log4_diag_status": ("accepted" if log4_accepted else "rejected") if (log_fit_used is not None) else "no_fit",
+        "log4_diag_reason": str(log4_reason),
         "r2_raw_rho_lin": float(rho_r2) if np.isfinite(rho_r2) else rho_r2,
         "r2_raw_sig_lin": float(sig_r2) if np.isfinite(sig_r2) else sig_r2,
         "r2_index_ri_lin": float(ri_r2) if np.isfinite(ri_r2) else ri_r2,
@@ -1479,8 +1511,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
-    
 
 # =============================================================================
 # RUNNER (your exact command)
