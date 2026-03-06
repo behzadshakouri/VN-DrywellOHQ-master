@@ -29,6 +29,9 @@ B) Legacy logistic plots ALWAYS show logistic4 if it was computed
    (even if "rejected" by AIC/R2 rule). We now *label* accepted/rejected
    instead of hiding the curve.
 C) Diagnostics/logistic-only titles/labels show acceptance status + reason.
+D) Added missing LOGLOG conductivity logistic fit:
+   - logSig_log4 is now computed from logSig vs logS
+   - so LOGLOG conductivity bundle plots can also show logistic4
 
 Directory assumptions (unchanged):
 ----------------------------------
@@ -1085,11 +1088,9 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
     # =========================
     # INDEX FITS (NORM legacy)
     # =========================
-    # RI index linear
     ri_slope, ri_int, ri_r2, ri_p, ri_ss, ri_aic = linear_fit(sip_df["logS"], sip_df["logRhoIdx"])
     sip_df["logRhoIdx_lin"] = ri_slope*sip_df["logS"] + ri_int
 
-    # ICI index (VN-style) linear
     ici_slope, ici_int, ici_r2, ici_p, ici_ss, ici_aic = linear_fit(sip_df["logS"], sip_df["logICI_vn"])
     sip_df["logICI_lin"] = ici_slope*sip_df["logS"] + ici_int
 
@@ -1124,7 +1125,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         log4_reason = st
 
         if log4R is not None:
-            # Always store curve (even if rejected)
             ylog4 = logistic4(
                 sip_df["logS"].to_numpy(float),
                 log4R["L"], log4R["k"], log4R["x0"], log4R["c"]
@@ -1145,6 +1145,22 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
     # legacy diagnostic columns for linear residual
     sip_df["logRho_linfit"] = sip_df["logRho_lin"]
     sip_df["resid_lin_rho"] = sip_df["logRho"] - sip_df["logRho_linfit"]
+
+    # =========================
+    # LOGISTIC4 FOR LOGLOG CONDUCTIVITY BUNDLE
+    # NEW: compute missing logSig_log4 from logSig vs logS
+    # =========================
+    sip_df["logSig_log4"] = np.nan
+    if do_log4 and len(sip_df) >= 4:
+        log4S_log, _ = logistic_fit_noscipy(
+            sip_df["logS"], sip_df["logSig"],
+            fast=logistic_fast, max_seconds=logistic_max_seconds
+        )
+        if log4S_log is not None:
+            sip_df["logSig_log4"] = logistic4(
+                sip_df["logS"].to_numpy(float),
+                log4S_log["L"], log4S_log["k"], log4S_log["x0"], log4S_log["c"]
+            )
 
     # =========================
     # REAL-REAL fits (bundle)
@@ -1244,7 +1260,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
             log4_reason=log4_reason
         )
 
-        # Run the legacy scripts
         for sc in ["plot_raw_exponents.gp", "plot_index_exponents.gp", "plot_target_exponents.gp",
                    "plot_logistic_diagnostics.gp", "plot_logistic_only.gp"]:
             _run_gnuplot(sc, cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
@@ -1339,7 +1354,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         y_log4_col="sig_log4_real"
     )
 
-    # Run bundle scripts (fatal)
     for sc in [
         f"rho_vs_S__LOGLOG__{mode}__{methods}_{tag}Hz.gp",
         f"cond_vs_S__LOGLOG__{mode}__{methods}_{tag}Hz.gp",
@@ -1362,7 +1376,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         row["logbook_sheet"] = used_sheet
         row["logbook_overlap"] = overlap_cnt
         row["logbook_block_rows"] = block_rows
-        # include logistic status in all-values rows too
         row["log4_diag_status"] = ("accepted" if log4_accepted else "rejected") if (log_fit_used is not None) else "no_fit"
         row["log4_diag_reason"] = str(log4_reason)
         all_rows_accum.append(row)
@@ -1474,7 +1487,6 @@ def main():
             mode_txt = "+".join(modes)
             print(f"[{i}/{len(roots)}] OK modes={mode_txt} points={pts_txt} ({dt:.1f}s)", flush=True)
 
-            # per-run all_values Excel
             if per_run_excel_rows:
                 df_run = pd.DataFrame(per_run_excel_rows)
                 out_xlsx = (run / RESULTS_DIR) / f"all_values_{tag}Hz.xlsx"
