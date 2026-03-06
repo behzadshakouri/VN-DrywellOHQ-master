@@ -1,0 +1,274 @@
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+\definecolor{accent}{RGB}{25,56,99}
+\definecolor{accent2}{RGB}{46,84,150}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries\color{accent} Documentation for the SIP Processing Pipeline}\\[0.4em]
+{\large Batch extraction, saturation matching, regression analysis, and plot generation for SIP column experiments}
+\end{center}
+
+\section{Purpose and operating context}
+The pipeline automates a standard workflow for spectral induced polarization (SIP) column experiments. For each run folder it locates a processed SIP workbook in \texttt{Analysis/}, a laboratory logbook workbook in \texttt{SIP\_Raw\_Data/}, extracts the row nearest a target frequency from each SIP sheet, matches those measurements to saturation information from the logbook, computes derived variables in both real and logarithmic spaces, fits multiple candidate models, and writes both tables and report-style plots.
+
+The same run can be processed in normalized and unnormalized modes. The overall design therefore supports both scientific interpretation and regression testing across many specimens.
+
+\section{Expected directory structure}
+\begin{longtable}{p{0.22\textwidth} p{0.28\textwidth} p{0.40\textwidth}}
+\toprule
+\textbf{Location} & \textbf{Expected content} & \textbf{Role in pipeline}\\
+\midrule
+\endhead
+\texttt{Analysis/} & Processed SIP output workbook & Each sheet is treated as one measurement ID; one row is extracted at the requested frequency.\\
+\texttt{SIP\_Raw\_Data/} & Logbook workbook & Provides degree of saturation directly, or enough inputs to derive it.\\
+\texttt{Results/} & Output folder & Receives debug tables, joined data tables, plots, and per-run Excel summaries.\\
+\bottomrule
+\end{longtable}
+
+\section{High-level workflow}
+\begin{longtable}{p{0.07\textwidth} p{0.52\textwidth} p{0.28\textwidth}}
+\toprule
+\textbf{Step} & \textbf{Action} & \textbf{Main outputs}\\
+\midrule
+\endhead
+1 & Discover run folders that contain both \texttt{Analysis/} and \texttt{SIP\_Raw\_Data/}. & List of valid run roots\\
+2 & Locate the SIP workbook and logbook workbook. & Input file paths\\
+3 & Read each SIP sheet and extract the row nearest the target frequency. & \texttt{measurement}, \texttt{rho}, \texttt{sigma\_imag}, \texttt{freq\_hz}\\
+4 & Select the best logbook block by maximizing overlap with SIP measurement IDs. & Saturation map and logbook metadata\\
+5 & Merge saturation with SIP responses and compute logs, indices, and targets. & Joined table with derived columns\\
+6 & Fit linear, through-origin, polynomial, and logistic models. & Fit coefficients, $R^2$, SSE, AIC, p-values\\
+7 & Write plots, run-level Excel files, and campaign-level summary files. & PNG, CSV, XLSX outputs\\
+\bottomrule
+\end{longtable}
+
+\section{Input variables and matching logic}
+Each sheet in the SIP workbook is interpreted as a measurement. The measurement identifier is the sheet name after normalization (case folding and removal of spaces, dashes, and underscores). In the logbook, the code searches for the measurement-ID column and then selects the contiguous block that maximizes overlap with the set of SIP identifiers. This avoids accidental matching to header rows, blank regions, or unrelated blocks in a long workbook.
+
+Saturation may enter the pipeline through either of two routes:
+\begin{itemize}[leftmargin=1.5em]
+\item Direct route: a saturation column already exists in the logbook.
+\item Derived route: saturation is computed from water mass, porosity, and column volume.
+\end{itemize}
+
+\section{Core formulas}
+This section expands the formulas used by the script. The pipeline combines direct physical quantities, logarithmic transforms, normalized indices, and regression models. All formulas below correspond directly to columns or fitted curves written by the code.
+
+\subsection{Saturation}
+Direct saturation is simply the value read from the logbook. If the logbook stores percent values such as 40 or 85, the script converts them to fractions by dividing by 100.
+\[
+S = \text{value read from the logbook}
+\]
+
+When saturation is derived from mass and geometry, the code uses
+\[
+S = \frac{M_w}{\rho_w\,\phi\,V},
+\]
+where $M_w$ is water mass in kilograms, $\rho_w$ is water density (taken as $1000\,\mathrm{kg/m^3}$), $\phi$ is porosity, and $V$ is column volume in $\mathrm{m^3}$.
+
+\subsection{Log-domain variables}
+The main log-domain variables are
+\[
+\log S = \log_{10}(S), \qquad
+\log \rho = \log_{10}(\rho), \qquad
+\log \sigma = \log_{10}(\sigma_{imag}).
+\]
+Rows with nonpositive or nonfinite values cannot be passed through $\log_{10}$, so the script removes them before fitting. Those removed rows are written to a dropped-row CSV for traceability.
+
+\subsection{Reference quantities and normalized variables}
+The row with the largest matched saturation is treated as the reference state. If its resistivity and imaginary conductivity are $\rho_{ref}$ and $\sigma_{ref}$, then normalized variables are
+\[
+\rho_{idx} = \frac{\rho}{\rho_{ref}}, \qquad
+\sigma_{idx} = \frac{\sigma_{imag}}{\sigma_{ref}}.
+\]
+Their logarithmic forms are
+\[
+\log RI = \log_{10}(\rho) - \log_{10}(\rho_{ref}),
+\]
+while the conductivity index can be written in either direction,
+\[
+\log \sigma_{idx} = \log_{10}(\sigma_{imag}) - \log_{10}(\sigma_{ref})
+\]
+or
+\[
+\log ICI = \log_{10}(\sigma_{ref}) - \log_{10}(\sigma_{imag}),
+\]
+depending on the selected CLI option.
+
+\subsection{VN-style target quantities}
+The resistivity target is
+\[
+\log RI_{vn} =
+\begin{cases}
+\log RI, & \text{normalized mode},\\
+\log_{10}(\rho), & \text{unnormalized mode},
+\end{cases}
+\]
+and the conductivity target is
+\[
+\log ICI_{vn} =
+\begin{cases}
+\log_{10}(\sigma_{ref}) - \log_{10}(\sigma_{imag}), & \text{normalized mode},\\
+\log_{10}(\sigma_{imag}), & \text{unnormalized mode}.
+\end{cases}
+\]
+The important point is that the normalized VN-style conductivity target always uses the $\sigma_{ref}/\sigma$ direction.
+
+\section{Regression models}
+\subsection{Standard linear model}
+The ordinary linear model is
+\[
+\hat y = ax + b.
+\]
+The residual sum of squares is
+\[
+SSE = \sum_i (y_i - \hat y_i)^2,
+\]
+and the total sum of squares is
+\[
+SST = \sum_i (y_i - \bar y)^2.
+\]
+The coefficient of determination is
+\[
+R^2 = 1 - \frac{SSE}{SST}.
+\]
+The script also computes a Gaussian Akaike information criterion,
+\[
+AIC = n\ln\!\left(\frac{SSE}{n}\right) + 2k,
+\]
+where $n$ is the number of fitted points and $k$ is the number of free parameters. For the linear model, $k=2$.
+
+The p-value reported for linear fits is based on an F statistic,
+\[
+F = \frac{(SST-SSE)/df_{model}}{SSE/df_{residual}},
+\]
+with the survival function evaluated through an incomplete-beta implementation.
+
+\subsection{Through-origin target model}
+For the target plots the intercept is fixed to zero,
+\[
+\hat y = ax.
+\]
+The least-squares slope has a closed form,
+\[
+a = \frac{x\cdot y}{x\cdot x}.
+\]
+This coefficient is interpreted as the target exponent for the RI and ICI plots.
+
+\subsection{Polynomial model}
+When the polynomial option is enabled, the fitted curve has the form
+\[
+\hat y = c_0x^d + c_1x^{d-1} + \cdots + c_d,
+\]
+where $d$ is set by \texttt{--poly-deg}. The fit is performed with \texttt{numpy.polyfit}, and the predicted values are written into the joined CSV for plotting.
+
+\subsection{Four-parameter logistic model}
+The nonlinear logistic candidate is
+\[
+f(x) = c + \frac{L}{1 + \exp[-k(x-x_0)]}.
+\]
+Its asymptotic behavior is easy to interpret:
+\[
+x \ll x_0 \Rightarrow f(x) \approx c,
+\qquad
+x \gg x_0 \Rightarrow f(x) \approx c + L.
+\]
+Therefore $c$ is the lower plateau, $c+L$ is the upper plateau, $x_0$ is the transition location, and $k$ controls steepness.
+
+The optimizer is SciPy-free. It starts from heuristic initial values and performs a bounded coordinate search over $(L,k,x_0,c)$, always keeping the parameter set with the lowest SSE. The fit can therefore be computed even in restricted environments where SciPy is unavailable.
+
+The code still evaluates an acceptance rule,
+\[
+\text{accept if } \bigl(R^2_{logistic} \ge R^2_{linear} + \varepsilon\bigr)
+\quad \text{or} \quad
+AIC_{logistic} < AIC_{linear},
+\]
+with $\varepsilon = 0.005$ in the current settings. In the current implementation this test is used as metadata for labels and summaries rather than as a gate that hides the computed logistic curve.
+
+\section{Real-space and log-space plot families}
+\begin{longtable}{p{0.18\textwidth} p{0.24\textwidth} p{0.46\textwidth}}
+\toprule
+\textbf{Plot family} & \textbf{Axes} & \textbf{Interpretation}\\
+\midrule
+\endhead
+RAW & $\log\rho$ or $\log\sigma$ versus $\log S$ & Classical exponent view; emphasizes approximately linear behavior in log-log space.\\
+INDEX & $\log R_I$ or $\log ICI_{vn}$ versus $\log S$ & Normalized response view anchored to the maximum-saturation reference row.\\
+TARGET & $\log RI_{vn}$ or $\log ICI_{vn}$ versus $\log S$ with zero intercept & Exponent-style target plot used for VN interpretation.\\
+Diagnostics & $\log\rho$ versus $\log S$ plus residual panels & Side-by-side check of linear and logistic behavior in the same transformed space.\\
+Bundle REAL & $\rho$ or $\sigma$ versus $S$ & Direct physical-space comparison of data, linear, polynomial, and logistic curves.\\
+Bundle LOGLOG & $\log\rho$ or $\log\sigma$ versus $\log S$ & Expanded comparison in transformed space.\\
+\bottomrule
+\end{longtable}
+
+The real-space plots are usually the best place to assess whether the logistic model captures a rise-and-plateau saturation trend. The exponent plots remain useful when the main interest is slope-like behavior and continuity with earlier reporting styles.
+
+\section{Output files}
+\begin{longtable}{p{0.38\textwidth} p{0.18\textwidth} p{0.31\textwidth}}
+\toprule
+\textbf{File pattern} & \textbf{Scope} & \textbf{Meaning}\\
+\midrule
+\endhead
+\texttt{debug\_before\_filter\_<tag>Hz\_\_<mode>.csv} & Per run, per mode & Merged data before log-domain filtering.\\
+\texttt{dropped\_rows\_<tag>Hz\_\_<mode>.csv} & Per run, per mode & Rows rejected because one or more logged quantities were invalid.\\
+\texttt{joined\_\_<mode>\_<tag>Hz.csv} & Per run, per mode & Main analysis table containing raw values, transformed values, and fitted curves.\\
+\texttt{joined\_<tag>Hz.csv} & Per run, normalized mode & Legacy alias of the normalized joined file.\\
+\texttt{Results\_Summary\_<tag>Hz.csv/.xlsx} & Campaign-wide & One summary row per run and mode, including counts and logistic status fields.\\
+\texttt{all\_values\_<tag>Hz.xlsx} & Per run and campaign-wide & Complete accumulation of all rows with derived columns.\\
+\bottomrule
+\end{longtable}
+
+\section{Command-line interface}
+\begin{longtable}{p{0.22\textwidth} p{0.65\textwidth}}
+\toprule
+\textbf{Argument} & \textbf{Meaning}\\
+\midrule
+\endhead
+\texttt{top} & Top folder that contains run subfolders.\\
+\texttt{--freq} & Target frequency used to choose one row from each SIP sheet.\\
+\texttt{--sample} & Optional substring filter applied to SIP sheet names.\\
+\texttt{--min-points} & Minimum valid matched points needed before a run is accepted.\\
+\texttt{--max-df} & Optional maximum frequency mismatch; 0 disables this filter.\\
+\texttt{--clean-results} & Back up \texttt{Results/} before writing new outputs.\\
+\texttt{--ici-mode} & Selects the sign convention for the normalized conductivity index.\\
+\texttt{--poly-deg} & Polynomial degree; values $\ge 2$ activate polynomial bundle curves.\\
+\texttt{--logistic-fast} & Enables the SciPy-free logistic search routine.\\
+\texttt{--logistic-max-seconds} & Time limit per logistic fit.\\
+\texttt{--logistic4} & Turns on four-parameter logistic fitting.\\
+\texttt{--both-modes} & Processes normalized and unnormalized modes in one call.\\
+\bottomrule
+\end{longtable}
+
+\subsection{Example command}
+\begin{verbatim}
+python3 auto_sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+  --freq 0.01 --min-points 4 \
+  --logistic-fast --logistic-max-seconds 8 \
+  --clean-results --both-modes \
+  --ici-mode sig_over_sigref \
+  --poly-deg 2 --poly-raw \
+  --logistic4
+\end{verbatim}
+
+\section{Interpretation notes}
+A useful reading strategy is to separate physical interpretation from model bookkeeping. The linear and through-origin fits support exponent-style reporting and continuity with earlier workflows. The polynomial fit is a flexible diagnostic smoother. The logistic fit is the main nonlinear candidate for responses that show a rapid rise followed by a plateau. The acceptance flag should therefore be read as a comparison result, not as a statement that the logistic curve failed to compute.
+
+When only four to six matched points are available, AIC can penalize the logistic model strongly because it carries four parameters. For that reason, the bundle plots and diagnostic plots remain important even when the formal acceptance flag says ``rejected.'' The computed curve may still be physically informative.
+
+\section{Short summary}
+The pipeline is a robust batch-analysis tool for SIP column experiments. It combines workbook discovery, identifier matching, saturation reconstruction, log-domain and real-domain transforms, and four families of fit models into one repeatable workflow. Its outputs are suitable for debugging, method comparison, and direct scientific interpretation.
+
+\end{document}

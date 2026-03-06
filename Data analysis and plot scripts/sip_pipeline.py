@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-auto_sip_pipeline_v27_noscipy.py
+sip_pipeline.py
 
-v27 (legacy-style restored) + your requested updates:
+legacy-style + your requested updates:
 ----------------------------------------------------
 1) LOGISTIC4 runs with >=4 points (your request).
-2) Restore legacy v27 plots (RAW/INDEX/TARGET/diagnostics/logistic-only):
+2) Restore legacy plots (RAW/INDEX/TARGET/diagnostics/logistic-only):
    - same naming
    - same "feel" (fonts/points/linetypes)
    - RAW/INDEX/TARGET are tall again (1200x1600) so TARGET is not "wide".
@@ -16,13 +16,13 @@ v27 (legacy-style restored) + your requested updates:
    - Diagnostics: linear + logistic params/status
 4) --clean-results no longer "eats" old plots:
    - it backups Results/ to Results__backup_<timestamp>/ instead of deleting.
-5) Keeps v27 extra plots you added:
+5) Keeps extra plots you added:
    - REAL and LOGLOG bundles for rho vs S and conductivity vs S
    - BOTH modes: NORM + UNORM (via --both-modes)
    - Poly fits (deg>=2) on the bundle plots and stored in CSV
    - LOG4 fits (real-space and log-space) stored in CSV
 
-v27 FIXES (THIS UPDATE):
+FIXES (THIS UPDATE):
 ------------------------
 A) No more gnuplot spam: write CSVs with na_rep="" (blank instead of 'nan')
 B) Legacy logistic plots ALWAYS show logistic4 if it was computed
@@ -633,7 +633,7 @@ def _run_gnuplot(script_name: str, cwd: Path, timeout_s: int, fatal: bool):
         return False, msg
 
 # =============================================================================
-# LEGACY v27 GNUPLOT WRITERS (RESTORED STYLE + PARAM LABELS + SIZES)
+# LEGACY GNUPLOT WRITERS (RESTORED STYLE + PARAM LABELS + SIZES)
 # =============================================================================
 
 def write_plot_raw_exponents(results_dir: Path, csv_name: str, out_png: str, freq: float,
@@ -1103,7 +1103,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
 
     # =========================
     # LOGISTIC4 (diagnostics: logRho vs logS)
-    # v27 FIX: compute always; PLOT always if computed; label accepted/rejected
+    # FIX: compute always; PLOT always if computed; label accepted/rejected
     # =========================
     sip_df["logRho_log4"]    = np.nan
     sip_df["logRho_logfit"]  = np.nan
@@ -1205,7 +1205,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         (results_dir / f"joined_{tag}Hz.csv").write_text(joined_path.read_text())
 
     # =========================
-    # LEGACY v27 PLOTS (NORM only)
+    # LEGACY PLOTS (NORM only)
     # =========================
     if mode == "NORM":
         legacy_csv = f"joined_{tag}Hz.csv"
@@ -1515,7 +1515,7 @@ if __name__ == "__main__":
 # =============================================================================
 # RUNNER (your exact command)
 # =============================================================================
-# python3 auto_sip_pipeline_v27_noscipy.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+# python3 sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
 #   --freq 0.01 --min-points 4 \
 #   --logistic-fast --logistic-max-seconds 8 \
 #   --clean-results --both-modes \
