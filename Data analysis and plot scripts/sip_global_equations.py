@@ -24,34 +24,23 @@ Main idea
         - stacked_data_ALL
         - fits_ALL
         - settings
-        - one stacked_data_<MODE> sheet per mode
+        - one stacked_<MODE> sheet per mode
         - one fits_<MODE> sheet per mode
-        - one stacked_data_<MODE>_<SITE> sheet per site/mode
+        - one data_<MODE>_<SITE> sheet per site/mode
         - one fits_<MODE>_<SITE> sheet per site/mode
+    * one per-mode Excel workbook when mode is UNORM or BOTH
     * one plot per site/response pair
     * one overall "ALL_SITES" plot per response pair
 
-Supported fit methods
----------------------
-- linear           y = a*x + b
-- origin           y = a*x
-- poly             y = c0*x^d + c1*x^(d-1) + ... + cd
-- logistic4        y = c + L/(1 + exp(-k*(x - x0)))
-
-Default use case
-----------------
-For each site, fit:
-- resistivity vs saturation
-- conductivity vs saturation
-- log resistivity vs log saturation
-- log conductivity vs log saturation
-
-Notes
------
-1) This script uses the joined CSV outputs from the previous pipeline.
-2) "Moisture content" is interpreted as saturation S unless a theta column exists.
-3) Plotting uses gnuplot (not matplotlib), so it avoids NumPy/matplotlib binary mismatch issues.
-4) Plot titles/labels are plain text only; no subscript conversion.
+Important additions
+-------------------
+1) Folder provenance is preserved in Excel:
+   - __run_root
+   - __run_name
+   - __joined_file
+   so you can see exactly where each m1, m2, ... came from.
+2) If mode = UNORM or BOTH, separate UNORM Excel outputs are also written.
+3) Plot titles/labels are plain text only; no subscript conversion.
 """
 
 import argparse
@@ -124,9 +113,6 @@ def compact_text(s: str) -> str:
     return re.sub(r"\s+", " ", str(s)).strip()
 
 def human_label(col: str) -> str:
-    """
-    Plain-text labels only. No subscript syntax, no enhanced text tricks.
-    """
     mapping = {
         "S": "Saturation",
         "theta": "Moisture content",
@@ -141,6 +127,8 @@ def human_label(col: str) -> str:
         "logRI_vn": "log10(RI)",
         "rho_idx": "Resistivity Index",
         "sig_idx": "Conductivity Index",
+        "measurement": "Measurement",
+        "measurement_norm": "Measurement ID",
     }
     return mapping.get(col, col)
 
@@ -421,9 +409,6 @@ def find_joined_files(top: Path, mode: str, tag: str):
     return sorted(top.rglob(pattern))
 
 def add_real_alias_columns(df: pd.DataFrame):
-    """
-    Backfill aliases if older/newer joined files differ a bit.
-    """
     out = df.copy()
 
     if "rho_real" not in out.columns:
@@ -438,7 +423,6 @@ def add_real_alias_columns(df: pd.DataFrame):
         elif "sigma_imag" in out.columns:
             out["sig_real"] = safe_float_series(out["sigma_imag"])
 
-    # Moisture-content aliases only if already present in data
     if "logTheta" not in out.columns and "theta" in out.columns:
         out["logTheta"] = out["theta"].apply(safe_log10)
 
@@ -661,11 +645,9 @@ def fit_one_group(df_group, group_name, xcol, ycol, methods, poly_deg, logistic_
 # =============================================================================
 
 def write_mode_site_sheets(writer, df_mode, fits_mode, mode_name: str):
-    # Per-mode full sheets
     df_mode.to_excel(writer, sheet_name=sheet_safe_name(f"stacked_{mode_name}"), index=False)
     fits_mode.to_excel(writer, sheet_name=sheet_safe_name(f"fits_{mode_name}"), index=False)
 
-    # Per-site sheets
     sites = sorted(df_mode["__site"].dropna().astype(str).unique().tolist())
     for site in sites:
         df_site = df_mode.loc[df_mode["__site"].astype(str) == site].copy()
@@ -682,15 +664,23 @@ def write_mode_site_sheets(writer, df_mode, fits_mode, mode_name: str):
                 index=False
             )
 
+def write_single_mode_workbook(outdir: Path, mode_name: str, tag: str,
+                               df_mode: pd.DataFrame, fits_mode: pd.DataFrame,
+                               settings_df: pd.DataFrame):
+    xlsx = outdir / f"global_equations__{mode_name}_{tag}Hz.xlsx"
+    with pd.ExcelWriter(xlsx, engine="openpyxl") as w:
+        df_mode.to_excel(w, sheet_name="stacked_data", index=False)
+        if not fits_mode.empty:
+            fits_mode.to_excel(w, sheet_name="fits", index=False)
+        settings_df.to_excel(w, sheet_name="settings", index=False)
+        write_mode_site_sheets(w, df_mode, fits_mode, mode_name)
+    return xlsx
+
 # =============================================================================
 # CLI
 # =============================================================================
 
 def parse_response_pairs(vals):
-    """
-    Input form:
-      --pair S rho_real --pair logS logRho
-    """
     pairs = []
     for v in vals:
         if len(v) != 2:
@@ -787,7 +777,6 @@ def main():
                 lambda s: dmap.get(s, infer_site_name(s))
             )
 
-    # Build response pairs
     pairs = []
     if args.pair:
         pairs.extend(parse_response_pairs(args.pair))
@@ -796,7 +785,7 @@ def main():
     else:
         pairs.extend(DEFAULT_RESPONSES)
 
-    if args.include_vn_targets:
+    if args.include_vn-targets:
         pairs.extend([
             ("logS", "logRhoIdx"),
             ("logS", "logICI_vn"),
@@ -814,7 +803,6 @@ def main():
                 ("logTheta", "logSig"),
             ])
 
-    # De-duplicate pairs while preserving order
     seen = set()
     uniq_pairs = []
     for p in pairs:
@@ -823,7 +811,6 @@ def main():
             seen.add(p)
     pairs = uniq_pairs
 
-    # Save stacked data ALL
     stacked_csv = outdir / f"stacked_joined__ALLMODES_{tag}Hz.csv"
     df_all.to_csv(stacked_csv, index=False)
 
@@ -872,6 +859,8 @@ def main():
                     row["mode"] = mode
                     row["freq"] = args.freq
                     row["site"] = group_name
+                    row["folder_sources"] = "; ".join(sorted(dfg["__run_root"].astype(str).unique().tolist()))
+                    row["run_names"] = "; ".join(sorted(dfg["__run_name"].astype(str).unique().tolist()))
                     fit_rows.append(row)
 
                 if fits and not args.no_plots:
@@ -931,6 +920,7 @@ def main():
         ]
     })
 
+    # Main combined workbook
     xlsx = outdir / f"global_equations__{args.mode}_{tag}Hz.xlsx"
     with pd.ExcelWriter(xlsx, engine="openpyxl") as w:
         df_all.to_excel(w, sheet_name="stacked_data_ALL", index=False)
@@ -944,12 +934,26 @@ def main():
             if not dmode.empty:
                 write_mode_site_sheets(w, dmode, fmode, mode)
 
+    # Per-mode workbooks
+    mode_xlsx_paths = []
+    for mode in modes:
+        dmode = df_all.loc[df_all["__mode"].astype(str) == mode].copy()
+        if dmode.empty:
+            continue
+        fmode = fits_df.loc[fits_df["mode"].astype(str) == mode].copy() if not fits_df.empty else pd.DataFrame()
+        mode_settings = settings_df.copy()
+        mode_settings.loc[mode_settings["key"] == "mode", "value"] = mode
+        mode_xlsx = write_single_mode_workbook(outdir, mode, tag, dmode, fmode, mode_settings)
+        mode_xlsx_paths.append(mode_xlsx)
+
     fits_csv = outdir / f"global_equations__{args.mode}_{tag}Hz.csv"
     fits_df.to_csv(fits_csv, index=False)
 
     print(f"Stacked data: {stacked_csv}", flush=True)
     print(f"Fits CSV:     {fits_csv}", flush=True)
     print(f"Fits XLSX:    {xlsx}", flush=True)
+    for p in mode_xlsx_paths:
+        print(f"Mode XLSX:    {p}", flush=True)
     print(f"Plots folder: {outdir}", flush=True)
 
 if __name__ == "__main__":
