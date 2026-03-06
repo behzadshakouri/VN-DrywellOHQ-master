@@ -32,6 +32,10 @@ C) Diagnostics/logistic-only titles/labels show acceptance status + reason.
 D) Added missing LOGLOG conductivity logistic fit:
    - logSig_log4 is now computed from logSig vs logS
    - so LOGLOG conductivity bundle plots can also show logistic4
+E) Added back the missing old target-result plot as an extra figure:
+   - target_raw_exponents_<tag>Hz.png
+   - uses linear-with-intercept results (the blue/red pair logic)
+F) Fixed titles such as VN S-12 to stay plain text (no subscript conversion).
 
 Directory assumptions (unchanged):
 ----------------------------------
@@ -155,10 +159,9 @@ def norm_measid(s: str) -> str:
 def pretty_source_name(run_folder_name: str) -> str:
     """
     Readable plot title from folder name.
-    Also convert S-1 -> S_{-1} for gnuplot enhanced text.
+    Keep plain text titles (no gnuplot subscript conversion).
     """
     s = str(run_folder_name).replace("_", " ").strip()
-    s = re.sub(r'\bS-(\d+)\b', r'S_{-\1}', s)
     return s
 
 def tag_from_freq(freq: float) -> str:
@@ -753,6 +756,48 @@ unset multiplot
 """
     (results_dir / "plot_target_exponents.gp").write_text(gp)
 
+def write_plot_target_raw_exponents(results_dir: Path, csv_name: str, out_png: str, freq: float,
+                                    source_label: str,
+                                    n_exp, n_r2,
+                                    p_exp, p_r2):
+    """
+    Added-back old target-result figure (blue/red-pair logic), using
+    the linear-with-intercept results rather than the through-origin fit.
+    """
+    tag = "{:g}".format(freq)
+    gp = f"""reset
+set datafile separator ','
+set datafile missing ''
+set term pngcairo size 1200,1600 enhanced font 'Arial,24'
+set output '{out_png}'
+set multiplot layout 2,1
+
+set grid
+set key top right
+set tics out
+
+# --- TOP: resistivity target-result style
+set title '{source_label}: Saturation Exponent (Resistivity) at {tag} Hz'
+set xlabel 'log(Saturation)'
+set ylabel 'log(Resistivity Index)'
+set label 1 sprintf('{tag}Hz: n = {fmt(n_exp)}  R^2 = {fmt(n_r2)}') at graph 0.62,0.92 front
+plot '{csv_name}' using (column("logS")):(column("logRhoIdx")) with points pt 7 ps 1.8 title 'data', \\
+     '{csv_name}' using (column("logS")):(column("logRhoIdx_lin")) with lines dt 2 lw 3 title sprintf('{tag}Hz: n = {fmt(n_exp)}, R^2 = {fmt(n_r2)}')
+unset label 1
+
+# --- BOTTOM: conductivity target-result style
+set title '{source_label}: Saturation Exponent (Imaginary Conductivity) at {tag} Hz'
+set xlabel 'log(Saturation)'
+set ylabel 'log(Imaginary Conductivity Index)'
+set label 2 sprintf('{tag}Hz: p = {fmt(p_exp)}  R^2 = {fmt(p_r2)}') at graph 0.62,0.92 front
+plot '{csv_name}' using (column("logS")):(column("logICI_vn")) with points pt 7 ps 1.8 title 'data', \\
+     '{csv_name}' using (column("logS")):(column("logICI_lin")) with lines dt 2 lw 3 title sprintf('{tag}Hz: p = {fmt(p_exp)}, R^2 = {fmt(p_r2)}')
+unset label 2
+
+unset multiplot
+"""
+    (results_dir / "plot_target_raw_exponents.gp").write_text(gp)
+
 def write_plot_logistic_diag(results_dir: Path, csv_name: str, out_png: str,
                              freq: float, source_label: str,
                              lin_slope, lin_int, lin_r2,
@@ -1148,7 +1193,6 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
 
     # =========================
     # LOGISTIC4 FOR LOGLOG CONDUCTIVITY BUNDLE
-    # NEW: compute missing logSig_log4 from logSig vs logS
     # =========================
     sip_df["logSig_log4"] = np.nan
     if do_log4 and len(sip_df) >= 4:
@@ -1243,6 +1287,12 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
             goal_ri_a, goal_ri_r2, goal_ri_sse,
             goal_ici_a, goal_ici_r2, goal_ici_sse
         )
+        write_plot_target_raw_exponents(
+            results_dir, legacy_csv, f"target_raw_exponents_{tag}Hz.png", target_freq,
+            source_label,
+            -ri_slope, ri_r2,
+            -ici_slope, ici_r2
+        )
         write_plot_logistic_diag(
             results_dir, legacy_csv, f"exponents_logistic_diagnostics_{tag}Hz.png",
             target_freq, source_label,
@@ -1260,8 +1310,14 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
             log4_reason=log4_reason
         )
 
-        for sc in ["plot_raw_exponents.gp", "plot_index_exponents.gp", "plot_target_exponents.gp",
-                   "plot_logistic_diagnostics.gp", "plot_logistic_only.gp"]:
+        for sc in [
+            "plot_raw_exponents.gp",
+            "plot_index_exponents.gp",
+            "plot_target_exponents.gp",
+            "plot_target_raw_exponents.gp",
+            "plot_logistic_diagnostics.gp",
+            "plot_logistic_only.gp"
+        ]:
             _run_gnuplot(sc, cwd=results_dir, timeout_s=gnuplot_timeout, fatal=False)
 
     # =========================
