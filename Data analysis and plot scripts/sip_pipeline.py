@@ -25,6 +25,9 @@ legacy-style + requested updates:
    - equations sheet in Excel outputs always
    - optional equation labels in the right margin of plots via --plot-equations
      (default: OFF)
+7) Adds backup cleanup switch:
+   - --purge-backups removes Results__backup_* folders inside each run
+     before processing that run.
 
 FIXES:
 ------------------------
@@ -633,6 +636,19 @@ def backup_results_dir(results_dir: Path):
         shutil.move(str(results_dir), str(backup))
     except Exception:
         pass
+
+def purge_backup_folders(run_root: Path):
+    """
+    Remove all Results__backup_* folders inside a run directory.
+    """
+    removed = 0
+    for p in run_root.glob("Results__backup_*"):
+        try:
+            shutil.rmtree(p, ignore_errors=True)
+            removed += 1
+        except Exception:
+            pass
+    return removed
 
 # =============================================================================
 # GNUPLOT EXEC
@@ -1662,6 +1678,9 @@ def main():
     ap.add_argument("--clean-results", action="store_true",
                     help="BACKUP existing Results/ to Results__backup_<timestamp>/ before writing new outputs.")
 
+    ap.add_argument("--purge-backups", action="store_true",
+                    help="Delete all Results__backup_* folders inside each run before processing.")
+
     ap.add_argument("--ici-mode", type=str, default="sigref_over_sig",
                     choices=["sigref_over_sig","sig_over_sigref"],
                     help="Affects normalized index definition (NORM mode). VN TARGET always uses sigref/sig.")
@@ -1699,6 +1718,11 @@ def main():
     for i, run in enumerate(roots, 1):
         print(f"[{i}/{len(roots)}] START {run}", flush=True)
         ti = time.time()
+
+        if args.purge_backups:
+            removed = purge_backup_folders(run)
+            if removed > 0:
+                print(f"[{i}/{len(roots)}] removed {removed} backup folder(s)", flush=True)
 
         per_run_excel_rows = []
         per_run_eq_rows = []
@@ -1785,19 +1809,28 @@ if __name__ == "__main__":
 # =============================================================================
 # Default (equations only in Excel, NOT on plots):
 # python3 sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --clean-results --both-modes \
 #   --freq 0.01 --min-points 4 \
 #   --logistic-fast --logistic-max-seconds 8 \
-#   --clean-results --both-modes \
 #   --ici-mode sig_over_sigref \
 #   --poly-deg 2 --poly-raw \
 #   --logistic4
 #
 # With equations on plots too:
 # python3 sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --clean-results --both-modes \
 #   --freq 0.01 --min-points 4 \
 #   --logistic-fast --logistic-max-seconds 8 \
-#   --clean-results --both-modes \
 #   --ici-mode sig_over_sigref \
 #   --poly-deg 2 --poly-raw \
 #   --logistic4 \
 #   --plot-equations
+#
+# Remove old backup folders before processing:
+# python3 sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --clean-results --purge-backups --both-modes \
+#   --freq 0.01 --min-points 4 \
+#   --logistic-fast --logistic-max-seconds 8 \
+#   --ici-mode sig_over_sigref \
+#   --poly-deg 2 --poly-raw \
+#   --logistic4

@@ -1,4 +1,3 @@
-
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
 \usepackage[T1]{fontenc}
@@ -13,7 +12,6 @@
 \usepackage{hyperref}
 \hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
 \definecolor{accent}{RGB}{25,56,99}
-\definecolor{accent2}{RGB}{46,84,150}
 \setlength{\parskip}{0.45em}
 \setlength{\parindent}{0pt}
 \begin{document}
@@ -26,7 +24,7 @@
 \section{Purpose and operating context}
 The pipeline automates a standard workflow for spectral induced polarization (SIP) column experiments. For each run folder it locates a processed SIP workbook in \texttt{Analysis/}, a laboratory logbook workbook in \texttt{SIP\_Raw\_Data/}, extracts the row nearest a target frequency from each SIP sheet, matches those measurements to saturation information from the logbook, computes derived variables in both real and logarithmic spaces, fits multiple candidate models, and writes both tables and report-style plots.
 
-The same run can be processed in normalized and unnormalized modes. The overall design therefore supports both scientific interpretation and regression testing across many specimens.
+The same run can be processed in normalized and unnormalized modes. The overall design therefore supports both scientific interpretation and regression testing across many specimens. In the current version, Excel outputs also include an equations worksheet, plot equations can be turned on explicitly, and backup folders can be purged when a cleaner run directory is preferred.
 
 \section{Expected directory structure}
 \begin{longtable}{p{0.22\textwidth} p{0.28\textwidth} p{0.40\textwidth}}
@@ -53,6 +51,7 @@ The same run can be processed in normalized and unnormalized modes. The overall 
 5 & Merge saturation with SIP responses and compute logs, indices, and targets. & Joined table with derived columns\\
 6 & Fit linear, through-origin, polynomial, and logistic models. & Fit coefficients, $R^2$, SSE, AIC, p-values\\
 7 & Write plots, run-level Excel files, and campaign-level summary files. & PNG, CSV, XLSX outputs\\
+8 & Optionally annotate plots with equations and optionally remove old backup folders. & Equation labels and cleaned backup folders\\
 \bottomrule
 \end{longtable}
 
@@ -189,7 +188,7 @@ x \gg x_0 \Rightarrow f(x) \approx c + L.
 \]
 Therefore $c$ is the lower plateau, $c+L$ is the upper plateau, $x_0$ is the transition location, and $k$ controls steepness.
 
-The optimizer is SciPy-free. It starts from heuristic initial values and performs a bounded coordinate search over $(L,k,x_0,c)$, always keeping the parameter set with the lowest SSE. The fit can therefore be computed even in restricted environments where SciPy is unavailable.
+The optimizer is SciPy-free. It starts from heuristic initial values and performs a bounded coordinate search over $(L,k,x_0,c)$, always keeping the parameter set with the lowest SSE. The fit can therefore be computed even in restricted environments where SciPy is unavailable. In the current script, logistic fitting is allowed when at least four matched points are available and logistic fitting is enabled.
 
 The code still evaluates an acceptance rule,
 \[
@@ -214,7 +213,7 @@ Bundle LOGLOG & $\log\rho$ or $\log\sigma$ versus $\log S$ & Expanded comparison
 \bottomrule
 \end{longtable}
 
-The real-space plots are usually the best place to assess whether the logistic model captures a rise-and-plateau saturation trend. The exponent plots remain useful when the main interest is slope-like behavior and continuity with earlier reporting styles.
+The real-space plots are usually the best place to assess whether the logistic model captures a rise-and-plateau saturation trend. The exponent plots remain useful when the main interest is slope-like behavior and continuity with earlier reporting styles. When \texttt{--plot-equations} is enabled, equation labels are placed in the plot margin rather than on top of the data.
 
 \section{Output files}
 \begin{longtable}{p{0.38\textwidth} p{0.18\textwidth} p{0.31\textwidth}}
@@ -227,7 +226,8 @@ The real-space plots are usually the best place to assess whether the logistic m
 \texttt{joined\_\_<mode>\_<tag>Hz.csv} & Per run, per mode & Main analysis table containing raw values, transformed values, and fitted curves.\\
 \texttt{joined\_<tag>Hz.csv} & Per run, normalized mode & Legacy alias of the normalized joined file.\\
 \texttt{Results\_Summary\_<tag>Hz.csv/.xlsx} & Campaign-wide & One summary row per run and mode, including counts and logistic status fields.\\
-\texttt{all\_values\_<tag>Hz.xlsx} & Per run and campaign-wide & Complete accumulation of all rows with derived columns.\\
+\texttt{all\_values\_<tag>Hz.xlsx} & Per run and campaign-wide & Complete accumulation of all rows with derived columns plus an equations worksheet.\\
+\texttt{Results\_\_backup\_<timestamp>/} & Per run, optional & Backup copy of a previous \texttt{Results/} folder created by \texttt{--clean-results}.\\
 \bottomrule
 \end{longtable}
 
@@ -243,21 +243,24 @@ The real-space plots are usually the best place to assess whether the logistic m
 \texttt{--min-points} & Minimum valid matched points needed before a run is accepted.\\
 \texttt{--max-df} & Optional maximum frequency mismatch; 0 disables this filter.\\
 \texttt{--clean-results} & Back up \texttt{Results/} before writing new outputs.\\
+\texttt{--purge-backups} & Delete existing \texttt{Results\_\_backup\_*} folders inside each run before processing.\\
 \texttt{--ici-mode} & Selects the sign convention for the normalized conductivity index.\\
 \texttt{--poly-deg} & Polynomial degree; values $\ge 2$ activate polynomial bundle curves.\\
+\texttt{--poly-raw} & Compatibility flag retained for legacy runner usage.\\
 \texttt{--logistic-fast} & Enables the SciPy-free logistic search routine.\\
 \texttt{--logistic-max-seconds} & Time limit per logistic fit.\\
 \texttt{--logistic4} & Turns on four-parameter logistic fitting.\\
+\texttt{--plot-equations} & Add fitted-equation annotations to plot margins; Excel equation sheets are written regardless.\\
 \texttt{--both-modes} & Processes normalized and unnormalized modes in one call.\\
 \bottomrule
 \end{longtable}
 
 \subsection{Example command}
 \begin{verbatim}
-python3 auto_sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+python3 sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+  --clean-results --purge-backups --both-modes \
   --freq 0.01 --min-points 4 \
-  --logistic-fast --logistic-max-seconds 8 \
-  --clean-results --both-modes \
+  --logistic-fast --logistic-max-seconds 20 \
   --ici-mode sig_over_sigref \
   --poly-deg 2 --poly-raw \
   --logistic4
@@ -267,6 +270,8 @@ python3 auto_sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" 
 A useful reading strategy is to separate physical interpretation from model bookkeeping. The linear and through-origin fits support exponent-style reporting and continuity with earlier workflows. The polynomial fit is a flexible diagnostic smoother. The logistic fit is the main nonlinear candidate for responses that show a rapid rise followed by a plateau. The acceptance flag should therefore be read as a comparison result, not as a statement that the logistic curve failed to compute.
 
 When only four to six matched points are available, AIC can penalize the logistic model strongly because it carries four parameters. For that reason, the bundle plots and diagnostic plots remain important even when the formal acceptance flag says ``rejected.'' The computed curve may still be physically informative.
+
+The equations worksheet in the Excel outputs is intended to be the canonical place to review fitted forms across runs. Plot equations are optional because they are helpful for inspection but can make figures visually busier. Backup folders are also optional operational artifacts: \texttt{--clean-results} preserves previous outputs, while \texttt{--purge-backups} removes older backup folders when a cleaner run directory is preferred.
 
 \section{Short summary}
 The pipeline is a robust batch-analysis tool for SIP column experiments. It combines workbook discovery, identifier matching, saturation reconstruction, log-domain and real-domain transforms, and four families of fit models into one repeatable workflow. Its outputs are suitable for debugging, method comparison, and direct scientific interpretation.
