@@ -785,7 +785,7 @@ def main():
     else:
         pairs.extend(DEFAULT_RESPONSES)
 
-    if args.include_vn-targets:
+    if args.include_vn_targets:
         pairs.extend([
             ("logS", "logRhoIdx"),
             ("logS", "logICI_vn"),
