@@ -41,6 +41,16 @@ Important additions
    so you can see exactly where each m1, m2, ... came from.
 2) If mode = UNORM or BOTH, separate UNORM Excel outputs are also written.
 3) Plot titles/labels are plain text only; no subscript conversion.
+4) Adds log-base switch:
+   - --log-base 10   -> legacy behavior
+   - --log-base e    -> natural log when rebuilding log columns
+5) Adds normalization switch:
+   - --normalize none
+   - --normalize zscore
+   - --normalize minmax
+   Normalization is applied within each fit group only:
+   - each site gets its own normalization
+   - ALL_SITES gets its own normalization
 """
 
 import argparse
@@ -92,6 +102,80 @@ def safe_log10(x):
     if not np.isfinite(x) or x <= 0:
         return np.nan
     return math.log10(x)
+
+def safe_ln(x):
+    x = float(x)
+    if not np.isfinite(x) or x <= 0:
+        return np.nan
+    return math.log(x)
+
+def apply_log_scalar(x, base: str):
+    return safe_ln(x) if base == "e" else safe_log10(x)
+
+def apply_log_array(x, base: str):
+    x = np.asarray(x, float)
+    out = np.full_like(x, np.nan, dtype=float)
+    m = np.isfinite(x) & (x > 0)
+    if base == "e":
+        out[m] = np.log(x[m])
+    else:
+        out[m] = np.log10(x[m])
+    return out
+
+def fit_normalizer(v, method: str):
+    v = np.asarray(v, float)
+    m = np.isfinite(v)
+    vv = v[m]
+    if len(vv) == 0 or method == "none":
+        return {"method": "none", "center": 0.0, "scale": 1.0, "vmin": np.nan, "vmax": np.nan}
+    if method == "zscore":
+        mu = float(np.mean(vv))
+        sd = float(np.std(vv))
+        if not np.isfinite(sd) or sd <= 0:
+            sd = 1.0
+        return {"method": "zscore", "center": mu, "scale": sd, "vmin": np.nan, "vmax": np.nan}
+    if method == "minmax":
+        vmin = float(np.min(vv))
+        vmax = float(np.max(vv))
+        rng = vmax - vmin
+        if not np.isfinite(rng) or rng <= 0:
+            rng = 1.0
+        return {"method": "minmax", "center": vmin, "scale": rng, "vmin": vmin, "vmax": vmax}
+    return {"method": "none", "center": 0.0, "scale": 1.0, "vmin": np.nan, "vmax": np.nan}
+
+def apply_normalizer(v, norm):
+    v = np.asarray(v, float)
+    out = np.full_like(v, np.nan, dtype=float)
+    m = np.isfinite(v)
+    if norm["method"] == "none":
+        out[m] = v[m]
+        return out
+    out[m] = (v[m] - norm["center"]) / norm["scale"]
+    return out
+
+def resolve_series(df: pd.DataFrame, col: str, log_base: str):
+    if col in df.columns:
+        return safe_float_series(df[col]).to_numpy(float)
+
+    if col == "logS" and "S" in df.columns:
+        return apply_log_array(safe_float_series(df["S"]).to_numpy(float), log_base)
+
+    if col == "logTheta" and "theta" in df.columns:
+        return apply_log_array(safe_float_series(df["theta"]).to_numpy(float), log_base)
+
+    if col == "logRho":
+        if "rho_real" in df.columns:
+            return apply_log_array(safe_float_series(df["rho_real"]).to_numpy(float), log_base)
+        if "rho" in df.columns:
+            return apply_log_array(safe_float_series(df["rho"]).to_numpy(float), log_base)
+
+    if col == "logSig":
+        if "sig_real" in df.columns:
+            return apply_log_array(safe_float_series(df["sig_real"]).to_numpy(float), log_base)
+        if "sigma_imag" in df.columns:
+            return apply_log_array(safe_float_series(df["sigma_imag"]).to_numpy(float), log_base)
+
+    return np.full(len(df), np.nan, dtype=float)
 
 def aic_gaussian(ss_res, n, k_params):
     if n <= 0 or k_params <= 0 or not np.isfinite(ss_res) or ss_res <= 0:
@@ -465,9 +549,9 @@ def load_all_joined(top: Path, mode: str, tag: str):
 # GNUPLOT-BASED PLOTTING
 # =============================================================================
 
-def write_plot_data_csv(df_site, xcol, ycol, fits, csv_path: Path):
-    x = safe_float_series(df_site[xcol]).to_numpy(float)
-    y = safe_float_series(df_site[ycol]).to_numpy(float)
+def write_plot_data_csv(df_site, xcol, ycol, fits, csv_path: Path, log_base: str, normalize: str):
+    x = resolve_series(df_site, xcol, log_base)
+    y = resolve_series(df_site, ycol, log_base)
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]
     y = y[m]
@@ -475,9 +559,14 @@ def write_plot_data_csv(df_site, xcol, ycol, fits, csv_path: Path):
     if len(x) == 0:
         return False
 
-    order = np.argsort(x)
-    xs = x[order]
-    ys = y[order]
+    x_norm = fit_normalizer(x, normalize)
+    y_norm = fit_normalizer(y, normalize)
+    x_used = apply_normalizer(x, x_norm)
+    y_used = apply_normalizer(y, y_norm)
+
+    order = np.argsort(x_used)
+    xs = x_used[order]
+    ys = y_used[order]
 
     xgrid = np.linspace(float(np.min(xs)), float(np.max(xs)), 300)
 
@@ -576,12 +665,14 @@ def run_gnuplot(gp_path: Path):
 
 def save_site_plot(df_site, xcol, ycol, fits, out_png, title,
                    plot_equations: bool = False,
-                   eq_position: str = "right"):
+                   eq_position: str = "right",
+                   log_base: str = "10",
+                   normalize: str = "none"):
     out_png = Path(out_png)
     csv_path = out_png.with_suffix(".plotdata.csv")
     gp_path  = out_png.with_suffix(".gp")
 
-    ok = write_plot_data_csv(df_site, xcol, ycol, fits, csv_path)
+    ok = write_plot_data_csv(df_site, xcol, ycol, fits, csv_path, log_base=log_base, normalize=normalize)
     if not ok:
         return
 
@@ -602,34 +693,42 @@ def save_site_plot(df_site, xcol, ycol, fits, out_png, title,
 # MAIN FIT DRIVER
 # =============================================================================
 
-def fit_one_group(df_group, group_name, xcol, ycol, methods, poly_deg, logistic_max_seconds):
-    x = safe_float_series(df_group.get(xcol, pd.Series(dtype=float))).to_numpy(float)
-    y = safe_float_series(df_group.get(ycol, pd.Series(dtype=float))).to_numpy(float)
+def fit_one_group(df_group, group_name, xcol, ycol, methods, poly_deg,
+                  logistic_max_seconds, log_base, normalize):
+    x = resolve_series(df_group, xcol, log_base)
+    y = resolve_series(df_group, ycol, log_base)
+
     m = np.isfinite(x) & np.isfinite(y)
     x = x[m]
     y = y[m]
 
     results = []
     if len(x) < 2:
-        return results
+        return results, None
+
+    x_norm = fit_normalizer(x, normalize)
+    y_norm = fit_normalizer(y, normalize)
+
+    x_used = apply_normalizer(x, x_norm)
+    y_used = apply_normalizer(y, y_norm)
 
     if "linear" in methods:
-        r = linear_fit(x, y)
+        r = linear_fit(x_used, y_used)
         if r is not None:
             results.append(r)
 
     if "origin" in methods:
-        r = origin_fit(x, y)
+        r = origin_fit(x_used, y_used)
         if r is not None:
             results.append(r)
 
     if "poly" in methods and poly_deg >= 2:
-        r = poly_fit(x, y, poly_deg)
+        r = poly_fit(x_used, y_used, poly_deg)
         if r is not None:
             results.append(r)
 
     if "logistic4" in methods:
-        r = logistic_fit_noscipy(x, y, max_seconds=logistic_max_seconds)
+        r = logistic_fit_noscipy(x_used, y_used, max_seconds=logistic_max_seconds)
         if r is not None:
             results.append(r)
 
@@ -637,8 +736,22 @@ def fit_one_group(df_group, group_name, xcol, ycol, methods, poly_deg, logistic_
         r["group"] = group_name
         r["xcol"] = xcol
         r["ycol"] = ycol
+        r["log_base"] = log_base
+        r["normalize"] = normalize
+        r["x_norm_method"] = x_norm["method"]
+        r["x_norm_center"] = x_norm["center"]
+        r["x_norm_scale"] = x_norm["scale"]
+        r["y_norm_method"] = y_norm["method"]
+        r["y_norm_center"] = y_norm["center"]
+        r["y_norm_scale"] = y_norm["scale"]
 
-    return results
+    meta = {
+        "x_used": x_used,
+        "y_used": y_used,
+        "x_norm": x_norm,
+        "y_norm": y_norm,
+    }
+    return results, meta
 
 # =============================================================================
 # WORKBOOK WRITING
@@ -742,6 +855,12 @@ def main():
     ap.add_argument("--no-plots", action="store_true",
                     help="Skip plot generation entirely.")
 
+    ap.add_argument("--log-base", type=str, default="10", choices=["10", "e"],
+                    help="Base used when rebuilding log columns such as logS/logRho/logSig/logTheta.")
+
+    ap.add_argument("--normalize", type=str, default="none", choices=["none", "zscore", "minmax"],
+                    help="Normalize x and y within each fit group (each site or ALL_SITES).")
+
     args = ap.parse_args()
 
     top = Path(args.top).expanduser().resolve()
@@ -835,22 +954,21 @@ def main():
                 continue
 
             for xcol, ycol in pairs:
-                if xcol not in dfg.columns or ycol not in dfg.columns:
-                    continue
-
-                x = safe_float_series(dfg[xcol]).to_numpy(float)
-                y = safe_float_series(dfg[ycol]).to_numpy(float)
+                x = resolve_series(dfg, xcol, args.log_base)
+                y = resolve_series(dfg, ycol, args.log_base)
                 m = np.isfinite(x) & np.isfinite(y)
                 n_ok = int(np.sum(m))
 
                 if n_ok < args.min_points:
                     continue
 
-                fits = fit_one_group(
+                fits, fit_meta = fit_one_group(
                     dfg, group_name, xcol, ycol,
                     methods=args.methods,
                     poly_deg=args.poly_deg,
-                    logistic_max_seconds=args.logistic_max_seconds
+                    logistic_max_seconds=args.logistic_max_seconds,
+                    log_base=args.log_base,
+                    normalize=args.normalize
                 )
 
                 for fr in fits:
@@ -876,7 +994,9 @@ def main():
             save_site_plot(
                 dfg, xcol, ycol, fits, png, title,
                 plot_equations=args.plot_equations,
-                eq_position=args.eq_position
+                eq_position=args.eq_position,
+                log_base=args.log_base,
+                normalize=args.normalize
             )
         except Exception as e:
             print(f"[WARN] plot failed {Path(png).name}: {e}", flush=True)
@@ -900,6 +1020,8 @@ def main():
             "no_plots",
             "include_vn_targets",
             "include_theta",
+            "log_base",
+            "normalize",
         ],
         "value": [
             str(top),
@@ -917,6 +1039,8 @@ def main():
             args.no_plots,
             args.include_vn_targets,
             args.include_theta,
+            args.log_base,
+            args.normalize,
         ]
     })
 
@@ -958,3 +1082,108 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+# =============================================================================
+# RUNNER
+# =============================================================================
+# Default:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4
+
+# With equations on plots:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --plot-equations
+
+# Plot only best fit by AIC:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --plot-best-only
+
+# Include VN target pairs too:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --include-vn-targets
+
+# Include theta pairs too (if theta/logTheta exist):
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --include-theta
+
+# Natural log version:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --log-base e
+
+# Normalize within each fit group using z-score:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --normalize zscore
+
+# Normalize within each fit group using min-max:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --normalize minmax
+
+# Custom response pairs only:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --pair S rho_real \
+#   --pair S sig_real \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4
+
+# Custom response pairs + also include defaults:
+# python3 sip_global_equations.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --pair S rho_real \
+#   --pair S sig_real \
+#   --include-default-pairs \
+#   --methods linear poly logistic4 \
+#   --poly-deg 2 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4

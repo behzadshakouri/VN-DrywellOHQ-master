@@ -35,6 +35,29 @@ Priority use case:
 Notes:
     - Plotting uses gnuplot, not matplotlib
     - Plain-text plot labels only (no subscripts)
+
+New additions
+-------------
+1) Adds log-base switch:
+   - --log-base 10   -> legacy behavior
+   - --log-base e    -> natural log when rebuilding log columns
+
+2) Adds normalization switch:
+   - --normalize none
+   - --normalize zscore
+   - --normalize minmax
+   Normalization is applied within the relevant comparison group only:
+   - SAMPLE uses sample-specific normalization
+   - SITE uses site-specific normalization
+   - ALL uses all-data normalization
+
+3) Adds Gaussian likelihood stats for BOTH methods:
+   - sigma_hat (residual std)
+   - lnL       (Gaussian log-likelihood)
+   - AIC
+
+4) Logistic amplitude is signed, so decreasing curves are allowed:
+   - as x increases, y may decrease
 """
 
 import argparse
@@ -88,6 +111,28 @@ def safe_log10(x):
         return np.nan
     return math.log10(x)
 
+def safe_ln(x):
+    x = float(x)
+    if not np.isfinite(x) or x <= 0:
+        return np.nan
+    return math.log(x)
+
+def apply_log_array(x, base: str):
+    x = np.asarray(x, float)
+    out = np.full_like(x, np.nan, dtype=float)
+    m = np.isfinite(x) & (x > 0)
+    if base == "e":
+        out[m] = np.log(x[m])
+    else:
+        out[m] = np.log10(x[m])
+    return out
+
+def safe_log10_scalar(x):
+    x = float(x)
+    if not np.isfinite(x) or x <= 0:
+        return np.nan
+    return math.log10(x)
+
 def sse(y, yhat):
     r = y - yhat
     return float(np.sum(r * r))
@@ -96,6 +141,17 @@ def aic_gaussian(ss_res, n, k_params):
     if n <= 0 or k_params <= 0 or not np.isfinite(ss_res) or ss_res <= 0:
         return np.nan
     return float(n * math.log(ss_res / n) + 2.0 * k_params)
+
+def sigma_hat_from_sse(ss_res, n):
+    if n <= 0 or not np.isfinite(ss_res) or ss_res < 0:
+        return np.nan
+    return float(np.sqrt(ss_res / n))
+
+def gaussian_loglik(ss_res, n):
+    if n <= 0 or not np.isfinite(ss_res) or ss_res <= 0:
+        return np.nan
+    sigma2 = ss_res / n
+    return float(-0.5 * n * (math.log(2.0 * math.pi * sigma2) + 1.0))
 
 def tag_from_freq(freq: float) -> str:
     return str(freq).replace(".", "p")
@@ -175,7 +231,7 @@ def add_alias_columns(df: pd.DataFrame):
             out["sig_real"] = safe_float_series(out["sigma_imag"])
 
     if "logTheta" not in out.columns and "theta" in out.columns:
-        out["logTheta"] = out["theta"].apply(safe_log10)
+        out["logTheta"] = out["theta"].apply(safe_log10_scalar)
 
     return out
 
@@ -213,6 +269,65 @@ def load_joined_mode(top: Path, mode: str, tag: str):
     return pd.concat(rows, axis=0, ignore_index=True)
 
 # =============================================================================
+# RESOLVE / NORMALIZE SERIES
+# =============================================================================
+
+def fit_normalizer(v, method: str):
+    v = np.asarray(v, float)
+    m = np.isfinite(v)
+    vv = v[m]
+    if len(vv) == 0 or method == "none":
+        return {"method": "none", "center": 0.0, "scale": 1.0, "vmin": np.nan, "vmax": np.nan}
+    if method == "zscore":
+        mu = float(np.mean(vv))
+        sd = float(np.std(vv))
+        if not np.isfinite(sd) or sd <= 0:
+            sd = 1.0
+        return {"method": "zscore", "center": mu, "scale": sd, "vmin": np.nan, "vmax": np.nan}
+    if method == "minmax":
+        vmin = float(np.min(vv))
+        vmax = float(np.max(vv))
+        rng = vmax - vmin
+        if not np.isfinite(rng) or rng <= 0:
+            rng = 1.0
+        return {"method": "minmax", "center": vmin, "scale": rng, "vmin": vmin, "vmax": vmax}
+    return {"method": "none", "center": 0.0, "scale": 1.0, "vmin": np.nan, "vmax": np.nan}
+
+def apply_normalizer(v, norm):
+    v = np.asarray(v, float)
+    out = np.full_like(v, np.nan, dtype=float)
+    m = np.isfinite(v)
+    if norm["method"] == "none":
+        out[m] = v[m]
+        return out
+    out[m] = (v[m] - norm["center"]) / norm["scale"]
+    return out
+
+def resolve_series(df: pd.DataFrame, col: str, log_base: str):
+    if col in df.columns:
+        return safe_float_series(df[col]).to_numpy(float)
+
+    if col == "logS" and "S" in df.columns:
+        return apply_log_array(safe_float_series(df["S"]).to_numpy(float), log_base)
+
+    if col == "logTheta" and "theta" in df.columns:
+        return apply_log_array(safe_float_series(df["theta"]).to_numpy(float), log_base)
+
+    if col == "logRho":
+        if "rho_real" in df.columns:
+            return apply_log_array(safe_float_series(df["rho_real"]).to_numpy(float), log_base)
+        if "rho" in df.columns:
+            return apply_log_array(safe_float_series(df["rho"]).to_numpy(float), log_base)
+
+    if col == "logSig":
+        if "sig_real" in df.columns:
+            return apply_log_array(safe_float_series(df["sig_real"]).to_numpy(float), log_base)
+        if "sigma_imag" in df.columns:
+            return apply_log_array(safe_float_series(df["sigma_imag"]).to_numpy(float), log_base)
+
+    return np.full(len(df), np.nan, dtype=float)
+
+# =============================================================================
 # FITS
 # =============================================================================
 
@@ -222,7 +337,7 @@ def r2_from_fit(y, yhat):
     r2 = 1.0 - ss_res / ss_tot if ss_tot > 0 else np.nan
     return ss_res, r2
 
-def fit_power_real(x, y):
+def fit_power_real(x, y, log_base="10"):
     """
     REAL-REAL power law:
         y = a * x^b
@@ -236,15 +351,21 @@ def fit_power_real(x, y):
     if len(x) < 2:
         return None
 
-    lx = np.log10(x)
-    ly = np.log10(y)
+    lx = apply_log_array(x, log_base)
+    ly = apply_log_array(y, log_base)
 
     A = np.vstack([lx, np.ones_like(lx)]).T
     b, loga = np.linalg.lstsq(A, ly, rcond=None)[0]
-    a = 10.0 ** float(loga)
+
+    if log_base == "e":
+        a = math.exp(float(loga))
+    else:
+        a = 10.0 ** float(loga)
 
     yhat = a * np.power(x, b)
     ss_res, r2 = r2_from_fit(y, yhat)
+    sig = sigma_hat_from_sse(ss_res, len(x))
+    lnL = gaussian_loglik(ss_res, len(x))
     aic = aic_gaussian(ss_res, len(x), 2)
 
     return {
@@ -255,6 +376,8 @@ def fit_power_real(x, y):
         "b": float(b),
         "r2": float(r2) if np.isfinite(r2) else np.nan,
         "sse": float(ss_res),
+        "sigma_hat": float(sig) if np.isfinite(sig) else np.nan,
+        "lnL": float(lnL) if np.isfinite(lnL) else np.nan,
         "aic": float(aic) if np.isfinite(aic) else np.nan,
         "equation": f"y = {fmt(a)} * x^{fmt(b)}",
         "predict": lambda xx: a * np.power(np.asarray(xx, float), b),
@@ -278,6 +401,8 @@ def fit_power_loglog(x, y):
     a, b = np.linalg.lstsq(A, y, rcond=None)[0]
     yhat = a * x + b
     ss_res, r2 = r2_from_fit(y, yhat)
+    sig = sigma_hat_from_sse(ss_res, len(x))
+    lnL = gaussian_loglik(ss_res, len(x))
     aic = aic_gaussian(ss_res, len(x), 2)
     sign = "+" if b >= 0 else "-"
 
@@ -289,6 +414,8 @@ def fit_power_loglog(x, y):
         "b": float(b),
         "r2": float(r2) if np.isfinite(r2) else np.nan,
         "sse": float(ss_res),
+        "sigma_hat": float(sig) if np.isfinite(sig) else np.nan,
+        "lnL": float(lnL) if np.isfinite(lnL) else np.nan,
         "aic": float(aic) if np.isfinite(aic) else np.nan,
         "equation": f"y = {fmt(a)}*x {sign} {fmt(abs(b))}",
         "predict": lambda xx: a * np.asarray(xx, float) + b,
@@ -308,10 +435,19 @@ def _logistic_init_guess(x, y):
 
     y_min = float(np.min(y))
     y_max = float(np.max(y))
-    L = max(1e-6, y_max - y_min)
-    c = y_min
+    yr = max(1e-6, y_max - y_min)
 
-    y_mid = y_min + 0.5 * L
+    trend = float(y[-1] - y[0])
+
+    if trend >= 0:
+        c = y_min
+        L = yr
+        y_mid = c + 0.5 * L
+    else:
+        c = y_max
+        L = -yr
+        y_mid = c + 0.5 * L
+
     j = int(np.argmin(np.abs(y - y_mid)))
     x0 = float(x[j])
 
@@ -320,7 +456,7 @@ def _logistic_init_guess(x, y):
         dy = float(y[j0 + 1] - y[j0 - 1])
         dx = float(x[j0 + 1] - x[j0 - 1])
         slope = dy / dx if dx != 0 else 0.0
-        k = abs(4.0 * slope / max(L, 1e-6))
+        k = abs(4.0 * slope / max(abs(L), 1e-6))
         k = float(np.clip(k, K_MIN, K_MAX))
     else:
         k = 1.0
@@ -349,8 +485,9 @@ def fit_logistic4(x, y, max_seconds=20.0):
     stepc  = 0.25 * max(abs(Lb), 1e-6)
 
     def clamp_params(L, k, x0, c):
-        L = max(1e-9, L)
-        k = float(np.clip(k, K_MIN, K_MAX))
+        if abs(L) < 1e-9:
+            L = -1e-9 if L < 0 else 1e-9
+        k = float(np.clip(abs(k), K_MIN, K_MAX))
         return L, k, x0, c
 
     def current_sse(L, k, x0, c):
@@ -386,6 +523,8 @@ def fit_logistic4(x, y, max_seconds=20.0):
 
     yhat = logistic4(x, Lb, kb, x0b, cb)
     ss_res, r2 = r2_from_fit(y, yhat)
+    sig = sigma_hat_from_sse(ss_res, n)
+    lnL = gaussian_loglik(ss_res, n)
     aic = aic_gaussian(ss_res, n, 4)
 
     eq = (
@@ -402,6 +541,8 @@ def fit_logistic4(x, y, max_seconds=20.0):
         "c": float(cb),
         "r2": float(r2) if np.isfinite(r2) else np.nan,
         "sse": float(ss_res),
+        "sigma_hat": float(sig) if np.isfinite(sig) else np.nan,
+        "lnL": float(lnL) if np.isfinite(lnL) else np.nan,
         "aic": float(aic) if np.isfinite(aic) else np.nan,
         "equation": eq,
         "predict": lambda xx: logistic4(np.asarray(xx, float), Lb, kb, x0b, cb),
@@ -411,7 +552,7 @@ def fit_logistic4(x, y, max_seconds=20.0):
 # COMPARISON LOGIC
 # =============================================================================
 
-def compare_two_methods(x, y, space, logistic_max_seconds):
+def compare_two_methods(x, y, space, logistic_max_seconds, log_base="10"):
     """
     Returns dict with both fits + winner.
     """
@@ -425,7 +566,7 @@ def compare_two_methods(x, y, space, logistic_max_seconds):
         return None
 
     if space == "REAL":
-        power = fit_power_real(x, y)
+        power = fit_power_real(x, y, log_base=log_base)
     else:
         power = fit_power_loglog(x, y)
 
@@ -448,7 +589,8 @@ def compare_two_methods(x, y, space, logistic_max_seconds):
     }
 
 def add_compare_row(rows, level, group_name, mode, space, xcol, ycol,
-                    n_valid, folder_sources, run_names, fitcmp):
+                    n_valid, folder_sources, run_names, fitcmp,
+                    log_base, normalize, x_norm, y_norm):
     p = fitcmp["power"]
     l = fitcmp["logistic4"]
 
@@ -462,10 +604,27 @@ def add_compare_row(rows, level, group_name, mode, space, xcol, ycol,
         "n_valid": n_valid,
         "winner": fitcmp["winner"],
 
+        "log_base": log_base,
+        "normalize": normalize,
+
+        "x_norm_method": x_norm["method"],
+        "x_norm_center": x_norm["center"],
+        "x_norm_scale": x_norm["scale"],
+        "x_norm_vmin": x_norm.get("vmin", np.nan),
+        "x_norm_vmax": x_norm.get("vmax", np.nan),
+
+        "y_norm_method": y_norm["method"],
+        "y_norm_center": y_norm["center"],
+        "y_norm_scale": y_norm["scale"],
+        "y_norm_vmin": y_norm.get("vmin", np.nan),
+        "y_norm_vmax": y_norm.get("vmax", np.nan),
+
         "power_equation": p.get("equation", ""),
         "power_a": p.get("a", np.nan),
         "power_b": p.get("b", np.nan),
         "power_r2": p.get("r2", np.nan),
+        "power_sigma_hat": p.get("sigma_hat", np.nan),
+        "power_lnL": p.get("lnL", np.nan),
         "power_aic": p.get("aic", np.nan),
         "power_sse": p.get("sse", np.nan),
 
@@ -475,6 +634,8 @@ def add_compare_row(rows, level, group_name, mode, space, xcol, ycol,
         "logistic_x0": l.get("x0", np.nan),
         "logistic_c": l.get("c", np.nan),
         "logistic_r2": l.get("r2", np.nan),
+        "logistic_sigma_hat": l.get("sigma_hat", np.nan),
+        "logistic_lnL": l.get("lnL", np.nan),
         "logistic_aic": l.get("aic", np.nan),
         "logistic_sse": l.get("sse", np.nan),
 
@@ -544,11 +705,17 @@ def write_gnuplot_script(csv_path: Path, gp_path: Path, png_path: Path,
 
     ptxt = (
         f"POWER: {compact_text(fitcmp['power']['equation'])} | "
-        f"R2={fmt(fitcmp['power']['r2'],5)} | AIC={fmt(fitcmp['power']['aic'],5)}"
+        f"R2={fmt(fitcmp['power']['r2'],5)} | "
+        f"sigma={fmt(fitcmp['power']['sigma_hat'],5)} | "
+        f"lnL={fmt(fitcmp['power']['lnL'],5)} | "
+        f"AIC={fmt(fitcmp['power']['aic'],5)}"
     )
     ltxt = (
         f"LOGISTIC: {compact_text(fitcmp['logistic4']['equation'])} | "
-        f"R2={fmt(fitcmp['logistic4']['r2'],5)} | AIC={fmt(fitcmp['logistic4']['aic'],5)}"
+        f"R2={fmt(fitcmp['logistic4']['r2'],5)} | "
+        f"sigma={fmt(fitcmp['logistic4']['sigma_hat'],5)} | "
+        f"lnL={fmt(fitcmp['logistic4']['lnL'],5)} | "
+        f"AIC={fmt(fitcmp['logistic4']['aic'],5)}"
     )
     wtxt = f"Winner: {fitcmp['winner']}"
 
@@ -685,6 +852,12 @@ def main():
     ap.add_argument("--outdir", type=str, default="COMPARE_POWER_VS_LOGISTIC",
                     help="Output folder under top")
 
+    ap.add_argument("--log-base", type=str, default="10", choices=["10", "e"],
+                    help="Base used when rebuilding log-space columns such as logS/logRho/logSig/logTheta.")
+
+    ap.add_argument("--normalize", type=str, default="none", choices=["none", "zscore", "minmax"],
+                    help="Normalize x and y within each comparison group (sample/site/all).")
+
     args = ap.parse_args()
 
     top = Path(args.top).expanduser().resolve()
@@ -775,8 +948,6 @@ def main():
         dmode = df_all.loc[df_all["__mode"].astype(str) == mode].copy()
         if dmode.empty:
             continue
-        if xcol not in dmode.columns or ycol not in dmode.columns:
-            continue
 
         for level in levels:
             if level == "SAMPLE":
@@ -798,18 +969,26 @@ def main():
                 if dfg.empty:
                     continue
 
-                x = safe_float_series(dfg[xcol]).to_numpy(float)
-                y = safe_float_series(dfg[ycol]).to_numpy(float)
+                x = resolve_series(dfg, xcol, args.log_base)
+                y = resolve_series(dfg, ycol, args.log_base)
+
                 m = np.isfinite(x) & np.isfinite(y)
                 n_valid = int(np.sum(m))
                 if n_valid < args.min_points:
                     continue
 
+                x_norm = fit_normalizer(x[m], args.normalize)
+                y_norm = fit_normalizer(y[m], args.normalize)
+
+                x_used = apply_normalizer(x[m], x_norm)
+                y_used = apply_normalizer(y[m], y_norm)
+
                 fitcmp = compare_two_methods(
-                    x=x[m],
-                    y=y[m],
+                    x=x_used,
+                    y=y_used,
                     space=space,
                     logistic_max_seconds=args.logistic_max_seconds,
+                    log_base=args.log_base,
                 )
                 if fitcmp is None:
                     continue
@@ -829,6 +1008,10 @@ def main():
                     folder_sources=folder_sources,
                     run_names=run_names,
                     fitcmp=fitcmp,
+                    log_base=args.log_base,
+                    normalize=args.normalize,
+                    x_norm=x_norm,
+                    y_norm=y_norm,
                 )
 
                 dfg_used = dfg.loc[m].copy()
@@ -838,6 +1021,10 @@ def main():
                 dfg_used["__xcol"] = xcol
                 dfg_used["__ycol"] = ycol
                 dfg_used["__winner"] = fitcmp["winner"]
+                dfg_used["__x_used"] = x_used
+                dfg_used["__y_used"] = y_used
+                dfg_used["__log_base"] = args.log_base
+                dfg_used["__normalize"] = args.normalize
                 used_rows_all.append(dfg_used)
 
                 if not args.no_plots:
@@ -849,15 +1036,19 @@ def main():
                         f"{level} {g}: {human_label(ycol)} vs {human_label(xcol)} "
                         f"[{mode}, {space}, {args.freq:g} Hz]"
                     )
-                    plot_jobs.append((dfg_used.copy(), xcol, ycol, fitcmp, png, title))
+                    plot_df = pd.DataFrame({
+                        "x_used": x_used,
+                        "y_used": y_used,
+                    })
+                    plot_jobs.append((plot_df, "x_used", "y_used", fitcmp, png, title))
 
     compare_df = pd.DataFrame(compare_rows)
     used_df = pd.concat(used_rows_all, axis=0, ignore_index=True) if used_rows_all else pd.DataFrame()
 
-    for dfg_used, xcol, ycol, fitcmp, png, title in plot_jobs:
+    for dfg_used, xcol_plot, ycol_plot, fitcmp, png, title in plot_jobs:
         try:
             save_compare_plot(
-                dfg_used, xcol, ycol, fitcmp, png, title,
+                dfg_used, xcol_plot, ycol_plot, fitcmp, png, title,
                 plot_equations=args.plot_equations,
                 eq_position=args.eq_position,
             )
@@ -882,6 +1073,8 @@ def main():
             "plot_equations",
             "eq_position",
             "no_plots",
+            "log_base",
+            "normalize",
             "cases",
         ],
         "value": [
@@ -894,6 +1087,8 @@ def main():
             args.plot_equations,
             args.eq_position,
             args.no_plots,
+            args.log_base,
+            args.normalize,
             "; ".join([f"{m}|{sp}|{x}|{y}" for (m, sp, x, y) in cases]),
         ]
     })
@@ -946,3 +1141,104 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+# =============================================================================
+# RUNNER
+# =============================================================================
+# Default:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4
+
+# With equations on plots:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --plot-equations
+
+# Natural log version:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --log-base e
+
+# Normalize within each comparison group using z-score:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --normalize zscore
+
+# Normalize within each comparison group using min-max:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --normalize minmax
+
+# Include VN target comparisons too:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --include-vn-targets
+
+# Include theta comparisons too (if theta/logTheta exist):
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --include-theta
+
+# Custom cases only:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --case UNORM REAL S rho_real \
+#   --case UNORM REAL S sig_real \
+#   --case UNORM LOGLOG logS logRho \
+#   --case UNORM LOGLOG logS logSig \
+#   --logistic-max-seconds 20 \
+#   --min-points 4
+
+# Custom cases + also include defaults:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --case UNORM REAL S rho_real \
+#   --case UNORM REAL S sig_real \
+#   --include-default-cases \
+#   --logistic-max-seconds 20 \
+#   --min-points 4
+
+# UNORM only:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode UNORM \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4
+
+# NORM only:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode NORM \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4
+
+# No plots, tables/files only:
+# python3 sip_compare_power_vs_logistic.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --mode BOTH \
+#   --freq 0.01 \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --no-plots

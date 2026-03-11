@@ -28,6 +28,9 @@ legacy-style + requested updates:
 7) Adds backup cleanup switch:
    - --purge-backups removes Results__backup_* folders inside each run
      before processing that run.
+8) Adds log-base switch:
+   - --log-base 10   -> legacy behavior
+   - --log-base e    -> natural log
 
 FIXES:
 ------------------------
@@ -126,11 +129,11 @@ def to_float(x):
     except Exception:
         return float("nan")
 
-def safe_log10(x):
+def safe_log(x, base: str = "10"):
     x = float(x)
     if not np.isfinite(x) or x <= 0:
         return np.nan
-    return math.log10(x)
+    return math.log(x) if base == "e" else math.log10(x)
 
 def sse(y, yhat):
     r = y - yhat
@@ -1114,7 +1117,8 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
                      all_rows_accum: list,
                      per_run_excel_rows: list,
                      all_eq_rows_accum: list,
-                     per_run_eq_rows: list):
+                     per_run_eq_rows: list,
+                     log_base: str):
     analysis_dir = run_root / ANALYSIS_DIR
     raw_dir      = run_root / RAW_DIR
     results_dir  = run_root / RESULTS_DIR
@@ -1143,9 +1147,9 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
     )
     sip_df["S"] = sip_df["measurement_norm"].map(sat_map).astype(float)
 
-    sip_df["logS"]    = sip_df["S"].apply(safe_log10)
-    sip_df["logRho"]  = sip_df["rho"].apply(safe_log10)
-    sip_df["logSig"]  = sip_df["sigma_imag"].apply(safe_log10)
+    sip_df["logS"]    = sip_df["S"].apply(lambda v: safe_log(v, log_base))
+    sip_df["logRho"]  = sip_df["rho"].apply(lambda v: safe_log(v, log_base))
+    sip_df["logSig"]  = sip_df["sigma_imag"].apply(lambda v: safe_log(v, log_base))
 
     sip_df.copy().to_csv(results_dir / f"debug_before_filter_{tag}Hz__{mode}.csv", index=False, na_rep="")
 
@@ -1161,8 +1165,8 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
     iref = int(np.nanargmax(sip_df["S"].to_numpy(float)))
     rho_ref  = float(sip_df.iloc[iref]["rho"])
     sig_ref  = float(sip_df.iloc[iref]["sigma_imag"])
-    logRho_ref = safe_log10(rho_ref)
-    logSig_ref = safe_log10(sig_ref)
+    logRho_ref = safe_log(rho_ref, log_base)
+    logSig_ref = safe_log(sig_ref, log_base)
 
     sip_df["rho_ref"] = rho_ref
     sip_df["sig_ref"] = sig_ref
@@ -1617,6 +1621,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         row["source"] = source_label
         row["mode"] = mode
         row["ici_mode"] = ici_mode
+        row["log_base"] = log_base
         row["freq_target"] = target_freq
         row["tag"] = tag
         row["logbook_sheet"] = used_sheet
@@ -1645,6 +1650,7 @@ def process_one_mode(run_root: Path, target_freq: float, sheet_filter: str | Non
         "poly_deg": int(poly_deg) if (poly_deg and poly_deg >= 2) else 0,
         "log4_enabled": bool(do_log4),
         "plot_equations": bool(plot_equations),
+        "log_base": log_base,
         "has_log_points": bool(has_log_points),
         "log4_diag_status": ("accepted" if log4_accepted else "rejected") if (log_fit_used is not None) else "no_fit",
         "log4_diag_reason": str(log4_reason),
@@ -1698,6 +1704,9 @@ def main():
     ap.add_argument("--both-modes", action="store_true",
                     help="Run BOTH NORM and UNORM modes (recommended).")
 
+    ap.add_argument("--log-base", type=str, default="10", choices=["10", "e"],
+                    help="Base for log columns: 10 or natural log e.")
+
     args = ap.parse_args()
 
     base = Path(args.top).expanduser().resolve()
@@ -1750,7 +1759,8 @@ def main():
                     all_rows_accum=all_rows,
                     per_run_excel_rows=per_run_excel_rows,
                     all_eq_rows_accum=all_eq_rows,
-                    per_run_eq_rows=per_run_eq_rows
+                    per_run_eq_rows=per_run_eq_rows,
+                    log_base=args.log_base
                 )
                 res["i"] = i
                 summary_rows.append(res)
@@ -1834,3 +1844,13 @@ if __name__ == "__main__":
 #   --ici-mode sig_over_sigref \
 #   --poly-deg 2 --poly-raw \
 #   --logistic4
+#
+# Natural log version:
+# python3 sip_pipeline.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --clean-results --both-modes \
+#   --freq 0.01 --min-points 4 \
+#   --logistic-fast --logistic-max-seconds 8 \
+#   --ici-mode sig_over_sigref \
+#   --poly-deg 2 --poly-raw \
+#   --logistic4 \
+#   --log-base e
