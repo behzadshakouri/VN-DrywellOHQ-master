@@ -68,3 +68,9 @@ Build-Release-6.9.1/
 Build-Debug-5.15.2/
 
 Build-Release-5.15.2/
+
+*.pdf
+
+*.docx
+
+Data analysis and plot scripts/Docs/compare_cond_unorm__0p01Hz.xlsx

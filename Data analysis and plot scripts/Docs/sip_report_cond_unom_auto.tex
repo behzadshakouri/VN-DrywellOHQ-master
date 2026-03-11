@@ -1,0 +1,364 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{pgfplotstable}
+\usepackage{etoolbox}
+\usepackage{shellesc}
+
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+\definecolor{accent}{RGB}{25,56,99}
+
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+
+% ------------------------------------------------------------------
+% USER SETTINGS
+% ------------------------------------------------------------------
+\newcommand{\ReportFreq}{0.01}
+\newcommand{\CompareXLSX}{compare_cond_unorm__0p01Hz.xlsx}
+
+% Temporary CSVs generated from workbook sheets
+\newcommand{\TmpAll}{tmp_compare_ALL.csv}
+\newcommand{\TmpSample}{tmp_cmp_SAMPLE.csv}
+\newcommand{\TmpSite}{tmp_cmp_SITE.csv}
+\newcommand{\TmpAllOnly}{tmp_cmp_ALL.csv}
+\newcommand{\TmpSettings}{tmp_settings.csv}
+
+% ------------------------------------------------------------------
+% Convert XLSX sheets to CSV at compile time
+% Requires: pdflatex --shell-escape
+% Requires: xlsx2csv installed
+% ------------------------------------------------------------------
+\ShellEscape{xlsx2csv -n compare_ALL "\CompareXLSX" "\TmpAll"}
+\ShellEscape{xlsx2csv -n cmp_SAMPLE "\CompareXLSX" "\TmpSample"}
+\ShellEscape{xlsx2csv -n cmp_SITE "\CompareXLSX" "\TmpSite"}
+\ShellEscape{xlsx2csv -n cmp_ALL "\CompareXLSX" "\TmpAllOnly"}
+\ShellEscape{xlsx2csv -n settings "\CompareXLSX" "\TmpSettings"}
+
+% ------------------------------------------------------------------
+% PGFPLOTSTABLE SETTINGS
+% ------------------------------------------------------------------
+\pgfplotstableset{
+  col sep=comma,
+  string type,
+  empty cells with={},
+}
+
+\pgfplotstableset{
+  reportstyle/.style={
+    every head row/.style={
+      before row=\toprule,
+      after row=\midrule
+    },
+    every last row/.style={
+      after row=\bottomrule
+    }
+  }
+}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries\color{accent}
+Comparison of Power-Law and Logistic Models for Conductivity--Saturation Relationships}\\[0.4em]
+{\large UNORM analysis of SIP column experiments at \ReportFreq\ Hz}
+\end{center}
+
+\section{Objective}
+
+This report summarizes the conductivity-only UNORM comparison workflow using tables read directly from the workbook
+\texttt{\CompareXLSX}.
+
+The goal is to determine whether the conductivity--saturation relationship is better described by a power-law model or a logistic model.
+
+The analysis compares the two candidate forms:
+\[
+\sigma = aS^b
+\]
+and
+\[
+\sigma = c + \frac{L}{1+\exp[-k(S-x_0)]}
+\]
+
+using the following model-selection statistics:
+
+\begin{itemize}[leftmargin=1.5em]
+\item residual standard deviation $\sigma$
+\item Gaussian log-likelihood $\ln L$
+\item Akaike Information Criterion (AIC)
+\end{itemize}
+
+The preferred model is the one with the smaller AIC.
+
+\section{Input workbook}
+
+This report is designed to compile in the same folder as:
+
+\begin{itemize}[leftmargin=1.5em]
+\item \texttt{\CompareXLSX}
+\end{itemize}
+
+The following sheets are read automatically from the workbook:
+
+\begin{itemize}[leftmargin=1.5em]
+\item \texttt{compare\_ALL}
+\item \texttt{cmp\_SAMPLE}
+\item \texttt{cmp\_SITE}
+\item \texttt{cmp\_ALL}
+\item \texttt{settings}
+\end{itemize}
+
+\section{Analysis structure}
+
+The conductivity comparison is performed at three aggregation levels:
+
+\begin{longtable}{p{0.20\textwidth} p{0.65\textwidth}}
+\toprule
+\textbf{Level} & \textbf{Description}\\
+\midrule
+\endhead
+Sample & Each run is analyzed independently.\\
+Site & All runs belonging to the same site are pooled together.\\
+All & All available runs are combined into one dataset.\\
+\bottomrule
+\end{longtable}
+
+Normalization, when enabled in the workflow, is applied only over the relevant group range.  
+That means sample-level fits use sample-specific scaling, site-level fits use site-specific scaling, and all-data fits use the full combined range.
+
+\section{Model comparison criteria}
+
+For each fitted group, the workflow reports:
+
+\begin{longtable}{p{0.24\textwidth} p{0.62\textwidth}}
+\toprule
+\textbf{Metric} & \textbf{Interpretation}\\
+\midrule
+\endhead
+$R^2$ & Fraction of variance explained by the model.\\
+SSE & Sum of squared residuals. Smaller values indicate a closer fit.\\
+$\sigma$ & Residual standard deviation, estimated as $\sqrt{SSE/n}$.\\
+$\ln L$ & Gaussian log-likelihood. Larger values indicate a better fit.\\
+AIC & Information criterion balancing fit quality and model complexity. Smaller values are preferred.\\
+\bottomrule
+\end{longtable}
+
+The power-law model has two fitted parameters, while the logistic model has four.  
+AIC therefore penalizes the logistic model more strongly unless its improvement in fit is large enough to justify the extra flexibility.
+
+\section{Workbook settings}
+
+\pgfplotstabletypeset[
+  reportstyle,
+  columns={key,value},
+  columns/key/.style={column name=Setting, string type, column type={p{0.28\textwidth}}},
+  columns/value/.style={column name=Value, string type, column type={p{0.56\textwidth}}}
+]{\TmpSettings}
+
+\section{Automatic summary from workbook output}
+
+The following tables are read directly from \texttt{\CompareXLSX}.  
+This makes the report reproducible from the exported pipeline results.
+
+\subsection{All fitted groups}
+
+\pgfplotstabletypeset[
+  reportstyle,
+  columns={
+    level,
+    group,
+    space,
+    n_valid,
+    winner,
+    power_sigma_hat,
+    power_lnL,
+    power_aic,
+    logistic_amp_L,
+    logistic_sigma_hat,
+    logistic_lnL,
+    logistic_aic,
+    delta_aic_logistic_minus_power
+  },
+  columns/level/.style={column name=Level, string type, column type={p{0.10\textwidth}}},
+  columns/group/.style={column name=Group, string type, column type={p{0.15\textwidth}}},
+  columns/space/.style={column name=Space, string type, column type={p{0.08\textwidth}}},
+  columns/n_valid/.style={column name=$n$, column type={r}},
+  columns/winner/.style={column name=Winner, string type, column type={p{0.10\textwidth}}},
+  columns/power_sigma_hat/.style={column name=Power $\sigma$, fixed, precision=4, column type={r}},
+  columns/power_lnL/.style={column name=Power $\ln L$, fixed, precision=3, column type={r}},
+  columns/power_aic/.style={column name=Power AIC, fixed, precision=3, column type={r}},
+  columns/logistic_amp_L/.style={column name=Logistic $L$, fixed, precision=4, column type={r}},
+  columns/logistic_sigma_hat/.style={column name=Logistic $\sigma$, fixed, precision=4, column type={r}},
+  columns/logistic_lnL/.style={column name=Logistic $\ln L$, fixed, precision=3, column type={r}},
+  columns/logistic_aic/.style={column name=Logistic AIC, fixed, precision=3, column type={r}},
+  columns/delta_aic_logistic_minus_power/.style={column name=$\Delta$AIC, fixed, precision=3, column type={r}}
+]{\TmpAll}
+
+\section{Condensed interpretation guide}
+
+The last column in the table above is
+\[
+\Delta AIC = AIC_{\text{logistic}} - AIC_{\text{power}}
+\]
+
+Interpretation:
+
+\begin{itemize}[leftmargin=1.5em]
+\item $\Delta AIC < 0$ means the logistic model is preferred.
+\item $\Delta AIC > 0$ means the power-law model is preferred.
+\item Larger negative values indicate stronger support for the logistic model.
+\item Larger positive values indicate stronger support for the power-law model.
+\end{itemize}
+
+\section{Sample-level results}
+
+\pgfplotstabletypeset[
+  reportstyle,
+  columns={
+    group,
+    n_valid,
+    winner,
+    power_aic,
+    logistic_aic,
+    delta_aic_logistic_minus_power,
+    power_equation,
+    logistic_equation
+  },
+  columns/group/.style={column name=Sample, string type, column type={p{0.14\textwidth}}},
+  columns/n_valid/.style={column name=$n$, column type={r}},
+  columns/winner/.style={column name=Winner, string type, column type={p{0.10\textwidth}}},
+  columns/power_aic/.style={column name=Power AIC, fixed, precision=3, column type={r}},
+  columns/logistic_aic/.style={column name=Logistic AIC, fixed, precision=3, column type={r}},
+  columns/delta_aic_logistic_minus_power/.style={column name=$\Delta$AIC, fixed, precision=3, column type={r}},
+  columns/power_equation/.style={column name=Power equation, string type, column type={p{0.20\textwidth}}},
+  columns/logistic_equation/.style={column name=Logistic equation, string type, column type={p{0.24\textwidth}}}
+]{\TmpSample}
+
+\section{Site-level results}
+
+\pgfplotstabletypeset[
+  reportstyle,
+  columns={
+    group,
+    n_valid,
+    winner,
+    power_aic,
+    logistic_aic,
+    delta_aic_logistic_minus_power,
+    power_equation,
+    logistic_equation
+  },
+  columns/group/.style={column name=Site, string type, column type={p{0.14\textwidth}}},
+  columns/n_valid/.style={column name=$n$, column type={r}},
+  columns/winner/.style={column name=Winner, string type, column type={p{0.10\textwidth}}},
+  columns/power_aic/.style={column name=Power AIC, fixed, precision=3, column type={r}},
+  columns/logistic_aic/.style={column name=Logistic AIC, fixed, precision=3, column type={r}},
+  columns/delta_aic_logistic_minus_power/.style={column name=$\Delta$AIC, fixed, precision=3, column type={r}},
+  columns/power_equation/.style={column name=Power equation, string type, column type={p{0.20\textwidth}}},
+  columns/logistic_equation/.style={column name=Logistic equation, string type, column type={p{0.24\textwidth}}}
+]{\TmpSite}
+
+\section{All-data result}
+
+\pgfplotstabletypeset[
+  reportstyle,
+  columns={
+    group,
+    space,
+    n_valid,
+    winner,
+    power_sigma_hat,
+    power_lnL,
+    power_aic,
+    logistic_amp_L,
+    logistic_sigma_hat,
+    logistic_lnL,
+    logistic_aic,
+    delta_aic_logistic_minus_power,
+    power_equation,
+    logistic_equation
+  },
+  columns/group/.style={column name=Group, string type, column type={p{0.10\textwidth}}},
+  columns/space/.style={column name=Space, string type, column type={p{0.08\textwidth}}},
+  columns/n_valid/.style={column name=$n$, column type={r}},
+  columns/winner/.style={column name=Winner, string type, column type={p{0.10\textwidth}}},
+  columns/power_sigma_hat/.style={column name=Power $\sigma$, fixed, precision=4, column type={r}},
+  columns/power_lnL/.style={column name=Power $\ln L$, fixed, precision=3, column type={r}},
+  columns/power_aic/.style={column name=Power AIC, fixed, precision=3, column type={r}},
+  columns/logistic_amp_L/.style={column name=Logistic $L$, fixed, precision=4, column type={r}},
+  columns/logistic_sigma_hat/.style={column name=Logistic $\sigma$, fixed, precision=4, column type={r}},
+  columns/logistic_lnL/.style={column name=Logistic $\ln L$, fixed, precision=3, column type={r}},
+  columns/logistic_aic/.style={column name=Logistic AIC, fixed, precision=3, column type={r}},
+  columns/delta_aic_logistic_minus_power/.style={column name=$\Delta$AIC, fixed, precision=3, column type={r}},
+  columns/power_equation/.style={column name=Power equation, string type, column type={p{0.18\textwidth}}},
+  columns/logistic_equation/.style={column name=Logistic equation, string type, column type={p{0.22\textwidth}}}
+]{\TmpAllOnly}
+
+\section{Physical interpretation}
+
+Conductivity in partially saturated porous media may follow either of two broad patterns.
+
+\subsection{Power-law behavior}
+
+A power-law fit suggests a smooth monotonic scaling between saturation and conductivity, without a distinct transition zone.
+
+\subsection{Logistic behavior}
+
+A logistic fit suggests threshold-like behavior. This may reflect:
+
+\begin{itemize}[leftmargin=1.5em]
+\item formation of connected water pathways
+\item onset of pore-network connectivity
+\item rapid rise in conductivity over a limited saturation interval
+\item stabilization toward an upper plateau at high saturation
+\end{itemize}
+
+In many partially saturated systems, conductivity is more sensitive than resistivity to such connectivity transitions.
+
+\section{How to read the exported plots}
+
+The comparison workflow also writes plots for each fitted group.  
+Each plot contains:
+
+\begin{itemize}[leftmargin=1.5em]
+\item measured conductivity data
+\item fitted power-law curve
+\item fitted logistic curve
+\item optional labels with $\sigma$, $\ln L$, and AIC
+\end{itemize}
+
+These plots should be interpreted together with the AIC table.  
+A visually flexible curve is not automatically preferred unless its AIC is smaller.
+
+\section{Conclusion}
+
+This report provides a reproducible summary of the UNORM conductivity comparison workflow.
+
+The key decision rule is:
+
+\[
+\text{Choose the model with the smaller AIC}
+\]
+
+while also reviewing:
+
+\begin{itemize}[leftmargin=1.5em]
+\item residual standard deviation
+\item Gaussian log-likelihood
+\item fitted equations
+\item plotted curve shapes
+\end{itemize}
+
+Together, these outputs help determine whether conductivity is better represented by smooth power-law scaling or by threshold-driven logistic behavior.
+
+\end{document}

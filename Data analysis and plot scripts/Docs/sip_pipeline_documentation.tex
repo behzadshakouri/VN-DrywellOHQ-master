@@ -1,0 +1,291 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsmath,amssymb}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+\definecolor{accent}{RGB}{25,56,99}
+
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+\begin{center}
+{\LARGE\bfseries\color{accent} Documentation for the SIP Processing Pipeline}\\[0.4em]
+{\large Automated extraction, regression analysis, and model comparison for SIP column experiments}
+\end{center}
+
+\section{Purpose and scope}
+
+This pipeline provides an automated workflow for processing Spectral Induced Polarization (SIP) column experiment datasets.  
+The system extracts electrical measurements from processed SIP workbooks, matches them with laboratory saturation records, computes derived variables, and evaluates statistical relationships between saturation and electrical properties.
+
+The current version supports:
+
+\begin{itemize}[leftmargin=1.5em]
+\item batch processing of multiple experiment folders
+\item normalized and unnormalized processing modes
+\item regression analysis using multiple candidate models
+\item automated comparison between power-law and logistic relationships
+\item statistical evaluation using $R^2$, SSE, log-likelihood, and AIC
+\end{itemize}
+
+The pipeline therefore serves both as a scientific analysis tool and as a reproducible data-processing framework.
+
+\section{Directory structure}
+
+\begin{longtable}{p{0.22\textwidth} p{0.28\textwidth} p{0.40\textwidth}}
+\toprule
+\textbf{Location} & \textbf{Expected content} & \textbf{Purpose}\\
+\midrule
+\endhead
+\texttt{Analysis/} & Processed SIP workbook & Electrical measurements extracted from each sheet.\\
+\texttt{SIP\_Raw\_Data/} & Laboratory logbook workbook & Provides water saturation or parameters required to derive it.\\
+\texttt{Results/} & Output directory & Stores merged data tables, regression outputs, plots, and summaries.\\
+\bottomrule
+\end{longtable}
+
+\section{Processing workflow}
+
+\begin{longtable}{p{0.07\textwidth} p{0.52\textwidth} p{0.28\textwidth}}
+\toprule
+\textbf{Step} & \textbf{Action} & \textbf{Output}\\
+\midrule
+\endhead
+1 & Identify experiment folders containing both required input directories. & Valid run list\\
+2 & Locate SIP workbook and logbook workbook. & Input file paths\\
+3 & Extract the row nearest the target frequency from each SIP sheet. & Electrical measurements\\
+4 & Match measurement identifiers with saturation entries in the logbook. & Saturation mapping\\
+5 & Compute derived variables and log transformations. & Joined dataset\\
+6 & Fit regression models describing saturation–electrical relationships. & Model parameters\\
+7 & Generate plots and summary tables. & CSV, Excel, PNG outputs\\
+\bottomrule
+\end{longtable}
+
+\section{Derived variables}
+
+The pipeline computes several derived variables from the raw measurements.
+
+\subsection{Saturation}
+
+If saturation is directly available in the logbook:
+
+\[
+S = \text{saturation value}
+\]
+
+If derived from water mass:
+
+\[
+S = \frac{M_w}{\rho_w \phi V}
+\]
+
+where
+
+\begin{itemize}
+\item $M_w$ = water mass
+\item $\rho_w$ = water density
+\item $\phi$ = porosity
+\item $V$ = column volume
+\end{itemize}
+
+\subsection{Logarithmic transforms}
+
+The pipeline can use either base-10 logarithms or natural logarithms.
+
+Base-10 transforms:
+
+\[
+\log_{10} S,\qquad
+\log_{10} \rho,\qquad
+\log_{10} \sigma
+\]
+
+Natural logarithm option:
+
+\[
+\ln S,\qquad
+\ln \rho,\qquad
+\ln \sigma
+\]
+
+Rows with non-positive values are excluded from log-domain regression.
+
+\section{Normalization}
+
+Optional normalization can be applied to both variables prior to regression.
+
+Normalization is always performed using the data range corresponding to the analysis level.
+
+\begin{itemize}
+\item Sample-level normalization uses only that sample's data.
+\item Site-level normalization uses all samples belonging to the same site.
+\item Global normalization uses the full dataset.
+\end{itemize}
+
+Available normalization methods include:
+
+\subsection{Z-score normalization}
+
+\[
+x' = \frac{x - \mu}{\sigma}
+\]
+
+\subsection{Min–max normalization}
+
+\[
+x' = \frac{x - x_{min}}{x_{max} - x_{min}}
+\]
+
+\section{Regression models}
+
+Two primary model families are evaluated.
+
+\subsection{Power-law model}
+
+\[
+y = a S^b
+\]
+
+In logarithmic form:
+
+\[
+\log y = b \log S + \log a
+\]
+
+The power-law model is traditionally used for resistivity–saturation relationships.
+
+\subsection{Logistic model}
+
+The logistic model captures threshold behavior:
+
+\[
+y = c + \frac{L}{1 + \exp[-k(S-x_0)]}
+\]
+
+Parameters represent:
+
+\begin{itemize}
+\item $L$ : amplitude
+\item $k$ : transition steepness
+\item $x_0$ : transition location
+\item $c$ : baseline level
+\end{itemize}
+
+Unlike earlier implementations, the current pipeline allows both increasing and decreasing logistic curves.
+
+\section{Statistical metrics}
+
+Each model is evaluated using several metrics.
+
+\subsection{Sum of squared errors}
+
+\[
+SSE = \sum (y_i - \hat{y}_i)^2
+\]
+
+\subsection{Coefficient of determination}
+
+\[
+R^2 = 1 - \frac{SSE}{SST}
+\]
+
+\subsection{Residual standard deviation}
+
+\[
+\sigma = \sqrt{\frac{SSE}{n}}
+\]
+
+\subsection{Log likelihood}
+
+\[
+\ln L =
+-\frac{n}{2}
+\left(
+\ln(2\pi\sigma^2) + 1
+\right)
+\]
+
+\subsection{Akaike Information Criterion}
+
+\[
+AIC = n\ln\left(\frac{SSE}{n}\right) + 2k
+\]
+
+where $k$ is the number of model parameters.
+
+The preferred model is the one with the lowest AIC.
+
+\section{Analysis levels}
+
+Model comparisons are performed at three levels.
+
+\begin{longtable}{p{0.20\textwidth} p{0.65\textwidth}}
+\toprule
+\textbf{Level} & \textbf{Definition}\\
+\midrule
+\endhead
+Sample & Regression performed separately for each experiment.\\
+Site & All experiments belonging to the same site are combined.\\
+All & Entire dataset pooled together.\\
+\bottomrule
+\end{longtable}
+
+This structure allows the analysis to distinguish between local experimental behavior and broader trends.
+
+\section{Outputs}
+
+\begin{longtable}{p{0.38\textwidth} p{0.18\textwidth} p{0.31\textwidth}}
+\toprule
+\textbf{File} & \textbf{Scope} & \textbf{Purpose}\\
+\midrule
+\endhead
+\texttt{joined\_\_MODE\_freqHz.csv} & Per run & Merged dataset containing derived variables.\\
+\texttt{compare\_power\_vs\_logistic.csv} & Global & Regression statistics for both models.\\
+\texttt{compare\_power\_vs\_logistic.xlsx} & Global & Excel summary of model comparisons.\\
+\texttt{plots/*.png} & Per group & Visual comparison of model fits.\\
+\bottomrule
+\end{longtable}
+
+\section{Interpretation}
+
+Results consistently indicate that:
+
+\begin{itemize}
+
+\item Resistivity generally follows power-law scaling with saturation.
+
+\item Conductivity often exhibits logistic behavior.
+
+\item Logistic relationships indicate threshold-controlled electrical conduction.
+
+\end{itemize}
+
+Such threshold behavior is consistent with pore connectivity theory and percolation models.
+
+\section{Summary}
+
+The SIP processing pipeline integrates:
+
+\begin{itemize}
+
+\item automated data extraction
+\item robust matching of experimental records
+\item derived-variable computation
+\item multiple regression models
+\item statistical model comparison
+\item automated visualization
+
+\end{itemize}
+
+The resulting framework provides a reproducible and extensible approach for analyzing SIP saturation experiments.
+
+\end{document}
