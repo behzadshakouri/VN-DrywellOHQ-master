@@ -82,7 +82,6 @@ import pandas as pd
 K_ABS_MIN = 0.05
 K_ABS_MAX = 50.0
 
-# default cases: focused on conductivity only
 DEFAULT_CASES = [
     ("REAL", "S", "sig_real"),
 ]
@@ -152,9 +151,6 @@ def sigma_hat_from_sse(ss_res, n):
     return float(np.sqrt(ss_res / n))
 
 def gaussian_loglik(ss_res, n):
-    """
-    Gaussian MLE log-likelihood with sigma^2 = SSE/n.
-    """
     if n <= 0 or not np.isfinite(ss_res) or ss_res <= 0:
         return np.nan
     sigma2 = ss_res / n
@@ -163,7 +159,6 @@ def gaussian_loglik(ss_res, n):
 def aic_gaussian(ss_res, n, k_params):
     if n <= 0 or k_params <= 0 or not np.isfinite(ss_res) or ss_res <= 0:
         return np.nan
-    # equivalent to -2 lnL + 2k for Gaussian MLE
     return float(n * math.log(ss_res / n) + 2.0 * k_params)
 
 def tag_from_freq(freq: float) -> str:
@@ -182,12 +177,24 @@ def compact_text(s: str) -> str:
 
 def human_label(col: str):
     mapping = {
-        "S": "Saturation",
-        "sig_real": "Conductivity",
-        "logS": "log(Saturation)",
+        "S": "Water saturation, S",
+        "sig_real": "Electrical conductivity",
+        "logS": "log(S)",
         "logSig": "log(Conductivity)",
+        "x_used": "Water saturation, S",
+        "y_used": "Electrical conductivity",
     }
     return mapping.get(col, col)
+
+def short_plot_title(level: str, group: str, space: str):
+    group = str(group)
+    if level == "SAMPLE":
+        return f"Sample: {group}"
+    if level == "SITE":
+        return f"Site: {group}"
+    if level == "ALL":
+        return "All data"
+    return f"{level}: {group}"
 
 def sheet_safe_name(name: str, max_len: int = 31) -> str:
     bad = r'[:\\/?*\[\]]'
@@ -318,11 +325,6 @@ def inverse_normalizer(v, norm):
 # =============================================================================
 
 def fit_power_real(x, y, log_base="10"):
-    """
-    REAL-space power law:
-        y = a * x^b
-    fit by log-transform, evaluate in REAL y-space.
-    """
     x = np.asarray(x, float)
     y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y) & (x > 0) & (y > 0)
@@ -364,11 +366,6 @@ def fit_power_real(x, y, log_base="10"):
     }
 
 def fit_power_logspace(x, y):
-    """
-    LOG-space linear form:
-        y = a*x + b
-    where x and y are already transformed logs.
-    """
     x = np.asarray(x, float)
     y = np.asarray(y, float)
     m = np.isfinite(x) & np.isfinite(y)
@@ -408,13 +405,6 @@ def logistic4_signed(x, L, k, x0, c):
     return c + L / (1.0 + np.exp(-z))
 
 def _logistic_init_guess_signed(x, y):
-    """
-    Allows decreasing curves by allowing signed L.
-    For increasing:
-        c ~ low plateau, L > 0
-    For decreasing:
-        c ~ high plateau, L < 0
-    """
     x = np.asarray(x, float)
     y = np.asarray(y, float)
 
@@ -468,13 +458,12 @@ def fit_logistic4_signed(x, y, max_seconds=20.0):
     x_min, x_max = float(np.min(x)), float(np.max(x))
     spanx = max(1e-6, x_max - x_min)
 
-    stepL  = 0.25 * max(abs(Lb), 1e-6)
-    stepk  = 0.25 * max(abs(kb), 1e-6)
+    stepL = 0.25 * max(abs(Lb), 1e-6)
+    stepk = 0.25 * max(abs(kb), 1e-6)
     stepx0 = 0.20 * spanx
-    stepc  = 0.25 * max(abs(Lb), 1e-6)
+    stepc = 0.25 * max(abs(Lb), 1e-6)
 
     def clamp_params(L, k, x0, c):
-        # signed L allowed; k kept positive
         if abs(L) < 1e-9:
             L = -1e-9 if L < 0 else 1e-9
         k = float(np.clip(abs(k), K_ABS_MIN, K_ABS_MAX))
@@ -528,7 +517,7 @@ def fit_logistic4_signed(x, y, max_seconds=20.0):
     return {
         "method": "logistic4",
         "n": int(n),
-        "amp_L": float(Lb),   # signed amplitude
+        "amp_L": float(Lb),
         "k": float(kb),
         "x0": float(x0b),
         "c": float(cb),
@@ -643,7 +632,7 @@ def write_gnuplot_script(csv_path: Path, gp_path: Path, png_path: Path,
                          eq_position: str = "right"):
     eq_lines = []
     unset_lines = []
-    rmargin = "set rmargin 10"
+    extra_margins = ""
 
     ptxt = (
         f"POWER: {compact_text(fitcmp['power']['equation'])} | "
@@ -662,40 +651,45 @@ def write_gnuplot_script(csv_path: Path, gp_path: Path, png_path: Path,
 
     if plot_equations:
         if eq_position == "right":
-            rmargin = "set rmargin 48"
+            extra_margins = "set rmargin 38"
             eq_lines.extend([
-                f"set label 101 '{gp_escape(ptxt)}' at graph 1.02,0.94 left front",
+                f"set label 101 '{gp_escape(ptxt)}' at graph 1.02,0.92 left front",
                 f"set label 102 '{gp_escape(ltxt)}' at graph 1.02,0.82 left front",
-                f"set label 103 '{gp_escape(wtxt)}' at graph 1.02,0.70 left front",
+                f"set label 103 '{gp_escape(wtxt)}' at graph 1.02,0.72 left front",
             ])
         else:
             eq_lines.extend([
-                f"set label 101 '{gp_escape(ptxt)}' at graph 0.02,0.95 front",
-                f"set label 102 '{gp_escape(ltxt)}' at graph 0.02,0.86 front",
-                f"set label 103 '{gp_escape(wtxt)}' at graph 0.02,0.77 front",
+                f"set label 101 '{gp_escape(ptxt)}' at graph 0.03,0.97 left front",
+                f"set label 102 '{gp_escape(ltxt)}' at graph 0.03,0.89 left front",
+                f"set label 103 '{gp_escape(wtxt)}' at graph 0.03,0.81 left front",
             ])
         unset_lines.extend(["unset label 101", "unset label 102", "unset label 103"])
 
     gp = f"""reset
 set datafile separator ','
 set datafile missing ''
-set term pngcairo size 1200,800 noenhanced font 'Arial,24'
+set term pngcairo size 1400,900 noenhanced font 'Arial,28'
 set output '{png_path.name}'
 
-set grid
-set key top right
-set tics out
-{rmargin}
-
-set title '{gp_escape(title)}'
-set xlabel '{gp_escape(xlab)}'
-set ylabel '{gp_escape(ylab)}'
+set border lw 1.2
+set grid lw 0.8
+set tics out nomirror
+set xtics font ',24'
+set ytics font ',24'
+set xlabel '{gp_escape(xlab)}' font ',30' offset 0,0.8
+set ylabel '{gp_escape(ylab)}' font ',30' offset 1.2,0
+set title '{gp_escape(title)}' font ',32'
+set lmargin 12
+set bmargin 5
+set tmargin 2
+set key at graph 0.03,0.97 left top Left reverse spacing 1.2 font ',24' opaque
+{extra_margins}
 
 {chr(10).join(eq_lines)}
 
-plot '{csv_path.name}' using (column("x_data")):(column("y_data")) with points pt 7 ps 1.6 title 'data', \\
-     '{csv_path.name}' using (column("x_fit")):(column("y_power")) with lines lw 3 title 'power', \\
-     '{csv_path.name}' using (column("x_fit")):(column("y_logistic4")) with lines lw 3 title 'logistic4'
+plot '{csv_path.name}' using (column("x_data")):(column("y_data")) with points pt 7 ps 1.3 title 'Data', \\
+     '{csv_path.name}' using (column("x_fit")):(column("y_power")) with lines lw 3 title 'Power-law', \\
+     '{csv_path.name}' using (column("x_fit")):(column("y_logistic4")) with lines lw 3 title 'Logistic'
 
 {chr(10).join(unset_lines)}
 """
@@ -733,10 +727,6 @@ def save_compare_plot(df_used, xcol_fit, ycol_fit, fitcmp, out_png, title,
 
 def prepare_case_dataframe(dfg, space: str, xcol_raw: str, ycol_raw: str,
                            log_base: str, normalize: str):
-    """
-    Build the actual x/y used for fitting for ONE group only.
-    Normalization is therefore group-specific by construction.
-    """
     out = dfg.copy()
 
     if xcol_raw not in out.columns or ycol_raw not in out.columns:
@@ -756,7 +746,6 @@ def prepare_case_dataframe(dfg, space: str, xcol_raw: str, ycol_raw: str,
         x_fit_name = "x_fit_real"
         y_fit_name = "y_fit_real"
 
-    # mask BEFORE normalization
     m = np.isfinite(x_fit) & np.isfinite(y_fit)
     if np.sum(m) == 0:
         return None, None
@@ -802,35 +791,25 @@ def main():
 
     ap.add_argument("top", help="Top folder containing previous sip_pipeline outputs")
     ap.add_argument("--freq", type=float, default=0.01, help="Frequency tag")
-
     ap.add_argument("--include-log-space", action="store_true",
                     help="Also compare log(sig_real) vs log(S) in addition to real space.")
-
     ap.add_argument("--log-base", type=str, default="10", choices=["10", "e"],
                     help="Base used for transformed power/log-space work: 10 or natural log e.")
-
     ap.add_argument("--normalize", type=str, default="none",
                     choices=["none", "zscore", "minmax"],
                     help="Normalize x and y within each relevant group (sample/site/all).")
-
     ap.add_argument("--logistic-max-seconds", type=float, default=20.0,
                     help="Time cap per logistic fit")
-
     ap.add_argument("--min-points", type=int, default=4,
                     help="Minimum points required")
-
     ap.add_argument("--plot-equations", action="store_true",
                     help="Write equations and sigma/lnL/AIC on plots")
-
     ap.add_argument("--eq-position", type=str, default="right", choices=["right", "inside"],
                     help="Equation placement on plots")
-
     ap.add_argument("--no-plots", action="store_true",
                     help="Skip plot generation")
-
     ap.add_argument("--site-map", type=str, default="",
                     help="Optional CSV mapping run_name,site to override inferred site names")
-
     ap.add_argument("--outdir", type=str, default="COMPARE_COND_UNORM",
                     help="Output folder under top")
 
@@ -998,10 +977,7 @@ def main():
                         f"{make_safe_name(level)}__{make_safe_name(g)}__"
                         f"{ycol_raw}_vs_{xcol_raw}__UNORM_{space}_{tag}Hz.png"
                     )
-                    title = (
-                        f"{level} {g}: {human_label(ycol_raw)} vs {human_label(xcol_raw)} "
-                        f"[UNORM, {space}, {args.freq:g} Hz, norm={args.normalize}]"
-                    )
+                    title = short_plot_title(level, g, space)
                     plot_jobs.append((dfg_used.copy(), "x_used", "y_used", fitcmp, png, title))
 
     compare_df = pd.DataFrame(compare_rows)
@@ -1079,3 +1055,55 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+# =============================================================================
+# RUNNER
+# =============================================================================
+# Default (REAL only):
+# python3 sip_compare_cond_unorm.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --freq 0.01 \
+#   --log-base e \
+#   --normalize none \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --outdir COMPARE_COND_UNORM
+
+# REAL + LOG comparison:
+# python3 sip_compare_cond_unorm.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --freq 0.01 \
+#   --include-log-space \
+#   --log-base e \
+#   --normalize none \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --outdir COMPARE_COND_UNORM
+
+# Clean report-style plots (recommended):
+# python3 sip_compare_cond_unorm.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --freq 0.01 \
+#   --log-base e \
+#   --normalize none \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --outdir COMPARE_COND_UNORM
+
+# With equations/statistics printed on plots:
+# python3 sip_compare_cond_unorm.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --freq 0.01 \
+#   --log-base e \
+#   --normalize none \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --plot-equations \
+#   --eq-position right \
+#   --outdir COMPARE_COND_UNORM
+
+# No plots, tables/results only:
+# python3 sip_compare_cond_unorm.py "/mnt/3rd900/Projects/LA Project new/For_LBNL/SIP" \
+#   --freq 0.01 \
+#   --log-base e \
+#   --normalize none \
+#   --logistic-max-seconds 20 \
+#   --min-points 4 \
+#   --no-plots \
+#   --outdir COMPARE_COND_UNORM

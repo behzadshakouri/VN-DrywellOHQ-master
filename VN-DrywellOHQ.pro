@@ -1,4 +1,3 @@
-
 TEMPLATE = app
 
 QT -= gui
@@ -70,6 +69,7 @@ INCLUDEPATH += $$OHQPATH/src
 INCLUDEPATH += $$OHQPATH/include/GA
 INCLUDEPATH += $$OHQPATH/include/MCMC
 INCLUDEPATH += ../jsoncpp/include/
+INCLUDEPATH += $$PWD/../OpenHydroQual
 
 
 
@@ -455,6 +455,3 @@ else: unix:!android: target.path = /opt/$${TARGET}/bin
 HEADERS += \
     $$OHQPATH/src/BTC.hpp \
     $$OHQPATH/src/BTCSet.hpp
-
-
-

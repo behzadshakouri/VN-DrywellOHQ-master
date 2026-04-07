@@ -380,8 +380,8 @@ bool ModelCreator::Create(model_parameters mp,
         {1, { "LA_Precipitaion (1 yr).csv",                     41973, 42342 }},
         {2, { "LA_Precipitaion (1 yr new).csv",                 45230, 45600 }},
         {3, { "LA_Precipitaion (5 yr new).csv",                 44864, 45595 }},
-        {4, { "Pacoima Spreading Grounds_rainfall data.csv",     43466, 45292 }},
-        {5, { "Synthetic_rain_flow.csv",                        45763, 45764 }},
+        {4, { "Pacoima Spreading Grounds_rainfall data.csv",    43466, 45292 }},
+        {5, { "Synthetic_rain_flow.csv",                        45763, 45766 }},
     };
 
     if (!rainDB.count(raincfg.rain_data)) {
@@ -969,8 +969,8 @@ bool ModelCreator::Create(model_parameters mp,
 
     system->SetSystemSettings();
 
-    std::cout<<"Populate functions"<<std::endl;
-    system->PopulateOperatorsFunctions();
+    std::cout<<"Populate functions (skipped: handled internally)"<<std::endl;
+    // system->PopulateOperatorsFunctions();
     std::cout<<"Variable parents"<<std::endl;
     system->SetVariableParents();
     return true;

@@ -59,8 +59,10 @@ int main(int argc, char *argv[])
         Base_start = 43750;
     else if (raincfg.rain_data == 4)
         Base_start = 43466;
+    else if (raincfg.rain_data == 5)
+        Base_start = 45763.588194; // 04/16 14:07:00;
     else
-        Base_start = 45763;
+        Base_start = 45000;
 
     double Base_end = Base_start + Simulation_days;
 
