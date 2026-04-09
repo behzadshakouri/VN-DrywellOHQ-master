@@ -105,8 +105,8 @@ int main(int argc, char *argv[])
     //     - if g/uw override is provided (finite >0), it overrides only that group
     // ============================================================
     simcfg.KsatScaleFactor    = parse_ksat_scale(argc, argv, 1.0);
-    simcfg.KsatScaleFactor_g  = parse_ksat_scale_g(argc, argv, 3.0);
-    simcfg.KsatScaleFactor_uw = parse_ksat_scale_uw(argc, argv, 30.0);
+    simcfg.KsatScaleFactor_g  = parse_ksat_scale_g(argc, argv, 2.5);
+    simcfg.KsatScaleFactor_uw = parse_ksat_scale_uw(argc, argv, 35.0);
 
     // ============================================================
     //   INITIAL THETA MODE (AUTO for ERT analysis runs)
