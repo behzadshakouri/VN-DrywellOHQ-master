@@ -870,6 +870,8 @@ bool ModelCreator::Create(model_parameters mp,
     system->AddLink(L1, "Well_g", ("Soil-uw (" + QString::number(i_uw) + "$" + QString::number(j_uw) + ")").toStdString(), false);
 
     // Groundwater fixed head
+    double y_last_uw = 37000 + ((nz_uw_n - 1) * dz) * 2000;
+
     std::cout<<"Groundwater"<<std::endl;
     Block gw;
     gw.SetQuantities(system->GetMetaModel(), "fixed_head");
@@ -882,8 +884,7 @@ bool ModelCreator::Create(model_parameters mp,
     gw.SetVal("x",-mp.nr_uw*1000);
 
     // Align GW with last Soil-uw layer + small offset
-    double y_last_uw = 37000 + ((nz_uw_n - 1) * dz) * 2000;
-    gw.SetVal("y", y_last_uw + 2000);    system->AddBlock(gw,false);
+    gw.SetVal("y", y_last_uw + 3000);    system->AddBlock(gw,false);
 
     // Groundwater links
     std::cout<<"Soil to Groundwater"<<std::endl;
