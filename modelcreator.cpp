@@ -880,8 +880,10 @@ bool ModelCreator::Create(model_parameters mp,
     gw.SetVal("head",-mp.DepthtoGroundWater);
     gw.SetVal("Storage",100000);
     gw.SetVal("x",-mp.nr_uw*1000);
-    gw.SetVal("y",37000+(mp.nz_c+mp.nz_g+nz_uw_n)*2000);
-    system->AddBlock(gw,false);
+
+    // Align GW with last Soil-uw layer + small offset
+    double y_last_uw = 37000 + ((nz_uw_n - 1) * dz) * 2000;
+    gw.SetVal("y", y_last_uw + 2000);    system->AddBlock(gw,false);
 
     // Groundwater links
     std::cout<<"Soil to Groundwater"<<std::endl;
@@ -969,8 +971,8 @@ bool ModelCreator::Create(model_parameters mp,
 
     system->SetSystemSettings();
 
-    std::cout<<"Populate functions (skipped: handled internally)"<<std::endl;
-    // system->PopulateOperatorsFunctions();
+    //std::cout<<"Populate functions"<<std::endl;
+    //system->PopulateOperatorsFunctions();
     std::cout<<"Variable parents"<<std::endl;
     system->SetVariableParents();
     return true;
