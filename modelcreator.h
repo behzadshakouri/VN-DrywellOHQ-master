@@ -80,10 +80,10 @@ struct model_parameters
     double K_o       = 0.24322;
     double L         = -0.5;
 
-    double rw_c  = 4 * ft;
+    double rw_c  = 2 * ft;
     double rw_c_t = 6 * ft;
-    double rw_g  = 4 * ft;
-    double rw_uw = 4 * ft;
+    double rw_g  = 2 * ft;
+    double rw_uw = 2 * ft;
 
     double initial_theta = 0.2;
     double porosity_c    = 1.0;

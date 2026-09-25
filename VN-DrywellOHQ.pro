@@ -128,6 +128,7 @@ CONFIG(debug, debug|release) {
 SOURCES += \
         $$OHQPATH/src/Block.cpp \
         $$OHQPATH/src/Command.cpp \
+        $$OHQPATH/src/Composite.cpp \
         $$OHQPATH/src/Condition.cpp \
         $$OHQPATH/src/ErrorHandler.cpp \
         $$OHQPATH/src/Expression.cpp \
